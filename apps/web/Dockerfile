@@ -23,6 +23,7 @@ COPY --from=build /app/apps/web/.next /app/apps/web/.next
 COPY --from=build /app/apps/web/app /app/apps/web/app
 COPY --from=build /app/apps/web/components /app/apps/web/components
 COPY --from=build /app/apps/web/lib /app/apps/web/lib
+COPY --from=build /app/apps/web/public /app/apps/web/public
 COPY --from=build /app/apps/web/package.json /app/apps/web/package.json
 COPY --from=build /app/apps/web/next.config.mjs /app/apps/web/next.config.mjs
 WORKDIR /app/apps/web

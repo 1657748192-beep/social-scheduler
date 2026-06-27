@@ -16,9 +16,7 @@ export default function DataDeletionPage() {
           我们会在收到请求后处理。
         </p>
         <h2>Facebook 数据删除</h2>
-        <p>
-          你也可以在 Facebook 账号设置中移除本应用授权。移除后，本系统将无法继续访问 Facebook 授权数据。
-        </p>
+        <p>你也可以在 Facebook 账号设置中移除本应用授权。移除后，本系统将无法继续访问 Facebook 授权数据。</p>
       </section>
     </main>
   );
