@@ -1,14 +1,14 @@
 import { Worker } from "bullmq";
 import { getSocialPublisher } from "./integrations/social/registry";
 import { prisma } from "./prisma";
-import { redis } from "./redis";
-import { publishQueueName, type PublishQueuePayload } from "./queues/publishQueue";
+import { redisConnection } from "./redis";
+import { publishQueueJobName, publishQueueName, type PublishQueuePayload } from "./queues/publishQueue";
 import { recoverPendingPublishJobs } from "./services/scheduleService";
 
 const retryableJobStatuses = ["waiting", "retrying"] as const;
 const runnableScheduleStatuses = ["scheduled", "locked"] as const;
 
-const worker = new Worker<PublishQueuePayload>(
+const worker = new Worker<PublishQueuePayload, unknown, typeof publishQueueJobName>(
   publishQueueName,
   async (job) => {
     const publishJob = await prisma.publishJob.findUnique({
@@ -100,7 +100,7 @@ const worker = new Worker<PublishQueuePayload>(
     };
   },
   {
-    connection: redis,
+    connection: redisConnection,
     concurrency: 5
   }
 );
@@ -190,7 +190,6 @@ async function shutdown() {
   console.log("Shutting down worker");
   await worker.close();
   await prisma.$disconnect();
-  redis.disconnect();
   process.exit(0);
 }
 
