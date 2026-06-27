@@ -334,7 +334,7 @@ export default function DashboardPage() {
             ) : null}
           </section>
 
-          <section className="panel">
+          <section className="panel" id="social-channels">
             <div className="row">
               <h2>社交账号</h2>
               <span className="muted">{socialAccounts.length}</span>
