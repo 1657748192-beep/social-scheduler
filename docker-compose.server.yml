@@ -1,6 +1,7 @@
 services:
   postgres:
     restart: unless-stopped
+    ports: !reset []
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-app}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -8,6 +9,7 @@ services:
 
   redis:
     restart: unless-stopped
+    ports: !reset []
 
   api:
     restart: unless-stopped
