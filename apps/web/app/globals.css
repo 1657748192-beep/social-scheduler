@@ -255,30 +255,6 @@ textarea {
   padding: 2px 8px;
 }
 
-.channels-summary {
-  display: grid;
-  gap: 8px;
-  border: 1px solid #233241;
-  border-radius: 8px;
-  color: #aab6c5;
-  font-size: 12px;
-  padding: 10px;
-}
-
-.channel-progress {
-  height: 5px;
-  border-radius: 999px;
-  background: #253444;
-  overflow: hidden;
-}
-
-.channel-progress span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: #2f9cb3;
-}
-
 .software-sidebar-footer {
   display: grid;
   gap: 10px;

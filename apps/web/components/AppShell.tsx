@@ -144,11 +144,6 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
   }, []);
 
   const channelProviders = providerStatuses.length ? providerStatuses : defaultChannelProviders;
-  const activeChannelCount = channels.filter((account) => account.status === "active").length;
-  const channelProgress = Math.min(
-    100,
-    Math.round((activeChannelCount / Math.max(channelProviders.length, 1)) * 100)
-  );
   const channelItems = useMemo(
     () =>
       channelProviders.map((provider) => ({
@@ -258,14 +253,6 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
             </Link>
           </div>
 
-          <div className="channels-summary">
-            <span>
-              已连接 {activeChannelCount}/{channelProviders.length} 个通道
-            </span>
-            <div className="channel-progress" aria-hidden="true">
-              <span style={{ width: `${channelProgress}%` }} />
-            </div>
-          </div>
         </section>
 
         <div className="software-sidebar-footer">
