@@ -27,7 +27,7 @@ const navItems = [
 
 type SidebarProvider = Pick<
   OAuthProviderStatus,
-  "platform" | "platformParam" | "displayName" | "configured"
+  "platform" | "platformParam" | "displayName" | "configured" | "requiredEnv"
 >;
 
 const defaultChannelProviders: SidebarProvider[] = [
@@ -35,30 +35,81 @@ const defaultChannelProviders: SidebarProvider[] = [
     platform: "instagram",
     platformParam: "instagram",
     displayName: "Instagram",
-    configured: false
+    configured: false,
+    requiredEnv: ["INSTAGRAM_CLIENT_ID", "INSTAGRAM_CLIENT_SECRET"]
+  },
+  {
+    platform: "linkedin",
+    platformParam: "linkedin",
+    displayName: "LinkedIn",
+    configured: false,
+    requiredEnv: ["LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET"]
   },
   {
     platform: "facebook",
     platformParam: "facebook",
     displayName: "Facebook",
-    configured: false
+    configured: false,
+    requiredEnv: ["FACEBOOK_CLIENT_ID", "FACEBOOK_CLIENT_SECRET"]
+  },
+  {
+    platform: "youtube",
+    platformParam: "youtube",
+    displayName: "YouTube",
+    configured: false,
+    requiredEnv: ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET"]
+  },
+  {
+    platform: "tiktok",
+    platformParam: "tiktok",
+    displayName: "TikTok",
+    configured: false,
+    requiredEnv: ["TIKTOK_CLIENT_ID", "TIKTOK_CLIENT_SECRET"]
+  },
+  {
+    platform: "pinterest",
+    platformParam: "pinterest",
+    displayName: "Pinterest",
+    configured: false,
+    requiredEnv: ["PINTEREST_CLIENT_ID", "PINTEREST_CLIENT_SECRET"]
   },
   {
     platform: "x",
     platformParam: "twitter",
-    displayName: "X / Twitter",
-    configured: false
+    displayName: "Twitter / X",
+    configured: false,
+    requiredEnv: ["X_CLIENT_ID", "X_CLIENT_SECRET"]
   }
 ];
+
+const sidebarChannelOrder: SidebarProvider["platform"][] = ["instagram", "facebook", "x"];
 
 function channelInitial(platform: SidebarProvider["platform"]) {
   const initials: Record<SidebarProvider["platform"], string> = {
     instagram: "IG",
+    linkedin: "in",
     facebook: "f",
+    youtube: "▶",
+    tiktok: "♪",
+    pinterest: "P",
     x: "X"
   };
 
   return initials[platform];
+}
+
+function channelDescription(platform: SidebarProvider["platform"]) {
+  const descriptions: Record<SidebarProvider["platform"], string> = {
+    instagram: "账号或主页",
+    linkedin: "个人或组织",
+    facebook: "页面或群组",
+    youtube: "频道",
+    tiktok: "商业或个人",
+    pinterest: "企业或简介",
+    x: "账号"
+  };
+
+  return descriptions[platform];
 }
 
 function channelStatusText(account: SocialAccount | undefined, provider: SidebarProvider) {
@@ -84,6 +135,8 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
   const [channels, setChannels] = useState<SocialAccount[]>([]);
   const [providerStatuses, setProviderStatuses] = useState<OAuthProviderStatus[]>([]);
   const [channelsLoading, setChannelsLoading] = useState(true);
+  const [isChannelModalOpen, setIsChannelModalOpen] = useState(false);
+  const [channelActionError, setChannelActionError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -144,6 +197,9 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
   }, []);
 
   const channelProviders = providerStatuses.length ? providerStatuses : defaultChannelProviders;
+  const sidebarProviders = channelProviders.filter((provider) =>
+    sidebarChannelOrder.includes(provider.platform)
+  );
   const channelItems = useMemo(
     () =>
       channelProviders.map((provider) => ({
@@ -152,13 +208,40 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
       })),
     [channelProviders, channels]
   );
+  const sidebarChannelItems = useMemo(
+    () =>
+      sidebarProviders.map((provider) => ({
+        provider,
+        account: channels.find((account) => account.platform === provider.platform)
+      })),
+    [sidebarProviders, channels]
+  );
 
   async function openChannel(provider: SidebarProvider, account?: SocialAccount) {
-    const canStartAuthorization = provider.configured && workspaceId && account?.status !== "active";
+    setChannelActionError(null);
+
     const token = localStorage.getItem("social_scheduler_token");
 
-    if (!canStartAuthorization || !token) {
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+
+    if (account?.status === "active") {
       router.push("/dashboard#social-channels");
+      setIsChannelModalOpen(false);
+      return;
+    }
+
+    if (!workspaceId) {
+      setChannelActionError("请先创建或选择一个工作区。");
+      return;
+    }
+
+    if (!provider.configured) {
+      setChannelActionError(
+        `${provider.displayName} 还没配置开发者密钥：${provider.requiredEnv.join(" / ")}`
+      );
       return;
     }
 
@@ -168,8 +251,8 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
         { token }
       );
       window.location.href = response.authorizationUrl;
-    } catch {
-      router.push("/dashboard#social-channels");
+    } catch (error) {
+      setChannelActionError(error instanceof Error ? error.message : "启动授权失败");
     }
   }
 
@@ -213,13 +296,17 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
         <section className="software-channels" aria-label="连接通道">
           <div className="channels-heading">
             <span>连接通道</span>
-            <Link href="/dashboard#social-channels" title="管理连接通道">
+            <button
+              aria-label="打开更多通道"
+              onClick={() => setIsChannelModalOpen(true)}
+              type="button"
+            >
               +
-            </Link>
+            </button>
           </div>
 
           <div className="channels-list">
-            {channelItems.map(({ provider, account }) => {
+            {sidebarChannelItems.map(({ provider, account }) => {
               const connected = account?.status === "active";
               const rowClassName = connected
                 ? "channel-row connected"
@@ -247,12 +334,15 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
 
             {channelsLoading ? <span className="channels-empty">正在读取通道</span> : null}
 
-            <Link className="channel-more" href="/dashboard#social-channels">
+            <button
+              className="channel-more"
+              onClick={() => setIsChannelModalOpen(true)}
+              type="button"
+            >
               <span className="channel-icon more">+</span>
               <span>更多通道</span>
-            </Link>
+            </button>
           </div>
-
         </section>
 
         <div className="software-sidebar-footer">
@@ -273,6 +363,59 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
 
         <div className={wide ? "software-content wide" : "software-content"}>{children}</div>
       </section>
+
+      {isChannelModalOpen ? (
+        <div
+          className="channel-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setIsChannelModalOpen(false);
+            }
+          }}
+        >
+          <section className="channel-modal" aria-modal="true" role="dialog">
+            <header className="channel-modal-header">
+              <h2>连接新频道</h2>
+              <button
+                aria-label="关闭连接频道弹窗"
+                onClick={() => setIsChannelModalOpen(false)}
+                type="button"
+              >
+                ×
+              </button>
+            </header>
+
+            {channelActionError ? <p className="channel-modal-error">{channelActionError}</p> : null}
+
+            <div className="channel-modal-grid">
+              {channelItems.map(({ provider, account }) => {
+                const connected = account?.status === "active";
+                const actionText = connected
+                  ? "已连接"
+                  : provider.configured
+                    ? "点击授权"
+                    : "待配置";
+
+                return (
+                  <button
+                    className={connected ? "channel-card connected" : "channel-card"}
+                    key={provider.platform}
+                    onClick={() => openChannel(provider, account)}
+                    type="button"
+                  >
+                    <span className={`channel-card-icon ${provider.platform}`}>
+                      {channelInitial(provider.platform)}
+                    </span>
+                    <strong>{provider.displayName}</strong>
+                    <small>{channelDescription(provider.platform)}</small>
+                    <em>{actionText}</em>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }

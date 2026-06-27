@@ -68,12 +68,24 @@ async function exchangeCodeForToken(
     "Content-Type": "application/x-www-form-urlencoded"
   };
 
-  if (provider.clientSecret) {
+  if (provider.clientAuthentication === "basic" && provider.clientSecret) {
     headers.Authorization = `Basic ${Buffer.from(`${provider.clientId}:${provider.clientSecret}`).toString(
       "base64"
     )}`;
-  } else {
+  }
+
+  if (provider.clientAuthentication === "body") {
     body.set("client_id", provider.clientId);
+    if (provider.clientSecret) {
+      body.set("client_secret", provider.clientSecret);
+    }
+  }
+
+  if (provider.clientAuthentication === "tiktok") {
+    body.set("client_key", provider.clientId);
+    if (provider.clientSecret) {
+      body.set("client_secret", provider.clientSecret);
+    }
   }
 
   const response = await fetch(provider.tokenUrl, {
@@ -117,6 +129,54 @@ async function fetchProviderProfile(provider: OAuthProviderConfig, accessToken: 
     };
   }
 
+  if (provider.platform === "linkedin") {
+    return {
+      providerAccountId: payload.sub,
+      displayName: payload.name,
+      avatarUrl: payload.picture,
+      accountType: "profile"
+    };
+  }
+
+  if (provider.platform === "youtube") {
+    const channel = payload.items?.[0];
+
+    if (!channel) {
+      throw new HttpError(400, "YouTube channel profile was not found", payload);
+    }
+
+    return {
+      providerAccountId: channel.id,
+      displayName: channel.snippet?.title,
+      avatarUrl: channel.snippet?.thumbnails?.default?.url,
+      accountType: "channel"
+    };
+  }
+
+  if (provider.platform === "tiktok") {
+    const profile = payload.data?.user;
+
+    if (!profile?.open_id) {
+      throw new HttpError(400, "TikTok profile was not found", payload);
+    }
+
+    return {
+      providerAccountId: profile.open_id,
+      displayName: profile.display_name,
+      avatarUrl: profile.avatar_url,
+      accountType: "profile"
+    };
+  }
+
+  if (provider.platform === "pinterest") {
+    return {
+      providerAccountId: payload.id,
+      displayName: payload.profile_name || payload.username,
+      avatarUrl: payload.profile_image,
+      accountType: payload.account_type || "profile"
+    };
+  }
+
   return {
     providerAccountId: payload.id,
     displayName: payload.name,
@@ -149,10 +209,14 @@ export async function startOAuth(userId: string, platformParam: string, workspac
 
   const authorizationUrl = new URL(provider.authorizationUrl);
   authorizationUrl.searchParams.set("response_type", "code");
-  authorizationUrl.searchParams.set("client_id", provider.clientId);
+  authorizationUrl.searchParams.set(provider.authorizationClientIdParam ?? "client_id", provider.clientId);
   authorizationUrl.searchParams.set("redirect_uri", redirectUri);
-  authorizationUrl.searchParams.set("scope", scopes.join(" "));
+  authorizationUrl.searchParams.set("scope", scopes.join(provider.scopeSeparator ?? " "));
   authorizationUrl.searchParams.set("state", state);
+
+  Object.entries(provider.authorizationParams ?? {}).forEach(([key, value]) => {
+    authorizationUrl.searchParams.set(key, value);
+  });
 
   if (provider.usesPkce && codeVerifier) {
     authorizationUrl.searchParams.set("code_challenge", base64UrlSha256(codeVerifier));

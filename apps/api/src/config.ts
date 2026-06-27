@@ -19,7 +19,15 @@ const envSchema = z.object({
   FACEBOOK_CLIENT_ID: z.string().optional().default(""),
   FACEBOOK_CLIENT_SECRET: z.string().optional().default(""),
   INSTAGRAM_CLIENT_ID: z.string().optional().default(""),
-  INSTAGRAM_CLIENT_SECRET: z.string().optional().default("")
+  INSTAGRAM_CLIENT_SECRET: z.string().optional().default(""),
+  LINKEDIN_CLIENT_ID: z.string().optional().default(""),
+  LINKEDIN_CLIENT_SECRET: z.string().optional().default(""),
+  YOUTUBE_CLIENT_ID: z.string().optional().default(""),
+  YOUTUBE_CLIENT_SECRET: z.string().optional().default(""),
+  TIKTOK_CLIENT_ID: z.string().optional().default(""),
+  TIKTOK_CLIENT_SECRET: z.string().optional().default(""),
+  PINTEREST_CLIENT_ID: z.string().optional().default(""),
+  PINTEREST_CLIENT_SECRET: z.string().optional().default("")
 });
 
 export const config = envSchema.parse(process.env);

@@ -97,7 +97,7 @@ export type WorkspaceInvitation = {
 
 export type SocialAccount = {
   id: string;
-  platform: "x" | "facebook" | "instagram";
+  platform: "x" | "facebook" | "instagram" | "tiktok" | "linkedin" | "youtube" | "pinterest";
   providerAccountId: string;
   displayName: string;
   avatarUrl?: string;
@@ -119,8 +119,15 @@ export type OAuthStartResponse = {
 };
 
 export type OAuthProviderStatus = {
-  platform: "x" | "facebook" | "instagram";
-  platformParam: "twitter" | "facebook" | "instagram";
+  platform: "x" | "facebook" | "instagram" | "tiktok" | "linkedin" | "youtube" | "pinterest";
+  platformParam:
+    | "twitter"
+    | "facebook"
+    | "instagram"
+    | "tiktok"
+    | "linkedin"
+    | "youtube"
+    | "pinterest";
   displayName: string;
   configured: boolean;
   clientIdConfigured: boolean;

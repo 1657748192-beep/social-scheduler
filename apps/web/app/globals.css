@@ -140,18 +140,22 @@ textarea {
   font-weight: 800;
 }
 
-.channels-heading a {
+.channels-heading a,
+.channels-heading button {
   display: grid;
   place-items: center;
   width: 26px;
   height: 26px;
   border: 1px solid #304052;
   border-radius: 8px;
+  background: transparent;
   color: #ffffff;
   text-decoration: none;
+  cursor: pointer;
 }
 
-.channels-heading a:hover {
+.channels-heading a:hover,
+.channels-heading button:hover {
   background: #1f2c3a;
 }
 
@@ -213,6 +217,22 @@ textarea {
   background: #1877f2;
 }
 
+.channel-icon.linkedin {
+  background: #0a66c2;
+}
+
+.channel-icon.youtube {
+  background: #ff0000;
+}
+
+.channel-icon.tiktok {
+  background: #050505;
+}
+
+.channel-icon.pinterest {
+  background: #e60023;
+}
+
 .channel-icon.x {
   background: #111827;
 }
@@ -253,6 +273,164 @@ textarea {
   color: #8fa0b4;
   font-size: 12px;
   padding: 2px 8px;
+}
+
+.channel-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 32, 0.72);
+  padding: 24px;
+}
+
+.channel-modal {
+  width: min(840px, 100%);
+  max-height: min(760px, calc(100vh - 48px));
+  overflow: auto;
+  border: 1px solid #dce2ea;
+  border-radius: 8px;
+  background: #fbfbfa;
+  box-shadow: 0 24px 80px rgba(10, 15, 22, 0.34);
+}
+
+.channel-modal-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 74px;
+  border-bottom: 1px solid #e3e7ee;
+  background: rgba(251, 251, 250, 0.96);
+  padding: 18px 68px;
+}
+
+.channel-modal-header h2 {
+  margin: 0;
+  color: #1c232e;
+  font-size: 20px;
+}
+
+.channel-modal-header button {
+  position: absolute;
+  right: 22px;
+  top: 18px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #d4dae3;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #485568;
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.channel-modal-header button:hover {
+  background: #f0f3f7;
+  color: #111827;
+}
+
+.channel-modal-error {
+  margin: 16px 88px 0;
+  border: 1px solid #f2c6c2;
+  border-radius: 8px;
+  background: #fff5f4;
+  color: #9f2d23;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.channel-modal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  padding: 26px 88px 36px;
+}
+
+.channel-card {
+  min-height: 176px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  border: 1px solid #dfe4eb;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #202732;
+  padding: 20px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.channel-card:hover {
+  transform: translateY(-1px);
+  border-color: #2f9cb3;
+  box-shadow: 0 12px 32px rgba(20, 30, 44, 0.1);
+}
+
+.channel-card.connected {
+  border-color: #2f9cb3;
+  background: #f0fbfd;
+}
+
+.channel-card-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  background: #2b3948;
+  color: #ffffff;
+  font-weight: 900;
+}
+
+.channel-card-icon.instagram {
+  background: #c13584;
+}
+
+.channel-card-icon.linkedin {
+  background: #0a66c2;
+}
+
+.channel-card-icon.facebook {
+  background: #1877f2;
+}
+
+.channel-card-icon.youtube {
+  background: #ff0000;
+}
+
+.channel-card-icon.tiktok {
+  background: #050505;
+}
+
+.channel-card-icon.pinterest {
+  background: #e60023;
+}
+
+.channel-card-icon.x {
+  background: #111827;
+}
+
+.channel-card strong {
+  font-size: 16px;
+}
+
+.channel-card small {
+  color: #536174;
+  font-size: 13px;
+}
+
+.channel-card em {
+  color: #78869a;
+  font-size: 12px;
+  font-style: normal;
 }
 
 .software-sidebar-footer {
@@ -1078,6 +1256,28 @@ textarea {
   .software-nav a {
     justify-content: center;
     padding: 0 8px;
+  }
+
+  .channel-modal-backdrop {
+    padding: 12px;
+  }
+
+  .channel-modal-header {
+    min-height: 64px;
+    padding: 16px 58px;
+  }
+
+  .channel-modal-error {
+    margin: 14px 16px 0;
+  }
+
+  .channel-modal-grid {
+    grid-template-columns: 1fr;
+    padding: 18px 16px 24px;
+  }
+
+  .channel-card {
+    min-height: 132px;
   }
 
   .software-topbar {

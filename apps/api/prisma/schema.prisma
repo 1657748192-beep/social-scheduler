@@ -38,6 +38,9 @@ enum Platform {
   instagram
   facebook
   tiktok
+  linkedin
+  youtube
+  pinterest
 
   @@map("platform")
 }

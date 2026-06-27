@@ -49,6 +49,14 @@ services:
       FACEBOOK_CLIENT_SECRET: ""
       INSTAGRAM_CLIENT_ID: ""
       INSTAGRAM_CLIENT_SECRET: ""
+      LINKEDIN_CLIENT_ID: ""
+      LINKEDIN_CLIENT_SECRET: ""
+      YOUTUBE_CLIENT_ID: ""
+      YOUTUBE_CLIENT_SECRET: ""
+      TIKTOK_CLIENT_ID: ""
+      TIKTOK_CLIENT_SECRET: ""
+      PINTEREST_CLIENT_ID: ""
+      PINTEREST_CLIENT_SECRET: ""
     ports:
       - "4000:4000"
     depends_on:
@@ -80,6 +88,14 @@ services:
       FACEBOOK_CLIENT_SECRET: ""
       INSTAGRAM_CLIENT_ID: ""
       INSTAGRAM_CLIENT_SECRET: ""
+      LINKEDIN_CLIENT_ID: ""
+      LINKEDIN_CLIENT_SECRET: ""
+      YOUTUBE_CLIENT_ID: ""
+      YOUTUBE_CLIENT_SECRET: ""
+      TIKTOK_CLIENT_ID: ""
+      TIKTOK_CLIENT_SECRET: ""
+      PINTEREST_CLIENT_ID: ""
+      PINTEREST_CLIENT_SECRET: ""
     depends_on:
       postgres:
         condition: service_healthy

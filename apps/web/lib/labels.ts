@@ -71,7 +71,10 @@ export function platformLabel(platform: string) {
     twitter: "X / Twitter",
     instagram: "Instagram",
     facebook: "Facebook",
-    tiktok: "TikTok"
+    linkedin: "LinkedIn",
+    youtube: "YouTube",
+    tiktok: "TikTok",
+    pinterest: "Pinterest"
   };
 
   return labels[platform] ?? platform;
