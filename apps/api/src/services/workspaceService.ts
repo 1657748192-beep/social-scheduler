@@ -10,7 +10,7 @@ const memberRoles = ["owner", "admin", "editor", "viewer"] as const;
 
 export const createWorkspaceSchema = z.object({
   name: z.string().min(1).max(100),
-  timezone: z.string().min(1).max(80).default("UTC")
+  timezone: z.string().min(1).max(80).default("Asia/Shanghai")
 });
 
 export const createInvitationSchema = z.object({

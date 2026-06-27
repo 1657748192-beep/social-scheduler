@@ -1,7 +1,8 @@
 "use client";
 
 import type { CalendarSchedule } from "../../lib/api";
-import { addDays, formatDateKey, startOfWeek } from "./dateUtils";
+import { getChinaHour } from "../../lib/chinaTime";
+import { addDays, formatDateKey, getDayNumber, getWeekdayShort, startOfWeek } from "./dateUtils";
 import { CalendarEventItem } from "./CalendarEventItem";
 
 type WeekCalendarProps = {
@@ -24,7 +25,7 @@ export function WeekCalendar({
   function schedulesFor(day: Date, hour: number) {
     return schedules.filter((schedule) => {
       const scheduledAt = new Date(schedule.scheduledAt);
-      return formatDateKey(scheduledAt) === formatDateKey(day) && scheduledAt.getHours() === hour;
+      return formatDateKey(scheduledAt) === formatDateKey(day) && getChinaHour(scheduledAt) === hour;
     });
   }
 
@@ -33,8 +34,8 @@ export function WeekCalendar({
       <div className="calendar-hour-header" />
       {days.map((day) => (
         <div className="calendar-week-header" key={formatDateKey(day)}>
-          <strong>{day.toLocaleDateString("zh-CN", { weekday: "short" })}</strong>
-          <span>{day.getDate()}</span>
+          <strong>{getWeekdayShort(day)}</strong>
+          <span>{getDayNumber(day)}</span>
         </div>
       ))}
 
@@ -42,8 +43,8 @@ export function WeekCalendar({
         <div className="calendar-week-row" key={hour}>
           <div className="calendar-hour-label">{String(hour).padStart(2, "0")}:00</div>
           {days.map((day) => {
-            const target = new Date(day);
-            target.setHours(hour, 0, 0, 0);
+            const target = addDays(day, 0);
+            target.setTime(target.getTime() + hour * 60 * 60 * 1000);
             return (
               <div
                 className="calendar-hour-cell"

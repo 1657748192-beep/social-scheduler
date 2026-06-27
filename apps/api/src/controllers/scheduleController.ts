@@ -91,7 +91,7 @@ export async function createDemoScheduleController(req: Request, res: Response) 
   const result = await createSchedule(req.user!.id, body.workspaceId, {
     postVariantId: post.variants[0].id,
     scheduledAt: body.scheduledAt,
-    timezone: "UTC"
+    timezone: "Asia/Shanghai"
   });
 
   return res.status(201).json({

@@ -8,6 +8,7 @@ import {
   type MediaAsset,
   type Workspace
 } from "../../lib/api";
+import { chinaLocalInputToISOString } from "../../lib/chinaTime";
 import { MediaUploader } from "./MediaUploader";
 import { PlatformEditor } from "./PlatformEditor";
 import { PlatformTabs } from "./PlatformTabs";
@@ -88,7 +89,7 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
           body: {
             title: title || undefined,
             baseText,
-            scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
+            scheduledAt: scheduledAt ? chinaLocalInputToISOString(scheduledAt) : undefined,
             variants: selectedPlatforms.map((platform) => ({
               platform,
               text: variantTexts[platform] || baseText,

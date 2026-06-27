@@ -13,6 +13,7 @@ import {
   type WorkspaceInvitation,
   type WorkspaceMember
 } from "../../lib/api";
+import { chinaLocalInputToISOString, toChinaDatetimeLocalValue } from "../../lib/chinaTime";
 import {
   accountStatusLabel,
   invitationStatusLabel,
@@ -107,7 +108,7 @@ export default function DashboardPage() {
   const defaultDateTime = useMemo(() => {
     const date = new Date(Date.now() + 60_000);
     date.setSeconds(0, 0);
-    return date.toISOString().slice(0, 16);
+    return toChinaDatetimeLocalValue(date);
   }, []);
 
   async function createWorkspace(event: FormEvent<HTMLFormElement>) {
@@ -126,7 +127,7 @@ export default function DashboardPage() {
         token,
         body: {
           name: String(formData.get("name") ?? ""),
-          timezone: String(formData.get("timezone") ?? "UTC")
+          timezone: String(formData.get("timezone") ?? "Asia/Shanghai")
         }
       });
       event.currentTarget.reset();
@@ -220,7 +221,7 @@ export default function DashboardPage() {
 
     const formData = new FormData(event.currentTarget);
     const scheduledAtLocal = String(formData.get("scheduledAt") ?? "");
-    const scheduledAt = new Date(scheduledAtLocal).toISOString();
+    const scheduledAt = chinaLocalInputToISOString(scheduledAtLocal);
 
     try {
       const response = await apiRequest<DemoScheduleResponse>("/schedules/demo", {
@@ -277,7 +278,7 @@ export default function DashboardPage() {
               <button className="button" type="submit">
                 创建
               </button>
-              <input name="timezone" type="hidden" value="UTC" />
+              <input name="timezone" type="hidden" value="Asia/Shanghai" />
             </form>
 
             <ul className="list">
@@ -459,6 +460,7 @@ export default function DashboardPage() {
                 <span>发布时间</span>
                 <input name="scheduledAt" type="datetime-local" defaultValue={defaultDateTime} />
               </label>
+              <p className="muted">按中国时间 UTC+8 保存。</p>
 
               <button className="button" disabled={isSubmitting || !selectedWorkspace} type="submit">
                 {isSubmitting ? "排程中" : "加入排程"}

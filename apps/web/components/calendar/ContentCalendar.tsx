@@ -6,6 +6,7 @@ import {
   type CalendarSchedule,
   type Workspace
 } from "../../lib/api";
+import { getChinaDateParts, withChinaTime } from "../../lib/chinaTime";
 import {
   addDays,
   startOfMonthGrid,
@@ -82,10 +83,11 @@ export function ContentCalendar({ token, workspaces }: ContentCalendarProps) {
     }
 
     const previous = new Date(schedule.scheduledAt);
-    const next = new Date(targetDate);
+    const previousParts = getChinaDateParts(previous);
+    let next = new Date(targetDate);
 
     if (mode === "day") {
-      next.setHours(previous.getHours(), previous.getMinutes(), 0, 0);
+      next = withChinaTime(targetDate, previousParts.hour, previousParts.minute);
     }
 
     if (next.getTime() <= Date.now()) {

@@ -4,6 +4,7 @@ import type { CalendarSchedule } from "../../lib/api";
 import {
   addDays,
   formatDateKey,
+  getDayNumber,
   sameMonth,
   startOfMonthGrid
 } from "./dateUtils";
@@ -55,7 +56,7 @@ export function MonthCalendar({
               }
             }}
           >
-            <div className="calendar-day-number">{day.getDate()}</div>
+            <div className="calendar-day-number">{getDayNumber(day)}</div>
             <div className="calendar-day-events">
               {daySchedules.slice(0, 4).map((schedule) => (
                 <CalendarEventItem

@@ -156,7 +156,7 @@ export async function createComposerPost(
             postVariantId: createdVariant.id,
             workspaceId,
             scheduledAt,
-            timezone: "UTC",
+            timezone: "Asia/Shanghai",
             status: "scheduled",
             createdBy: userId
           }

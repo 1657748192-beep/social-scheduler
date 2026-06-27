@@ -1,7 +1,7 @@
 "use client";
 
 import type { Workspace } from "../../lib/api";
-import { formatMonthTitle, startOfWeek } from "./dateUtils";
+import { addDays, addMonths, formatDate, formatMonthTitle, startOfWeek } from "./dateUtils";
 
 type CalendarViewMode = "month" | "week";
 
@@ -25,21 +25,14 @@ export function CalendarToolbar({
   onWorkspaceChange
 }: CalendarToolbarProps) {
   const weekStart = startOfWeek(cursor);
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekEnd.getDate() + 6);
+  const weekEnd = addDays(weekStart, 6);
   const title =
     view === "month"
       ? formatMonthTitle(cursor)
-      : `${weekStart.toLocaleDateString("zh-CN")} - ${weekEnd.toLocaleDateString("zh-CN")}`;
+      : `${formatDate(weekStart)} - ${formatDate(weekEnd)}`;
 
   function move(direction: -1 | 1) {
-    const next = new Date(cursor);
-    if (view === "month") {
-      next.setMonth(next.getMonth() + direction);
-    } else {
-      next.setDate(next.getDate() + direction * 7);
-    }
-    onCursorChange(next);
+    onCursorChange(view === "month" ? addMonths(cursor, direction) : addDays(cursor, direction * 7));
   }
 
   return (

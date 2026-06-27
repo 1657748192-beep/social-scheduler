@@ -16,7 +16,7 @@ const activeScheduleStatuses = ["scheduled", "locked"] as const;
 export const createScheduleSchema = z.object({
   postVariantId: z.string().uuid(),
   scheduledAt: z.string().datetime(),
-  timezone: z.string().min(1).max(80).default("UTC")
+  timezone: z.string().min(1).max(80).default("Asia/Shanghai")
 });
 
 export const listSchedulesSchema = z.object({

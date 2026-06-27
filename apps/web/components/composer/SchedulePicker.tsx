@@ -1,5 +1,7 @@
 "use client";
 
+import { APP_TIME_ZONE_LABEL, toChinaDatetimeLocalValue } from "../../lib/chinaTime";
+
 type SchedulePickerProps = {
   value: string;
   onChange: (value: string) => void;
@@ -12,13 +14,13 @@ export function SchedulePicker({ value, onChange }: SchedulePickerProps) {
       <label className="field">
         <span>发布时间</span>
         <input
-          min={new Date().toISOString().slice(0, 16)}
+          min={toChinaDatetimeLocalValue(new Date())}
           onChange={(event) => onChange(event.target.value)}
           type="datetime-local"
           value={value}
         />
       </label>
-      <p className="muted">留空则保存为草稿。</p>
+      <p className="muted">按{APP_TIME_ZONE_LABEL}保存；留空则保存为草稿。</p>
     </section>
   );
 }

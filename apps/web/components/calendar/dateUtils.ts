@@ -1,51 +1,76 @@
+import {
+  formatChinaDate,
+  formatChinaDateKey,
+  formatChinaDateTime,
+  formatChinaTime,
+  fromChinaDateParts,
+  getChinaDateParts
+} from "../../lib/chinaTime";
+
 export function startOfDay(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const parts = getChinaDateParts(date);
+  return fromChinaDateParts(parts.year, parts.month, parts.date);
 }
 
 export function startOfWeek(date: Date) {
   const start = startOfDay(date);
-  start.setDate(start.getDate() - start.getDay());
-  return start;
+  const parts = getChinaDateParts(start);
+  const dayOfWeek = new Date(Date.UTC(parts.year, parts.month, parts.date)).getUTCDay();
+  return fromChinaDateParts(parts.year, parts.month, parts.date - dayOfWeek);
 }
 
 export function startOfMonthGrid(date: Date) {
-  return startOfWeek(new Date(date.getFullYear(), date.getMonth(), 1));
+  const parts = getChinaDateParts(date);
+  return startOfWeek(fromChinaDateParts(parts.year, parts.month, 1));
 }
 
 export function addDays(date: Date, days: number) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
+  const parts = getChinaDateParts(date);
+  return fromChinaDateParts(parts.year, parts.month, parts.date + days, parts.hour, parts.minute);
 }
 
 export function addMonths(date: Date, months: number) {
-  return new Date(date.getFullYear(), date.getMonth() + months, 1);
+  const parts = getChinaDateParts(date);
+  return fromChinaDateParts(parts.year, parts.month + months, 1);
 }
 
 export function formatDateKey(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
-    date.getDate()
-  ).padStart(2, "0")}`;
+  return formatChinaDateKey(date);
 }
 
 export function sameMonth(left: Date, right: Date) {
-  return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth();
+  const leftParts = getChinaDateParts(left);
+  const rightParts = getChinaDateParts(right);
+  return leftParts.year === rightParts.year && leftParts.month === rightParts.month;
 }
 
 export function formatMonthTitle(date: Date) {
-  return date.toLocaleDateString("zh-CN", {
-    month: "long",
-    year: "numeric"
-  });
+  const parts = getChinaDateParts(date);
+  return `${parts.year}年${parts.month + 1}月`;
 }
 
 export function formatTime(date: Date) {
-  return date.toLocaleTimeString("zh-CN", {
-    hour: "2-digit",
-    minute: "2-digit"
-  });
+  return formatChinaTime(date);
 }
 
 export function formatDateTime(date: Date) {
-  return `${date.toLocaleDateString("zh-CN")} ${formatTime(date)}`;
+  return formatChinaDateTime(date);
+}
+
+export function formatDate(date: Date) {
+  return formatChinaDate(date);
+}
+
+export function getDayNumber(date: Date) {
+  return getChinaDateParts(date).date;
+}
+
+export function getWeekdayShort(date: Date) {
+  return ["周日", "周一", "周二", "周三", "周四", "周五", "周六"][
+    new Date(Date.UTC(
+      getChinaDateParts(date).year,
+      getChinaDateParts(date).month,
+      getChinaDateParts(date).date
+    )).getUTCDay()
+  ];
 }
