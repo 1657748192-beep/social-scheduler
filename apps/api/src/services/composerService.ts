@@ -56,7 +56,7 @@ function validateVariant(platform: ComposerPlatform, text: string, mediaCount: n
   if (mediaCount > limit.maxImages) {
     errors.push({
       code: "too_many_images",
-      message: `${limit.label} allows up to ${limit.maxImages} images`,
+      message: `${limit.label} allows up to ${limit.maxImages} media assets`,
       limit: limit.maxImages,
       actual: mediaCount
     });
@@ -265,7 +265,7 @@ export async function getComposerPost(userId: string, workspaceId: string, postI
   return post;
 }
 
-export async function uploadWorkspaceImage(
+export async function uploadWorkspaceMedia(
   userId: string,
   workspaceId: string,
   file: Express.Multer.File
@@ -274,7 +274,7 @@ export async function uploadWorkspaceImage(
   ensureCanWrite(membership.role);
 
   if (!file) {
-    throw new HttpError(400, "Image file is required");
+    throw new HttpError(400, "Media file is required");
   }
 
   const asset = await prisma.mediaAsset.create({

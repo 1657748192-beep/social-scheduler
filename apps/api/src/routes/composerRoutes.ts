@@ -5,10 +5,10 @@ import {
   getComposerPostController,
   listComposerPostsController,
   listWorkspaceMediaController,
-  uploadWorkspaceImageController
+  uploadWorkspaceMediaController
 } from "../controllers/composerController";
 import { requireAuth } from "../middleware/auth";
-import { imageUpload } from "../middleware/upload";
+import { mediaUpload } from "../middleware/upload";
 import { asyncHandler } from "../utils/asyncHandler";
 
 export const composerRoutes = Router();
@@ -23,8 +23,8 @@ composerRoutes.get(
 composerRoutes.post(
   "/workspaces/:workspaceId/media",
   requireAuth,
-  imageUpload.single("file"),
-  asyncHandler(uploadWorkspaceImageController)
+  mediaUpload.single("file"),
+  asyncHandler(uploadWorkspaceMediaController)
 );
 
 composerRoutes.get(

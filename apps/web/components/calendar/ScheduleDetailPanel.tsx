@@ -45,9 +45,13 @@ export function ScheduleDetailPanel({ schedule, onClose }: ScheduleDetailPanelPr
 
       {schedule.postVariant.media.length ? (
         <div className="detail-media-grid">
-          {schedule.postVariant.media.map((item) => (
-            <img alt="" key={item.id} src={item.mediaAsset.fileUrl} />
-          ))}
+          {schedule.postVariant.media.map((item) =>
+            item.mediaAsset.mimeType.startsWith("video/") ? (
+              <video controls key={item.id} preload="metadata" src={item.mediaAsset.fileUrl} />
+            ) : (
+              <img alt="" key={item.id} src={item.mediaAsset.fileUrl} />
+            )
+          )}
         </div>
       ) : null}
 

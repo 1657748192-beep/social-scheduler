@@ -6,14 +6,14 @@ import { platformLimits } from "./platformConfig";
 type PlatformEditorProps = {
   platform: ComposerPlatform;
   text: string;
-  imageCount: number;
+  mediaCount: number;
   onChange: (value: string) => void;
 };
 
-export function PlatformEditor({ platform, text, imageCount, onChange }: PlatformEditorProps) {
+export function PlatformEditor({ platform, text, mediaCount, onChange }: PlatformEditorProps) {
   const limit = platformLimits[platform];
   const overTextLimit = text.length > limit.maxTextLength;
-  const overImageLimit = imageCount > limit.maxImages;
+  const overMediaLimit = mediaCount > limit.maxImages;
 
   return (
     <section className="composer-panel editor-surface">
@@ -35,8 +35,8 @@ export function PlatformEditor({ platform, text, imageCount, onChange }: Platfor
         <span className={overTextLimit ? "danger" : ""}>
           {overTextLimit ? "文案超过平台限制" : "文案长度正常"}
         </span>
-        <span className={overImageLimit ? "danger" : ""}>
-          {imageCount}/{limit.maxImages} 张图片
+        <span className={overMediaLimit ? "danger" : ""}>
+          {mediaCount}/{limit.maxImages} 个素材
         </span>
       </div>
     </section>

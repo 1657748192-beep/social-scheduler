@@ -6,15 +6,15 @@ import {
   getComposerPost,
   listComposerPosts,
   listWorkspaceMedia,
-  uploadWorkspaceImage
+  uploadWorkspaceMedia
 } from "../services/composerService";
 
 export async function getComposerPlatformsController(_req: Request, res: Response) {
   return res.json(getComposerPlatforms());
 }
 
-export async function uploadWorkspaceImageController(req: Request, res: Response) {
-  const asset = await uploadWorkspaceImage(
+export async function uploadWorkspaceMediaController(req: Request, res: Response) {
+  const asset = await uploadWorkspaceMedia(
     req.user!.id,
     req.params.workspaceId,
     req.file as Express.Multer.File

@@ -10,7 +10,7 @@ type CalendarEventItemProps = {
 
 export function CalendarEventItem({ schedule, onClick }: CalendarEventItemProps) {
   const scheduledAt = new Date(schedule.scheduledAt);
-  const thumbnail = schedule.postVariant.media[0]?.mediaAsset.fileUrl;
+  const thumbnail = schedule.postVariant.media[0]?.mediaAsset;
 
   return (
     <button
@@ -26,7 +26,13 @@ export function CalendarEventItem({ schedule, onClick }: CalendarEventItemProps)
       }}
       type="button"
     >
-      {thumbnail ? <img alt="" src={thumbnail} /> : null}
+      {thumbnail ? (
+        thumbnail.mimeType.startsWith("video/") ? (
+          <span className="calendar-video-thumb">视频</span>
+        ) : (
+          <img alt="" src={thumbnail.fileUrl} />
+        )
+      ) : null}
       <span>
         <strong>{formatTime(scheduledAt)}</strong>
         {schedule.postVariant.post.title || schedule.postVariant.text}

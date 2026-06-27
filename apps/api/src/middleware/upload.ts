@@ -18,14 +18,14 @@ const storage = multer.diskStorage({
   }
 });
 
-export const imageUpload = multer({
+export const mediaUpload = multer({
   storage,
   limits: {
-    fileSize: 10 * 1024 * 1024
+    fileSize: 100 * 1024 * 1024
   },
   fileFilter: (_req, file, callback) => {
-    if (!file.mimetype.startsWith("image/")) {
-      callback(new HttpError(400, "Only image uploads are supported"));
+    if (!file.mimetype.startsWith("image/") && !file.mimetype.startsWith("video/")) {
+      callback(new HttpError(400, "Only image or video uploads are supported"));
       return;
     }
 

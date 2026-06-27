@@ -171,7 +171,7 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
         />
 
         <PlatformEditor
-          imageCount={media.length}
+          mediaCount={media.length}
           onChange={(value) =>
             setVariantTexts((current) => ({
               ...current,

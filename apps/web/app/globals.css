@@ -826,6 +826,16 @@ textarea {
   font-size: 14px;
 }
 
+.upload-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.upload-actions input {
+  display: none;
+}
+
 .upload-drop {
   display: flex;
   align-items: center;
@@ -836,10 +846,17 @@ textarea {
   background: #f9fbfd;
   cursor: pointer;
   font-weight: 700;
+  color: var(--text);
 }
 
-.upload-drop input {
-  display: none;
+.upload-drop.video {
+  border-color: #6aa8b7;
+  background: #f3fbfd;
+}
+
+.upload-drop:disabled {
+  cursor: wait;
+  opacity: 0.7;
 }
 
 .media-grid {
@@ -850,6 +867,7 @@ textarea {
 }
 
 .media-thumb {
+  position: relative;
   aspect-ratio: 1;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -860,11 +878,32 @@ textarea {
 }
 
 .media-thumb img,
-.preview-images img {
+.media-thumb video,
+.preview-images img,
+.preview-images video {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.media-badge,
+.preview-video span,
+.calendar-video-thumb {
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(12, 20, 31, 0.78);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.media-badge {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 3px 7px;
 }
 
 .preview-stack {
@@ -924,9 +963,23 @@ textarea {
   grid-template-columns: repeat(2, 1fr);
 }
 
-.preview-images img {
+.preview-images img,
+.preview-video {
   aspect-ratio: 1.2;
   border-radius: 8px;
+}
+
+.preview-video {
+  position: relative;
+  overflow: hidden;
+  background: #111827;
+}
+
+.preview-video span {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 3px 8px;
 }
 
 .composer-actions {
@@ -1090,7 +1143,14 @@ textarea {
   object-fit: cover;
 }
 
-.calendar-event span {
+.calendar-video-thumb {
+  width: 34px;
+  height: 24px;
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.calendar-event > span:not(.calendar-video-thumb) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1209,7 +1269,8 @@ textarea {
   gap: 8px;
 }
 
-.detail-media-grid img {
+.detail-media-grid img,
+.detail-media-grid video {
   width: 100%;
   aspect-ratio: 1;
   object-fit: cover;

@@ -32,9 +32,16 @@ export function PostPreview({ platforms, texts, media }: PostPreviewProps) {
               <p>{texts[platform] || "这里会显示该平台的专属文案。"}</p>
               {media.length ? (
                 <div className={`preview-images count-${Math.min(media.length, 4)}`}>
-                  {media.slice(0, 4).map((asset) => (
-                    <img alt="" key={asset.id} src={asset.fileUrl} />
-                  ))}
+                  {media.slice(0, 4).map((asset) =>
+                    asset.mimeType.startsWith("video/") ? (
+                      <div className="preview-video" key={asset.id}>
+                        <video muted preload="metadata" src={asset.fileUrl} />
+                        <span>视频</span>
+                      </div>
+                    ) : (
+                      <img alt="" key={asset.id} src={asset.fileUrl} />
+                    )
+                  )}
                 </div>
               ) : null}
             </article>
