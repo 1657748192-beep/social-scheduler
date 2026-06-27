@@ -47,3 +47,27 @@ NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
 3. Go to the dashboard
 4. Create a demo scheduled publish job
 5. Check the API logs and worker logs in Docker
+
+## Production maintenance
+
+Production deployment is designed to be GitHub-first:
+
+```text
+developer computer -> GitHub main -> /opt/social-scheduler on the server -> Docker Compose
+```
+
+Server deploy:
+
+```bash
+cd /opt/social-scheduler
+bash scripts/deploy-server.sh
+```
+
+Database backup:
+
+```bash
+cd /opt/social-scheduler
+bash scripts/backup-db.sh
+```
+
+See [docs/SERVER_MAINTENANCE.md](docs/SERVER_MAINTENANCE.md).
