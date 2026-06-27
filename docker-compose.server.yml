@@ -78,16 +78,21 @@ services:
       NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL}/api/v1
 
   reverse-proxy:
-    image: nginx:1.27-alpine
+    image: caddy:2.8-alpine
     container_name: social_scheduler_nginx
     restart: unless-stopped
     ports:
       - "80:80"
+      - "443:443"
     volumes:
-      - ./infra/nginx/social-scheduler.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
       - api
       - web
 
 volumes:
   api_uploads:
+  caddy_data:
+  caddy_config:

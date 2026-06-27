@@ -1,0 +1,15 @@
+app.bufferhelp.com {
+  encode gzip zstd
+
+  handle /api/* {
+    reverse_proxy api:4000
+  }
+
+  handle /uploads/* {
+    reverse_proxy api:4000
+  }
+
+  handle {
+    reverse_proxy web:3000
+  }
+}
