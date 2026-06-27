@@ -2,6 +2,10 @@ node_modules
 .next
 dist
 .env
+.env.server
+.env.production
+.env.production.api
+.env.staging
 .env.local
 .env.*.local
 coverage
