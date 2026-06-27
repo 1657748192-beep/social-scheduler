@@ -6,6 +6,7 @@ import { AppShell } from "../../components/AppShell";
 import {
   apiRequest,
   type CurrentUser,
+  type OAuthProviderStatus,
   type OAuthStartResponse,
   type SocialAccount,
   type Workspace,
@@ -36,6 +37,7 @@ export default function DashboardPage() {
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([]);
   const [socialAccounts, setSocialAccounts] = useState<SocialAccount[]>([]);
+  const [oauthStatuses, setOAuthStatuses] = useState<OAuthProviderStatus[]>([]);
   const [latestInviteUrl, setLatestInviteUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [createdJob, setCreatedJob] = useState<DemoScheduleResponse | null>(null);
@@ -57,7 +59,7 @@ export default function DashboardPage() {
   }
 
   async function loadWorkspaceDetails(storedToken: string, workspaceId: string) {
-    const [memberList, invitationList, socialAccountList] = await Promise.all([
+    const [memberList, invitationList, socialAccountList, oauthStatusList] = await Promise.all([
       apiRequest<WorkspaceMember[]>(`/workspaces/${workspaceId}/members`, { token: storedToken }),
       canManageMembers
         ? apiRequest<WorkspaceInvitation[]>(`/workspaces/${workspaceId}/invitations`, {
@@ -66,12 +68,14 @@ export default function DashboardPage() {
         : Promise.resolve([]),
       apiRequest<SocialAccount[]>(`/workspaces/${workspaceId}/social-accounts`, {
         token: storedToken
-      })
+      }),
+      apiRequest<OAuthProviderStatus[]>("/integrations/oauth/status", { token: storedToken })
     ]);
 
     setMembers(memberList);
     setInvitations(invitationList);
     setSocialAccounts(socialAccountList);
+    setOAuthStatuses(oauthStatusList);
   }
 
   useEffect(() => {
@@ -164,7 +168,7 @@ export default function DashboardPage() {
     }
   }
 
-  async function connectSocialAccount(platform: "twitter" | "facebook" | "instagram") {
+  async function connectSocialAccount(platform: OAuthProviderStatus["platformParam"]) {
     if (!token || !selectedWorkspace) {
       return;
     }
@@ -337,16 +341,54 @@ export default function DashboardPage() {
             </div>
 
             {canManageMembers ? (
-              <div className="form">
-                <button className="button" type="button" onClick={() => connectSocialAccount("twitter")}>
-                  绑定 X / Twitter
-                </button>
-                <button className="button secondary" type="button" onClick={() => connectSocialAccount("facebook")}>
-                  绑定 Facebook
-                </button>
-                <button className="button secondary" type="button" onClick={() => connectSocialAccount("instagram")}>
-                  绑定 Instagram
-                </button>
+              <div className="oauth-provider-list">
+                {oauthStatuses.map((provider) => (
+                  <article className="oauth-provider" key={provider.platform}>
+                    <div className="row">
+                      <strong>{provider.displayName}</strong>
+                      <span className={provider.configured ? "status-pill ready" : "status-pill warning"}>
+                        {provider.configured ? "已配置" : "未配置"}
+                      </span>
+                    </div>
+
+                    <p className="muted">
+                      {provider.configured
+                        ? "可以跳转到平台授权页面绑定账号。"
+                        : "需要先在平台开发者后台创建应用，并把 Client ID / Secret 写入服务器环境变量。"}
+                    </p>
+
+                    <button
+                      className="button"
+                      disabled={!provider.configured}
+                      onClick={() => connectSocialAccount(provider.platformParam)}
+                      type="button"
+                    >
+                      {provider.configured ? `绑定 ${provider.displayName}` : "等待配置后绑定"}
+                    </button>
+
+                    <div className="oauth-links">
+                      <a href={provider.developerUrl} rel="noreferrer" target="_blank">
+                        打开开发者后台
+                      </a>
+                      <a href={provider.docsUrl} rel="noreferrer" target="_blank">
+                        查看配置文档
+                      </a>
+                    </div>
+
+                    <div className="oauth-config-box">
+                      <span>OAuth 回调地址</span>
+                      <code>{provider.redirectUri}</code>
+                    </div>
+
+                    {!provider.configured ? (
+                      <div className="oauth-config-box">
+                        <span>服务器需要配置</span>
+                        <code>{provider.requiredEnv.join(" / ")}</code>
+                      </div>
+                    ) : null}
+                  </article>
+                ))}
+                {!oauthStatuses.length ? <p className="muted">正在读取平台配置状态。</p> : null}
               </div>
             ) : (
               <p className="muted">只有所有者和管理员可以绑定社交账号。</p>

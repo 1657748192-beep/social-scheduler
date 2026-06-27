@@ -3,6 +3,7 @@ import {
   disconnectSocialAccountController,
   listSocialAccountsController,
   oauthCallbackController,
+  oauthProviderStatusController,
   startOAuthController
 } from "../controllers/socialAccountController";
 import { requireAuth } from "../middleware/auth";
@@ -10,6 +11,11 @@ import { asyncHandler } from "../utils/asyncHandler";
 
 export const socialAccountRoutes = Router();
 
+socialAccountRoutes.get(
+  "/integrations/oauth/status",
+  requireAuth,
+  asyncHandler(oauthProviderStatusController)
+);
 socialAccountRoutes.get(
   "/integrations/:platform/oauth/start",
   requireAuth,

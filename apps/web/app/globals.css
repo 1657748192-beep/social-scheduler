@@ -354,6 +354,74 @@ textarea {
   font-size: 13px;
 }
 
+.oauth-provider-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.oauth-provider {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background: #fff;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  border-radius: 999px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.status-pill.ready {
+  background: #e7f7ed;
+  color: #16713d;
+}
+
+.status-pill.warning {
+  background: #fff4e5;
+  color: #a45400;
+}
+
+.oauth-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.oauth-links a {
+  color: var(--primary);
+}
+
+.oauth-config-box {
+  display: grid;
+  gap: 6px;
+}
+
+.oauth-config-box span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.oauth-config-box code {
+  display: block;
+  overflow-wrap: anywhere;
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: #f1f4f8;
+  color: #263241;
+  font-size: 12px;
+}
+
 .composer-layout {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr) 320px;

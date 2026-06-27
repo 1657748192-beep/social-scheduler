@@ -118,6 +118,21 @@ export type OAuthStartResponse = {
   platform: string;
 };
 
+export type OAuthProviderStatus = {
+  platform: "x" | "facebook" | "instagram";
+  platformParam: "twitter" | "facebook" | "instagram";
+  displayName: string;
+  configured: boolean;
+  clientIdConfigured: boolean;
+  clientSecretConfigured: boolean;
+  clientSecretRequired: boolean;
+  redirectUri: string;
+  developerUrl: string;
+  docsUrl: string;
+  requiredEnv: string[];
+  scopes: string[];
+};
+
 export type ComposerPlatform = "x" | "instagram" | "facebook";
 
 export type PlatformLimit = {

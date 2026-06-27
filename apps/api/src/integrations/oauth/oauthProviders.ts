@@ -16,6 +16,21 @@ export type OAuthProviderConfig = {
   usesPkce: boolean;
 };
 
+export type OAuthProviderStatus = {
+  platform: Platform;
+  platformParam: OAuthPlatformParam;
+  displayName: string;
+  configured: boolean;
+  clientIdConfigured: boolean;
+  clientSecretConfigured: boolean;
+  clientSecretRequired: boolean;
+  redirectUri: string;
+  developerUrl: string;
+  docsUrl: string;
+  requiredEnv: string[];
+  scopes: string[];
+};
+
 const providerConfigs: Record<Platform, OAuthProviderConfig | undefined> = {
   x: {
     platform: "x",
@@ -53,6 +68,64 @@ const providerConfigs: Record<Platform, OAuthProviderConfig | undefined> = {
   tiktok: undefined
 };
 
+const providerSetup: Record<Platform, Omit<OAuthProviderStatus, "configured" | "clientIdConfigured" | "clientSecretConfigured" | "clientSecretRequired" | "redirectUri" | "scopes"> | undefined> = {
+  x: {
+    platform: "x",
+    platformParam: "twitter",
+    displayName: "X / Twitter",
+    developerUrl: "https://developer.x.com/en/portal/dashboard",
+    docsUrl: "https://docs.x.com/fundamentals/developer-portal",
+    requiredEnv: ["X_CLIENT_ID", "X_CLIENT_SECRET"]
+  },
+  facebook: {
+    platform: "facebook",
+    platformParam: "facebook",
+    displayName: "Facebook",
+    developerUrl: "https://developers.facebook.com/apps/",
+    docsUrl: "https://developers.facebook.com/documentation/development/create-an-app/app-dashboard",
+    requiredEnv: ["FACEBOOK_CLIENT_ID", "FACEBOOK_CLIENT_SECRET"]
+  },
+  instagram: {
+    platform: "instagram",
+    platformParam: "instagram",
+    displayName: "Instagram",
+    developerUrl: "https://developers.facebook.com/apps/",
+    docsUrl: "https://developers.facebook.com/docs/instagram-platform/",
+    requiredEnv: ["INSTAGRAM_CLIENT_ID 或 FACEBOOK_CLIENT_ID", "INSTAGRAM_CLIENT_SECRET 或 FACEBOOK_CLIENT_SECRET"]
+  },
+  tiktok: undefined
+};
+
+export function redirectUriFor(platform: Platform) {
+  const publicPlatform = platform === "x" ? "twitter" : platform;
+  return `${config.API_PUBLIC_URL}/api/v1/integrations/${publicPlatform}/oauth/callback`;
+}
+
+export function listOAuthProviderStatuses(): OAuthProviderStatus[] {
+  return (["x", "facebook", "instagram"] as Platform[]).map((platform) => {
+    const provider = providerConfigs[platform];
+    const setup = providerSetup[platform];
+
+    if (!provider || !setup) {
+      throw new HttpError(500, "OAuth provider setup is missing");
+    }
+
+    const clientIdConfigured = Boolean(provider.clientId);
+    const clientSecretConfigured = Boolean(provider.clientSecret);
+    const clientSecretRequired = !provider.usesPkce;
+
+    return {
+      ...setup,
+      configured: clientIdConfigured && (!clientSecretRequired || clientSecretConfigured),
+      clientIdConfigured,
+      clientSecretConfigured,
+      clientSecretRequired,
+      redirectUri: redirectUriFor(platform),
+      scopes: provider.defaultScopes
+    };
+  });
+}
+
 export function normalizeOAuthPlatform(platform: string): Platform {
   if (platform === "twitter") {
     return "x";
@@ -74,7 +147,11 @@ export function getOAuthProvider(platform: string) {
   }
 
   if (!provider.clientId) {
-    throw new HttpError(500, `${provider.displayName} OAuth client id is not configured`);
+    throw new HttpError(409, `${provider.displayName} OAuth client id is not configured`);
+  }
+
+  if (!provider.usesPkce && !provider.clientSecret) {
+    throw new HttpError(409, `${provider.displayName} OAuth client secret is not configured`);
   }
 
   return provider;

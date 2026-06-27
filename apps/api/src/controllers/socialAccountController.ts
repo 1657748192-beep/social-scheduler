@@ -1,6 +1,9 @@
 import type { Request, Response } from "express";
 import { config } from "../config";
 import {
+  listOAuthProviderStatuses
+} from "../integrations/oauth/oauthProviders";
+import {
   completeOAuth,
   disconnectSocialAccount,
   listSocialAccounts,
@@ -13,6 +16,10 @@ export async function startOAuthController(req: Request, res: Response) {
   const query = startOAuthSchema.parse(req.query);
   const result = await startOAuth(req.user!.id, req.params.platform, query.workspaceId);
   return res.json(result);
+}
+
+export async function oauthProviderStatusController(_req: Request, res: Response) {
+  return res.json(listOAuthProviderStatuses());
 }
 
 export async function oauthCallbackController(req: Request, res: Response) {

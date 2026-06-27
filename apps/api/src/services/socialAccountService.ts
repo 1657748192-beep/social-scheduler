@@ -5,6 +5,7 @@ import { config } from "../config";
 import {
   getOAuthProvider,
   normalizeOAuthPlatform,
+  redirectUriFor,
   type OAuthProviderConfig
 } from "../integrations/oauth/oauthProviders";
 import { prisma } from "../prisma";
@@ -37,11 +38,6 @@ function base64UrlSha256(value: string) {
 
 function randomBase64Url(bytes = 32) {
   return randomBytes(bytes).toString("base64url");
-}
-
-function redirectUriFor(platform: Platform) {
-  const publicPlatform = platform === "x" ? "twitter" : platform;
-  return `${config.API_PUBLIC_URL}/api/v1/integrations/${publicPlatform}/oauth/callback`;
 }
 
 function parseScopes(tokenResponse: TokenResponse, fallbackScopes: string[]) {
