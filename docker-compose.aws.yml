@@ -1,0 +1,28 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: social_scheduler_api
+    restart: unless-stopped
+    env_file:
+      - .env.production.api
+    ports:
+      - "4000:4000"
+    volumes:
+      - api_uploads:/app/apps/api/uploads
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: social_scheduler_worker
+    restart: unless-stopped
+    command: ["node", "dist/worker.js"]
+    env_file:
+      - .env.production.api
+    volumes:
+      - api_uploads:/app/apps/api/uploads
+
+volumes:
+  api_uploads:

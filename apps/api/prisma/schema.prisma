@@ -1,0 +1,339 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum WorkspaceRole {
+  owner
+  admin
+  editor
+  viewer
+
+  @@map("workspace_role")
+}
+
+enum InvitationStatus {
+  pending
+  accepted
+  revoked
+  expired
+
+  @@map("invitation_status")
+}
+
+enum MemberStatus {
+  active
+  invited
+  disabled
+
+  @@map("member_status")
+}
+
+enum Platform {
+  x
+  instagram
+  facebook
+  tiktok
+
+  @@map("platform")
+}
+
+enum SocialAccountStatus {
+  active
+  disconnected
+  token_expired
+
+  @@map("social_account_status")
+}
+
+enum PostStatus {
+  draft
+  in_review
+  approved
+  scheduled
+  archived
+
+  @@map("post_status")
+}
+
+enum PublishStatus {
+  draft
+  queued
+  publishing
+  published
+  failed
+  canceled
+
+  @@map("publish_status")
+}
+
+enum ScheduleStatus {
+  scheduled
+  locked
+  published
+  failed
+  canceled
+
+  @@map("schedule_status")
+}
+
+enum JobStatus {
+  waiting
+  active
+  succeeded
+  retrying
+  failed
+  dead
+
+  @@map("job_status")
+}
+
+model User {
+  id           String            @id @default(uuid()) @db.Uuid
+  email        String            @unique
+  passwordHash String            @map("password_hash")
+  name         String
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
+  ownedSpaces  Workspace[]       @relation("WorkspaceOwner")
+  memberships  WorkspaceMember[]
+  posts        Post[]            @relation("PostAuthor")
+  sessions     UserSession[]
+  sentInvites  WorkspaceInvitation[] @relation("InvitationSender")
+  acceptedInvites WorkspaceInvitation[] @relation("InvitationAccepter")
+  oauthStates  OauthState[]
+  uploadedMedia MediaAsset[]     @relation("MediaUploader")
+
+  @@map("users")
+}
+
+model UserSession {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenId   String    @unique @map("token_id")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt, expiresAt])
+  @@map("user_sessions")
+}
+
+model Workspace {
+  id        String            @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String            @unique
+  timezone  String            @default("UTC")
+  plan      String            @default("free")
+  ownerId   String            @map("owner_id") @db.Uuid
+  owner     User              @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+  members   WorkspaceMember[]
+  posts     Post[]
+  invitations WorkspaceInvitation[]
+  socialAccounts SocialAccount[]
+  oauthStates OauthState[]
+  mediaAssets MediaAsset[]
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String        @id @default(uuid()) @db.Uuid
+  workspaceId String        @map("workspace_id") @db.Uuid
+  userId      String        @map("user_id") @db.Uuid
+  role        WorkspaceRole @default(owner)
+  status      MemberStatus  @default(active)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@map("workspace_members")
+}
+
+model WorkspaceInvitation {
+  id           String           @id @default(uuid()) @db.Uuid
+  workspaceId  String           @map("workspace_id") @db.Uuid
+  email        String
+  role         WorkspaceRole    @default(viewer)
+  tokenHash    String           @unique @map("token_hash")
+  status       InvitationStatus @default(pending)
+  invitedById  String           @map("invited_by_id") @db.Uuid
+  acceptedById String?          @map("accepted_by_id") @db.Uuid
+  expiresAt    DateTime         @map("expires_at")
+  acceptedAt   DateTime?        @map("accepted_at")
+  createdAt    DateTime         @default(now()) @map("created_at")
+  workspace    Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy    User             @relation("InvitationSender", fields: [invitedById], references: [id])
+  acceptedBy   User?            @relation("InvitationAccepter", fields: [acceptedById], references: [id])
+
+  @@index([workspaceId, status, createdAt])
+  @@index([email, status])
+  @@map("workspace_invitations")
+}
+
+model SocialAccount {
+  id                String              @id @default(uuid()) @db.Uuid
+  workspaceId       String              @map("workspace_id") @db.Uuid
+  platform          Platform
+  providerAccountId String              @map("provider_account_id")
+  displayName       String              @map("display_name")
+  avatarUrl         String?             @map("avatar_url")
+  accountType       String?             @map("account_type")
+  status            SocialAccountStatus @default(active)
+  capabilities      Json                @default("{}")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  workspace         Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  credential        OauthCredential?
+
+  @@unique([workspaceId, platform, providerAccountId])
+  @@map("social_accounts")
+}
+
+model OauthCredential {
+  id                    String        @id @default(uuid()) @db.Uuid
+  socialAccountId       String        @unique @map("social_account_id") @db.Uuid
+  accessTokenEncrypted  String        @map("access_token_encrypted")
+  refreshTokenEncrypted String?       @map("refresh_token_encrypted")
+  tokenType             String        @default("Bearer") @map("token_type")
+  scopes                String[]
+  expiresAt             DateTime?     @map("expires_at")
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+  socialAccount         SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  @@map("oauth_credentials")
+}
+
+model OauthState {
+  id           String    @id @default(uuid()) @db.Uuid
+  workspaceId  String    @map("workspace_id") @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  platform     Platform
+  state        String    @unique
+  codeVerifier String?   @map("code_verifier")
+  redirectUri  String    @map("redirect_uri")
+  scopes       String[]
+  expiresAt    DateTime  @map("expires_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, platform, createdAt])
+  @@index([expiresAt])
+  @@map("oauth_states")
+}
+
+model MediaAsset {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  uploadedBy  String   @map("uploaded_by") @db.Uuid
+  fileUrl     String   @map("file_url")
+  storageKey  String   @map("storage_key")
+  mimeType    String   @map("mime_type")
+  sizeBytes   Int      @map("size_bytes")
+  width       Int?
+  height      Int?
+  durationSec Int?     @map("duration_sec")
+  status      String   @default("ready")
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  uploader    User      @relation("MediaUploader", fields: [uploadedBy], references: [id])
+  variantLinks PostVariantMedia[]
+
+  @@map("media_assets")
+}
+
+model Post {
+  id             String        @id @default(uuid()) @db.Uuid
+  workspaceId    String        @map("workspace_id") @db.Uuid
+  authorId       String        @map("author_id") @db.Uuid
+  title          String?
+  baseText       String        @map("base_text")
+  workflowStatus PostStatus    @default(draft) @map("workflow_status")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  workspace      Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  author         User          @relation("PostAuthor", fields: [authorId], references: [id])
+  variants       PostVariant[]
+
+  @@index([workspaceId, workflowStatus, createdAt])
+  @@map("posts")
+}
+
+model PostVariant {
+  id               String        @id @default(uuid()) @db.Uuid
+  postId           String        @map("post_id") @db.Uuid
+  socialAccountId  String?       @map("social_account_id") @db.Uuid
+  platform         Platform
+  text             String
+  linkUrl          String?       @map("link_url")
+  platformPayload  Json          @default("{}") @map("platform_payload")
+  validationErrors Json          @default("[]") @map("validation_errors")
+  publishStatus    PublishStatus @default(draft) @map("publish_status")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+  post             Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  schedules        Schedule[]
+  media            PostVariantMedia[]
+
+  @@map("post_variants")
+}
+
+model PostVariantMedia {
+  id            String      @id @default(uuid()) @db.Uuid
+  postVariantId String      @map("post_variant_id") @db.Uuid
+  mediaAssetId  String      @map("media_asset_id") @db.Uuid
+  sortOrder     Int         @default(0) @map("sort_order")
+  postVariant   PostVariant @relation(fields: [postVariantId], references: [id], onDelete: Cascade)
+  mediaAsset    MediaAsset  @relation(fields: [mediaAssetId], references: [id], onDelete: Cascade)
+
+  @@map("post_variant_media")
+}
+
+model Schedule {
+  id            String         @id @default(uuid()) @db.Uuid
+  postVariantId String         @map("post_variant_id") @db.Uuid
+  workspaceId   String         @map("workspace_id") @db.Uuid
+  scheduledAt   DateTime       @map("scheduled_at")
+  timezone      String         @default("UTC")
+  status        ScheduleStatus @default(scheduled)
+  createdBy     String         @map("created_by") @db.Uuid
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  postVariant   PostVariant    @relation(fields: [postVariantId], references: [id], onDelete: Cascade)
+  publishJobs   PublishJob[]
+
+  @@index([workspaceId, scheduledAt, status])
+  @@map("schedules")
+}
+
+model PublishJob {
+  id                String    @id @default(uuid()) @db.Uuid
+  scheduleId        String    @map("schedule_id") @db.Uuid
+  postVariantId     String    @map("post_variant_id") @db.Uuid
+  workspaceId       String    @map("workspace_id") @db.Uuid
+  status            JobStatus @default(waiting)
+  attempts          Int       @default(0)
+  maxAttempts       Int       @default(3) @map("max_attempts")
+  idempotencyKey    String    @unique @map("idempotency_key")
+  lockedAt          DateTime? @map("locked_at")
+  providerPostId    String?   @map("provider_post_id")
+  providerPermalink String?   @map("provider_permalink")
+  lastError         String?   @map("last_error")
+  rawResponse       Json?     @map("raw_response")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  schedule          Schedule  @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status, createdAt])
+  @@map("publish_jobs")
+}
