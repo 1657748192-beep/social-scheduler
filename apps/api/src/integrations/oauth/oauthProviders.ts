@@ -92,7 +92,7 @@ const providerConfigs: Record<Platform, OAuthProviderConfig> = {
     authorizationUrl: "https://www.facebook.com/v20.0/dialog/oauth",
     tokenUrl: "https://graph.facebook.com/v20.0/oauth/access_token",
     profileUrl: "https://graph.facebook.com/me?fields=id,name,picture",
-    defaultScopes: ["public_profile", "pages_show_list", "pages_manage_posts"],
+    defaultScopes: ["public_profile"],
     usesPkce: false,
     clientAuthentication: "body"
   },
