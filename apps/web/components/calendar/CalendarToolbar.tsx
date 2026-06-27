@@ -30,7 +30,7 @@ export function CalendarToolbar({
   const title =
     view === "month"
       ? formatMonthTitle(cursor)
-      : `${weekStart.toLocaleDateString()} - ${weekEnd.toLocaleDateString()}`;
+      : `${weekStart.toLocaleDateString("zh-CN")} - ${weekEnd.toLocaleDateString("zh-CN")}`;
 
   function move(direction: -1 | 1) {
     const next = new Date(cursor);
@@ -46,7 +46,7 @@ export function CalendarToolbar({
     <section className="calendar-toolbar">
       <div>
         <h1>{title}</h1>
-        <p className="muted">Drag scheduled content to a new day or hour.</p>
+        <p className="muted">拖动已排程内容，可以调整到新的日期或小时。</p>
       </div>
 
       <div className="calendar-controls">
@@ -63,24 +63,24 @@ export function CalendarToolbar({
             onClick={() => onViewChange("month")}
             type="button"
           >
-            Month
+            月视图
           </button>
           <button
             className={view === "week" ? "active" : ""}
             onClick={() => onViewChange("week")}
             type="button"
           >
-            Week
+            周视图
           </button>
         </div>
         <button className="button secondary" onClick={() => move(-1)} type="button">
-          Prev
+          上一页
         </button>
         <button className="button secondary" onClick={() => onCursorChange(new Date())} type="button">
-          Today
+          今天
         </button>
         <button className="button secondary" onClick={() => move(1)} type="button">
-          Next
+          下一页
         </button>
       </div>
     </section>

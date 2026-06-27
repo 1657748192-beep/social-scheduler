@@ -14,9 +14,9 @@ type AppShellProps = {
 };
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/composer", label: "Composer" },
-  { href: "/calendar", label: "Calendar" }
+  { href: "/dashboard", label: "控制台" },
+  { href: "/composer", label: "内容编辑" },
+  { href: "/calendar", label: "排程日历" }
 ];
 
 export function AppShell({ title, subtitle, userLabel, wide = false, children }: AppShellProps) {
@@ -44,7 +44,7 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
           <div className="software-mark">S</div>
           <div>
             <strong>Social Scheduler</strong>
-            <span>Control Center</span>
+            <span>内容排程后台</span>
           </div>
         </div>
 
@@ -61,9 +61,9 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
         </nav>
 
         <div className="software-sidebar-footer">
-          <span>{userLabel || "Signed in"}</span>
+          <span>{userLabel || "已登录"}</span>
           <button className="button secondary" onClick={signOut} type="button">
-            Sign out
+            退出登录
           </button>
         </div>
       </aside>

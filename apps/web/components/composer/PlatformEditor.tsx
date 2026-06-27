@@ -27,16 +27,16 @@ export function PlatformEditor({ platform, text, imageCount, onChange }: Platfor
       <textarea
         className="composer-textarea"
         onChange={(event) => onChange(event.target.value)}
-        placeholder={`Write a ${limit.label} version`}
+        placeholder={`撰写 ${limit.label} 版本`}
         value={text}
       />
 
       <div className="validation-strip">
         <span className={overTextLimit ? "danger" : ""}>
-          {overTextLimit ? "Text is over the platform limit" : "Text length is ready"}
+          {overTextLimit ? "文案超过平台限制" : "文案长度正常"}
         </span>
         <span className={overImageLimit ? "danger" : ""}>
-          {imageCount}/{limit.maxImages} images
+          {imageCount}/{limit.maxImages} 张图片
         </span>
       </div>
     </section>

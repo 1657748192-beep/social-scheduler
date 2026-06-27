@@ -33,7 +33,7 @@ export function MonthCalendar({
 
   return (
     <section className="calendar-month">
-      {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+      {["周日", "周一", "周二", "周三", "周四", "周五", "周六"].map((day) => (
         <div className="calendar-weekday" key={day}>
           {day}
         </div>
@@ -66,7 +66,7 @@ export function MonthCalendar({
               ))}
               {daySchedules.length > 4 ? (
                 <button className="calendar-more" type="button">
-                  +{daySchedules.length - 4} more
+                  +{daySchedules.length - 4} 更多
                 </button>
               ) : null}
             </div>

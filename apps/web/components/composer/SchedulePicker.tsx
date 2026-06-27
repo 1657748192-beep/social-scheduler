@@ -8,9 +8,9 @@ type SchedulePickerProps = {
 export function SchedulePicker({ value, onChange }: SchedulePickerProps) {
   return (
     <section className="composer-panel">
-      <h2>Schedule</h2>
+      <h2>定时发布</h2>
       <label className="field">
-        <span>Publish time</span>
+        <span>发布时间</span>
         <input
           min={new Date().toISOString().slice(0, 16)}
           onChange={(event) => onChange(event.target.value)}
@@ -18,7 +18,7 @@ export function SchedulePicker({ value, onChange }: SchedulePickerProps) {
           value={value}
         />
       </label>
-      <p className="muted">Leave empty to save as a draft.</p>
+      <p className="muted">留空则保存为草稿。</p>
     </section>
   );
 }

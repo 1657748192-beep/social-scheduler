@@ -32,7 +32,7 @@ export function MediaUploader({ workspaceId, token, media, onMediaChange }: Medi
       onMediaChange([...media, asset]);
       event.target.value = "";
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Upload failed");
+      setError(requestError instanceof Error ? requestError.message : "上传失败");
     } finally {
       setIsUploading(false);
     }
@@ -45,13 +45,13 @@ export function MediaUploader({ workspaceId, token, media, onMediaChange }: Medi
   return (
     <section className="composer-panel">
       <div className="row">
-        <h2>Images</h2>
+        <h2>图片</h2>
         <span className="muted">{media.length}</span>
       </div>
 
       <label className="upload-drop">
         <input accept="image/*" disabled={isUploading} onChange={uploadImage} type="file" />
-        <span>{isUploading ? "Uploading" : "Choose image"}</span>
+        <span>{isUploading ? "上传中" : "选择图片"}</span>
       </label>
 
       <div className="media-grid">
@@ -60,7 +60,7 @@ export function MediaUploader({ workspaceId, token, media, onMediaChange }: Medi
             className="media-thumb"
             key={asset.id}
             onClick={() => removeMedia(asset.id)}
-            title="Remove image"
+            title="移除图片"
             type="button"
           >
             <img alt="" src={asset.fileUrl} />

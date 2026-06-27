@@ -13,8 +13,8 @@ export function PostPreview({ platforms, texts, media }: PostPreviewProps) {
   return (
     <section className="composer-panel preview-rail">
       <div className="row">
-        <h2>Preview</h2>
-        <span className="muted">{platforms.length} platforms</span>
+        <h2>预览</h2>
+        <span className="muted">{platforms.length} 个平台</span>
       </div>
 
       <div className="preview-stack">
@@ -26,10 +26,10 @@ export function PostPreview({ platforms, texts, media }: PostPreviewProps) {
                 <div className="preview-avatar">{limit.label.slice(0, 1)}</div>
                 <div>
                   <strong>{limit.label}</strong>
-                  <div className="muted">@connected-account</div>
+                  <div className="muted">@已绑定账号</div>
                 </div>
               </div>
-              <p>{texts[platform] || "Platform-specific copy appears here."}</p>
+              <p>{texts[platform] || "这里会显示该平台的专属文案。"}</p>
               {media.length ? (
                 <div className={`preview-images count-${Math.min(media.length, 4)}`}>
                   {media.slice(0, 4).map((asset) => (

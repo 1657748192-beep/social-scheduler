@@ -25,7 +25,7 @@ export function PlatformTabs({ selected, active, onActiveChange, onToggle }: Pla
           >
             <span>{platform.label}</span>
             <input
-              aria-label={`Enable ${platform.label}`}
+              aria-label={`启用 ${platform.label}`}
               checked={isSelected}
               onChange={() => onToggle(platform.platform)}
               type="checkbox"

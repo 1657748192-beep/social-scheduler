@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { apiRequest } from "../../../lib/api";
+import { invitationStatusLabel, roleLabel } from "../../../lib/labels";
 
 type InvitationPreview = {
   email: string;
@@ -28,7 +29,7 @@ export default function InvitationPage() {
     apiRequest<InvitationPreview>(`/invitations/${token}`)
       .then(setInvitation)
       .catch((requestError) =>
-        setError(requestError instanceof Error ? requestError.message : "Invitation not found")
+        setError(requestError instanceof Error ? requestError.message : "未找到邀请")
       );
   }, [token]);
 
@@ -36,7 +37,7 @@ export default function InvitationPage() {
     const authToken = localStorage.getItem("social_scheduler_token");
 
     if (!authToken) {
-      setError("Sign in with the invited email before accepting this invitation.");
+      setError("请先使用被邀请的邮箱登录，再接受邀请。");
       return;
     }
 
@@ -45,34 +46,35 @@ export default function InvitationPage() {
         method: "POST",
         token: authToken
       });
-      setMessage("Invitation accepted. Redirecting to dashboard.");
+      setMessage("邀请已接受，正在跳转到控制台。");
       setTimeout(() => router.push("/dashboard"), 800);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Request failed");
+      setError(requestError instanceof Error ? requestError.message : "请求失败");
     }
   }
 
   return (
     <main className="page">
       <section className="auth-card">
-        <h1>Workspace invitation</h1>
+        <h1>工作空间邀请</h1>
         {invitation ? (
           <>
             <p className="muted">
-              {invitation.email} was invited to {invitation.workspace.name} as {invitation.role}.
+              {invitation.email} 被邀请加入 {invitation.workspace.name}，权限为{" "}
+              {roleLabel(invitation.role)}。
             </p>
-            <p className="muted">Status: {invitation.status}</p>
+            <p className="muted">状态：{invitationStatusLabel(invitation.status)}</p>
             <button className="button" type="button" onClick={acceptInvite}>
-              Accept invitation
+              接受邀请
             </button>
           </>
         ) : (
-          <p className="muted">Loading invitation</p>
+          <p className="muted">正在加载邀请</p>
         )}
         {message ? <p>{message}</p> : null}
         {error ? <p className="error">{error}</p> : null}
         <p className="muted">
-          <Link href="/login">Sign in</Link> or <Link href="/register">create an account</Link>
+          <Link href="/login">登录</Link> 或 <Link href="/register">创建账号</Link>
         </p>
       </section>
     </main>

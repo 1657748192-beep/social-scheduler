@@ -71,7 +71,7 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
     event.preventDefault();
 
     if (!selectedWorkspace) {
-      setError("Select a workspace first");
+      setError("请先选择工作空间");
       return;
     }
 
@@ -100,7 +100,7 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
 
       setResult(post);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Could not save content");
+      setError(requestError instanceof Error ? requestError.message : "无法保存内容");
     } finally {
       setIsSaving(false);
     }
@@ -110,9 +110,9 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
     <form className="composer-layout" onSubmit={savePost}>
       <aside className="composer-sidebar">
         <section className="composer-panel">
-          <h2>Workspace</h2>
+          <h2>工作空间</h2>
           <label className="field">
-            <span>Destination</span>
+            <span>发布位置</span>
             <select value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)}>
               {workspaces.map((workspace) => (
                 <option key={workspace.id} value={workspace.id}>
@@ -138,25 +138,25 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
       <main className="composer-main">
         <section className="composer-panel">
           <div className="row">
-            <h1>Content Composer</h1>
+            <h1>内容编辑器</h1>
             <button className="button secondary" onClick={applyBaseText} type="button">
-              Apply base text
+              应用基础文案
             </button>
           </div>
           <label className="field">
-            <span>Internal title</span>
+            <span>内部标题</span>
             <input
               onChange={(event) => setTitle(event.target.value)}
-              placeholder="Campaign note or draft name"
+              placeholder="活动备注或草稿名称"
               value={title}
             />
           </label>
           <label className="field">
-            <span>Base text</span>
+            <span>基础文案</span>
             <textarea
               className="composer-textarea compact"
               onChange={(event) => setBaseText(event.target.value)}
-              placeholder="Write the source version, then adapt it by platform."
+              placeholder="先写一版基础文案，再按平台分别调整。"
               required
               value={baseText}
             />
@@ -184,9 +184,9 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
 
         <div className="composer-actions">
           <button className="button" disabled={isSaving} type="submit">
-            {isSaving ? "Saving" : scheduledAt ? "Schedule post" : "Save draft"}
+            {isSaving ? "保存中" : scheduledAt ? "加入排程" : "保存草稿"}
           </button>
-          {result ? <span className="muted">Saved post {result.id}</span> : null}
+          {result ? <span className="muted">已保存内容 {result.id}</span> : null}
           {error ? <span className="error">{error}</span> : null}
         </div>
       </main>

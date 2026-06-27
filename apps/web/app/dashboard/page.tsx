@@ -12,6 +12,13 @@ import {
   type WorkspaceInvitation,
   type WorkspaceMember
 } from "../../lib/api";
+import {
+  accountStatusLabel,
+  invitationStatusLabel,
+  memberStatusLabel,
+  platformLabel,
+  roleLabel
+} from "../../lib/labels";
 
 type DemoScheduleResponse = {
   scheduleId: string;
@@ -77,7 +84,7 @@ export default function DashboardPage() {
 
     setToken(storedToken);
     loadAccount(storedToken).catch((requestError) => {
-      setError(requestError instanceof Error ? requestError.message : "Request failed");
+      setError(requestError instanceof Error ? requestError.message : "请求失败");
       localStorage.removeItem("social_scheduler_token");
       router.replace("/login");
     });
@@ -89,7 +96,7 @@ export default function DashboardPage() {
     }
 
     loadWorkspaceDetails(token, selectedWorkspaceId).catch((requestError) => {
-      setError(requestError instanceof Error ? requestError.message : "Request failed");
+      setError(requestError instanceof Error ? requestError.message : "请求失败");
     });
   }, [token, selectedWorkspaceId, canManageMembers]);
 
@@ -121,7 +128,7 @@ export default function DashboardPage() {
       event.currentTarget.reset();
       await loadAccount(token);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Request failed");
+      setError(requestError instanceof Error ? requestError.message : "请求失败");
     }
   }
 
@@ -153,7 +160,7 @@ export default function DashboardPage() {
       event.currentTarget.reset();
       await loadWorkspaceDetails(token, selectedWorkspace.id);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Request failed");
+      setError(requestError instanceof Error ? requestError.message : "请求失败");
     }
   }
 
@@ -174,7 +181,7 @@ export default function DashboardPage() {
 
       window.location.href = response.authorizationUrl;
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Request failed");
+      setError(requestError instanceof Error ? requestError.message : "请求失败");
     }
   }
 
@@ -192,7 +199,7 @@ export default function DashboardPage() {
       });
       await loadWorkspaceDetails(token, selectedWorkspace.id);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Request failed");
+      setError(requestError instanceof Error ? requestError.message : "请求失败");
     }
   }
 
@@ -225,7 +232,7 @@ export default function DashboardPage() {
 
       setCreatedJob(response);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Request failed");
+      setError(requestError instanceof Error ? requestError.message : "请求失败");
     } finally {
       setIsSubmitting(false);
     }
@@ -233,9 +240,9 @@ export default function DashboardPage() {
 
   return (
     <AppShell
-      title="Dashboard"
-      subtitle="Operations overview"
-      userLabel={user ? `${user.name} - ${user.email}` : "Loading account"}
+      title="控制台"
+      subtitle="工作空间、成员、账号绑定与快速排程"
+      userLabel={user ? `${user.name} - ${user.email}` : "正在加载账号"}
     >
       <div className="dashboard">
         {error ? <p className="error">{error}</p> : null}
@@ -243,28 +250,28 @@ export default function DashboardPage() {
         <div className="grid">
           <section className="panel">
             <div className="row">
-              <h2>Workspaces</h2>
+              <h2>工作空间</h2>
               <span className="muted">{workspaces.length}</span>
             </div>
 
             <label className="field">
-              <span>Active workspace</span>
+              <span>当前工作空间</span>
               <select
                 value={selectedWorkspaceId}
                 onChange={(event) => setSelectedWorkspaceId(event.target.value)}
               >
                 {workspaces.map((workspace) => (
                   <option key={workspace.id} value={workspace.id}>
-                    {workspace.name} ({workspace.role})
+                    {workspace.name} ({roleLabel(workspace.role)})
                   </option>
                 ))}
               </select>
             </label>
 
             <form className="inline-form" onSubmit={createWorkspace}>
-              <input name="name" placeholder="New workspace name" required />
+              <input name="name" placeholder="新工作空间名称" required />
               <button className="button" type="submit">
-                Create
+                创建
               </button>
               <input name="timezone" type="hidden" value="UTC" />
             </form>
@@ -274,7 +281,7 @@ export default function DashboardPage() {
                 <li key={workspace.id}>
                   <strong>{workspace.name}</strong>
                   <div className="muted">
-                    {workspace.slug} - {workspace.role}
+                    {workspace.slug} - {roleLabel(workspace.role)}
                   </div>
                 </li>
               ))}
@@ -283,7 +290,7 @@ export default function DashboardPage() {
 
           <section className="panel">
             <div className="row">
-              <h2>Members</h2>
+              <h2>成员</h2>
               <span className="muted">{members.length}</span>
             </div>
 
@@ -292,7 +299,7 @@ export default function DashboardPage() {
                 <li key={member.id}>
                   <strong>{member.name}</strong>
                   <div className="muted">
-                    {member.email} - {member.role} - {member.status}
+                    {member.email} - {roleLabel(member.role)} - {memberStatusLabel(member.status)}
                   </div>
                 </li>
               ))}
@@ -300,22 +307,22 @@ export default function DashboardPage() {
 
             {canManageMembers ? (
               <>
-                <h2>Invite member</h2>
+                <h2>邀请成员</h2>
                 <form className="form" onSubmit={inviteMember}>
                   <label className="field">
-                    <span>Email</span>
+                    <span>邮箱</span>
                     <input name="email" type="email" required />
                   </label>
                   <label className="field">
-                    <span>Role</span>
+                    <span>权限</span>
                     <select name="role" defaultValue="viewer">
-                      <option value="admin">Admin</option>
-                      <option value="editor">Editor</option>
-                      <option value="viewer">Viewer</option>
+                      <option value="admin">管理员</option>
+                      <option value="editor">编辑者</option>
+                      <option value="viewer">查看者</option>
                     </select>
                   </label>
                   <button className="button" type="submit">
-                    Create invite
+                    创建邀请
                   </button>
                 </form>
                 {latestInviteUrl ? <code className="code">{latestInviteUrl}</code> : null}
@@ -325,24 +332,24 @@ export default function DashboardPage() {
 
           <section className="panel">
             <div className="row">
-              <h2>Social accounts</h2>
+              <h2>社交账号</h2>
               <span className="muted">{socialAccounts.length}</span>
             </div>
 
             {canManageMembers ? (
               <div className="form">
                 <button className="button" type="button" onClick={() => connectSocialAccount("twitter")}>
-                  Connect Twitter / X
+                  绑定 X / Twitter
                 </button>
                 <button className="button secondary" type="button" onClick={() => connectSocialAccount("facebook")}>
-                  Connect Facebook
+                  绑定 Facebook
                 </button>
                 <button className="button secondary" type="button" onClick={() => connectSocialAccount("instagram")}>
-                  Connect Instagram
+                  绑定 Instagram
                 </button>
               </div>
             ) : (
-              <p className="muted">Only owners and admins can connect social accounts.</p>
+              <p className="muted">只有所有者和管理员可以绑定社交账号。</p>
             )}
 
             <ul className="list">
@@ -352,7 +359,7 @@ export default function DashboardPage() {
                     <div>
                       <strong>{account.displayName}</strong>
                       <div className="muted">
-                        {account.platform} - {account.status}
+                        {platformLabel(account.platform)} - {accountStatusLabel(account.status)}
                       </div>
                     </div>
                     {canManageMembers ? (
@@ -361,38 +368,38 @@ export default function DashboardPage() {
                         type="button"
                         onClick={() => disconnectSocialAccount(account.id)}
                       >
-                        Disconnect
+                        解绑
                       </button>
                     ) : null}
                   </div>
                 </li>
               ))}
-              {!socialAccounts.length ? <li className="muted">No social accounts connected</li> : null}
+              {!socialAccounts.length ? <li className="muted">暂未绑定社交账号</li> : null}
             </ul>
           </section>
 
           <section className="panel">
-            <h2>Pending invitations</h2>
+            <h2>待处理邀请</h2>
             <ul className="list">
               {invitations.map((invitation) => (
                 <li key={invitation.id}>
                   <strong>{invitation.email}</strong>
                   <div className="muted">
-                    {invitation.role} - {invitation.status}
+                    {roleLabel(invitation.role)} - {invitationStatusLabel(invitation.status)}
                   </div>
                 </li>
               ))}
-              {!invitations.length ? <li className="muted">No visible invitations</li> : null}
+              {!invitations.length ? <li className="muted">暂无邀请</li> : null}
             </ul>
           </section>
 
           <section className="panel">
-            <h2>Quick scheduled post</h2>
-            <p className="muted">Create a scheduled queue item for the selected workspace.</p>
+            <h2>快速排程内容</h2>
+            <p className="muted">为当前工作空间快速创建一条定时发布任务。</p>
 
             <form className="form" onSubmit={createDemoSchedule}>
               <label className="field">
-                <span>Platform</span>
+                <span>平台</span>
                 <select name="platform" defaultValue="x">
                   <option value="x">X / Twitter</option>
                   <option value="instagram">Instagram</option>
@@ -402,28 +409,28 @@ export default function DashboardPage() {
               </label>
 
               <label className="field">
-                <span>Content</span>
-                <textarea name="text" defaultValue="Draft a scheduled update." required />
+                <span>内容</span>
+                <textarea name="text" defaultValue="这是一条待发布内容。" required />
               </label>
 
               <label className="field">
-                <span>Scheduled time</span>
+                <span>发布时间</span>
                 <input name="scheduledAt" type="datetime-local" defaultValue={defaultDateTime} />
               </label>
 
               <button className="button" disabled={isSubmitting || !selectedWorkspace} type="submit">
-                {isSubmitting ? "Scheduling" : "Schedule post"}
+                {isSubmitting ? "排程中" : "加入排程"}
               </button>
             </form>
 
             {createdJob ? (
               <ul className="list">
                 <li>
-                  <strong>Schedule</strong>
+                  <strong>排程记录</strong>
                   <div className="muted">{createdJob.scheduleId}</div>
                 </li>
                 <li>
-                  <strong>Publish job</strong>
+                  <strong>发布任务</strong>
                   <div className="muted">{createdJob.publishJobId}</div>
                 </li>
               </ul>

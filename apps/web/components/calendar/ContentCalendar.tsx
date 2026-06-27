@@ -66,7 +66,7 @@ export function ContentCalendar({ token, workspaces }: ContentCalendarProps) {
       );
       setSchedules(response);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Could not load calendar");
+      setError(requestError instanceof Error ? requestError.message : "无法加载日历");
     }
   }
 
@@ -89,7 +89,7 @@ export function ContentCalendar({ token, workspaces }: ContentCalendarProps) {
     }
 
     if (next.getTime() <= Date.now()) {
-      setError("Cannot move content into the past");
+      setError("不能把内容移动到过去时间");
       return;
     }
 
@@ -115,7 +115,7 @@ export function ContentCalendar({ token, workspaces }: ContentCalendarProps) {
         setSelectedSchedule(updated);
       }
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Could not reschedule");
+      setError(requestError instanceof Error ? requestError.message : "无法修改发布时间");
     }
   }
 

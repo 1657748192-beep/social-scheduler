@@ -24,18 +24,18 @@ export default function CalendarPage() {
     apiRequest<Workspace[]>("/workspaces", { token: storedToken })
       .then(setWorkspaces)
       .catch((requestError) => {
-        setError(requestError instanceof Error ? requestError.message : "Could not load workspaces");
+        setError(requestError instanceof Error ? requestError.message : "无法加载工作空间");
       });
   }, [router]);
 
   return (
-    <AppShell title="Content Calendar" subtitle="Scheduled content" wide>
+    <AppShell title="排程日历" subtitle="按周/月查看已安排内容" wide>
       {error ? <p className="error">{error}</p> : null}
       {token && workspaces.length ? <ContentCalendar token={token} workspaces={workspaces} /> : null}
       {token && !workspaces.length ? (
         <section className="panel">
-          <h1>No workspaces</h1>
-          <p className="muted">Create a workspace before using the calendar.</p>
+          <h1>暂无工作空间</h1>
+          <p className="muted">请先创建工作空间，再使用排程日历。</p>
         </section>
       ) : null}
     </AppShell>

@@ -33,19 +33,19 @@ export function sameMonth(left: Date, right: Date) {
 }
 
 export function formatMonthTitle(date: Date) {
-  return date.toLocaleDateString(undefined, {
+  return date.toLocaleDateString("zh-CN", {
     month: "long",
     year: "numeric"
   });
 }
 
 export function formatTime(date: Date) {
-  return date.toLocaleTimeString(undefined, {
+  return date.toLocaleTimeString("zh-CN", {
     hour: "2-digit",
     minute: "2-digit"
   });
 }
 
 export function formatDateTime(date: Date) {
-  return `${date.toLocaleDateString()} ${formatTime(date)}`;
+  return `${date.toLocaleDateString("zh-CN")} ${formatTime(date)}`;
 }

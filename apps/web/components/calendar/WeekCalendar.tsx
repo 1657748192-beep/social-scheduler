@@ -33,7 +33,7 @@ export function WeekCalendar({
       <div className="calendar-hour-header" />
       {days.map((day) => (
         <div className="calendar-week-header" key={formatDateKey(day)}>
-          <strong>{day.toLocaleDateString(undefined, { weekday: "short" })}</strong>
+          <strong>{day.toLocaleDateString("zh-CN", { weekday: "short" })}</strong>
           <span>{day.getDate()}</span>
         </div>
       ))}

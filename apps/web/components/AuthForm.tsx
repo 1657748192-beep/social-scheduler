@@ -44,7 +44,7 @@ export function AuthForm({ mode }: AuthFormProps) {
       localStorage.setItem("social_scheduler_token", response.token);
       router.push("/dashboard");
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Request failed");
+      setError(requestError instanceof Error ? requestError.message : "请求失败");
     } finally {
       setIsSubmitting(false);
     }
@@ -52,28 +52,28 @@ export function AuthForm({ mode }: AuthFormProps) {
 
   return (
     <section className="auth-card">
-      <h1>{mode === "register" ? "Create account" : "Sign in"}</h1>
+      <h1>{mode === "register" ? "创建账号" : "登录"}</h1>
       <p className="muted">
         {mode === "register"
-          ? "Start with a workspace and a ready API token."
-          : "Use your account to access the scheduling dashboard."}
+          ? "创建账号后会自动生成默认工作空间。"
+          : "使用账号进入社交内容排程后台。"}
       </p>
 
       <form className="form" onSubmit={onSubmit}>
         {mode === "register" ? (
           <label className="field">
-            <span>Name</span>
+            <span>姓名</span>
             <input name="name" autoComplete="name" required />
           </label>
         ) : null}
 
         <label className="field">
-          <span>Email</span>
+          <span>邮箱</span>
           <input name="email" type="email" autoComplete="email" required />
         </label>
 
         <label className="field">
-          <span>Password</span>
+          <span>密码</span>
           <input
             name="password"
             type="password"
@@ -84,7 +84,7 @@ export function AuthForm({ mode }: AuthFormProps) {
         </label>
 
         <button className="button" disabled={isSubmitting} type="submit">
-          {isSubmitting ? "Please wait" : mode === "register" ? "Create account" : "Sign in"}
+          {isSubmitting ? "请稍等" : mode === "register" ? "创建账号" : "登录"}
         </button>
       </form>
 
@@ -93,11 +93,11 @@ export function AuthForm({ mode }: AuthFormProps) {
       <p className="muted">
         {mode === "register" ? (
           <>
-            Already registered? <Link href="/login">Sign in</Link>
+            已有账号？<Link href="/login">去登录</Link>
           </>
         ) : (
           <>
-            Need an account? <Link href="/register">Create one</Link>
+            还没有账号？<Link href="/register">创建一个</Link>
           </>
         )}
       </p>

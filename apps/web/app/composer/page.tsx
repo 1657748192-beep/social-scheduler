@@ -24,18 +24,18 @@ export default function ComposerPage() {
     apiRequest<Workspace[]>("/workspaces", { token: storedToken })
       .then(setWorkspaces)
       .catch((requestError) => {
-        setError(requestError instanceof Error ? requestError.message : "Could not load workspaces");
+        setError(requestError instanceof Error ? requestError.message : "无法加载工作空间");
       });
   }, [router]);
 
   return (
-    <AppShell title="Composer" subtitle="Drafts and variants" wide>
+    <AppShell title="内容编辑" subtitle="草稿、多平台版本与定时发布" wide>
       {error ? <p className="error">{error}</p> : null}
       {token && workspaces.length ? <ComposerForm token={token} workspaces={workspaces} /> : null}
       {token && !workspaces.length ? (
         <section className="panel">
-          <h1>No workspaces</h1>
-          <p className="muted">Create a workspace from the dashboard before composing.</p>
+          <h1>暂无工作空间</h1>
+          <p className="muted">请先在控制台创建工作空间，再开始编辑内容。</p>
         </section>
       ) : null}
     </AppShell>

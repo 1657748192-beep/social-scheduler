@@ -1,6 +1,7 @@
 "use client";
 
 import type { CalendarSchedule } from "../../lib/api";
+import { platformLabel, publishJobStatusLabel, scheduleStatusLabel } from "../../lib/labels";
 import { formatDateTime } from "./dateUtils";
 
 type ScheduleDetailPanelProps = {
@@ -19,21 +20,25 @@ export function ScheduleDetailPanel({ schedule, onClose }: ScheduleDetailPanelPr
   return (
     <aside className="schedule-detail">
       <div className="row">
-        <h2>{schedule.postVariant.post.title || "Scheduled content"}</h2>
+        <h2>{schedule.postVariant.post.title || "已排程内容"}</h2>
         <button className="button secondary" onClick={onClose} type="button">
-          Close
+          关闭
         </button>
       </div>
 
       <dl className="detail-list">
-        <dt>Platform</dt>
-        <dd>{schedule.postVariant.platform}</dd>
-        <dt>Scheduled</dt>
+        <dt>平台</dt>
+        <dd>{platformLabel(schedule.postVariant.platform)}</dd>
+        <dt>发布时间</dt>
         <dd>{formatDateTime(scheduledAt)}</dd>
-        <dt>Status</dt>
-        <dd>{schedule.status}</dd>
-        <dt>Publish job</dt>
-        <dd>{latestJob ? `${latestJob.status}, attempts ${latestJob.attempts}` : "None"}</dd>
+        <dt>状态</dt>
+        <dd>{scheduleStatusLabel(schedule.status)}</dd>
+        <dt>发布任务</dt>
+        <dd>
+          {latestJob
+            ? `${publishJobStatusLabel(latestJob.status)}，已尝试 ${latestJob.attempts} 次`
+            : "暂无"}
+        </dd>
       </dl>
 
       <div className="detail-copy">{schedule.postVariant.text}</div>
@@ -48,7 +53,7 @@ export function ScheduleDetailPanel({ schedule, onClose }: ScheduleDetailPanelPr
 
       {latestJob?.providerPermalink ? (
         <a className="button" href={latestJob.providerPermalink} rel="noreferrer" target="_blank">
-          Open published post
+          打开已发布内容
         </a>
       ) : null}
 

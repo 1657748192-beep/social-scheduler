@@ -19,7 +19,7 @@ export async function apiRequest<T>(path: string, options: ApiOptions = {}): Pro
   const payload = await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new Error(payload?.message ?? "Request failed");
+    throw new Error(payload?.message ?? "请求失败");
   }
 
   return payload as T;
@@ -37,7 +37,7 @@ export async function apiUpload<T>(path: string, token: string, formData: FormDa
   const payload = await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new Error(payload?.message ?? "Upload failed");
+    throw new Error(payload?.message ?? "上传失败");
   }
 
   return payload as T;
