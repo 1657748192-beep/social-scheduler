@@ -1,6 +1,7 @@
 import type { Platform } from "@prisma/client";
 
 export type PublishInput = {
+  workspaceId: string;
   platform: Platform;
   text: string;
   idempotencyKey: string;

@@ -64,6 +64,7 @@ const worker = new Worker<PublishQueuePayload, unknown, typeof publishQueueJobNa
 
     const publisher = getSocialPublisher(publishJob.schedule.postVariant.platform);
     const publishResult = await publisher.publish({
+      workspaceId: publishJob.workspaceId,
       platform: publishJob.schedule.postVariant.platform,
       text: publishJob.schedule.postVariant.text,
       idempotencyKey: publishJob.idempotencyKey

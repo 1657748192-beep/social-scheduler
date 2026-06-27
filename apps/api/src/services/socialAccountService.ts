@@ -32,6 +32,10 @@ type ProviderProfile = {
   accountType?: string;
 };
 
+type FacebookPageProfile = ProviderProfile & {
+  accessToken: string;
+};
+
 function base64UrlSha256(value: string) {
   return createHash("sha256").update(value).digest("base64url");
 }
@@ -185,6 +189,53 @@ async function fetchProviderProfile(provider: OAuthProviderConfig, accessToken: 
   };
 }
 
+async function exchangeFacebookLongLivedToken(provider: OAuthProviderConfig, tokenResponse: TokenResponse) {
+  if (provider.platform !== "facebook" || !provider.clientSecret) {
+    return tokenResponse;
+  }
+
+  const url = new URL(provider.tokenUrl);
+  url.searchParams.set("grant_type", "fb_exchange_token");
+  url.searchParams.set("client_id", provider.clientId);
+  url.searchParams.set("client_secret", provider.clientSecret);
+  url.searchParams.set("fb_exchange_token", tokenResponse.access_token);
+
+  const response = await fetch(url);
+  const payload = (await response.json().catch(() => null)) as TokenResponse | null;
+
+  if (!response.ok || !payload?.access_token) {
+    return tokenResponse;
+  }
+
+  return {
+    ...tokenResponse,
+    ...payload
+  };
+}
+
+async function fetchFacebookPages(accessToken: string): Promise<FacebookPageProfile[]> {
+  const url = new URL("https://graph.facebook.com/v20.0/me/accounts");
+  url.searchParams.set("fields", "id,name,access_token,picture{url}");
+  url.searchParams.set("access_token", accessToken);
+
+  const response = await fetch(url);
+  const payload = (await response.json().catch(() => null)) as any;
+
+  if (!response.ok || !Array.isArray(payload?.data)) {
+    return [];
+  }
+
+  return payload.data
+    .filter((page: any) => page?.id && page?.name && page?.access_token)
+    .map((page: any) => ({
+      providerAccountId: page.id,
+      displayName: page.name,
+      avatarUrl: page.picture?.data?.url,
+      accountType: "page",
+      accessToken: page.access_token
+    }));
+}
+
 export async function startOAuth(userId: string, platformParam: string, workspaceId: string) {
   const provider = getOAuthProvider(platformParam);
   await requireWorkspaceManager(userId, workspaceId);
@@ -253,13 +304,88 @@ export async function completeOAuth(platformParam: string, code: string, state: 
     oauthState.redirectUri,
     oauthState.codeVerifier ?? undefined
   );
-  const profile = await fetchProviderProfile(provider, tokenResponse.access_token);
-  const scopes = parseScopes(tokenResponse, oauthState.scopes);
-  const expiresAt = tokenResponse.expires_in
-    ? new Date(Date.now() + tokenResponse.expires_in * 1000)
+  const credentialTokenResponse = await exchangeFacebookLongLivedToken(provider, tokenResponse);
+  const profile = await fetchProviderProfile(provider, credentialTokenResponse.access_token);
+  const facebookPages =
+    provider.platform === "facebook"
+      ? await fetchFacebookPages(credentialTokenResponse.access_token)
+      : [];
+  const scopes = parseScopes(credentialTokenResponse, oauthState.scopes);
+  const expiresAt = credentialTokenResponse.expires_in
+    ? new Date(Date.now() + credentialTokenResponse.expires_in * 1000)
     : null;
 
   const socialAccount = await prisma.$transaction(async (tx) => {
+    if (facebookPages.length) {
+      let firstAccount:
+        | Awaited<ReturnType<typeof tx.socialAccount.upsert>>
+        | null = null;
+
+      for (const page of facebookPages) {
+        const account = await tx.socialAccount.upsert({
+          where: {
+            workspaceId_platform_providerAccountId: {
+              workspaceId: oauthState.workspaceId,
+              platform: provider.platform,
+              providerAccountId: page.providerAccountId
+            }
+          },
+          create: {
+            workspaceId: oauthState.workspaceId,
+            platform: provider.platform,
+            providerAccountId: page.providerAccountId,
+            displayName: page.displayName,
+            avatarUrl: page.avatarUrl,
+            accountType: page.accountType,
+            status: "active",
+            capabilities: {
+              oauth2: true,
+              scopes,
+              pagePublishing: true
+            }
+          },
+          update: {
+            displayName: page.displayName,
+            avatarUrl: page.avatarUrl,
+            accountType: page.accountType,
+            status: "active",
+            capabilities: {
+              oauth2: true,
+              scopes,
+              pagePublishing: true
+            }
+          }
+        });
+
+        await tx.oauthCredential.upsert({
+          where: {
+            socialAccountId: account.id
+          },
+          create: {
+            socialAccountId: account.id,
+            accessTokenEncrypted: encryptToken(page.accessToken),
+            tokenType: "Bearer",
+            scopes,
+            expiresAt
+          },
+          update: {
+            accessTokenEncrypted: encryptToken(page.accessToken),
+            tokenType: "Bearer",
+            scopes,
+            expiresAt
+          }
+        });
+
+        firstAccount ??= account;
+      }
+
+      await tx.oauthState.delete({
+        where: { id: oauthState.id }
+      });
+
+      return firstAccount!;
+    }
+
     const account = await tx.socialAccount.upsert({
       where: {
         workspaceId_platform_providerAccountId: {
@@ -299,20 +425,20 @@ export async function completeOAuth(platformParam: string, code: string, state: 
       },
       create: {
         socialAccountId: account.id,
-        accessTokenEncrypted: encryptToken(tokenResponse.access_token),
-        refreshTokenEncrypted: tokenResponse.refresh_token
-          ? encryptToken(tokenResponse.refresh_token)
+        accessTokenEncrypted: encryptToken(credentialTokenResponse.access_token),
+        refreshTokenEncrypted: credentialTokenResponse.refresh_token
+          ? encryptToken(credentialTokenResponse.refresh_token)
           : undefined,
-        tokenType: tokenResponse.token_type ?? "Bearer",
+        tokenType: credentialTokenResponse.token_type ?? "Bearer",
         scopes,
         expiresAt
       },
       update: {
-        accessTokenEncrypted: encryptToken(tokenResponse.access_token),
-        refreshTokenEncrypted: tokenResponse.refresh_token
-          ? encryptToken(tokenResponse.refresh_token)
+        accessTokenEncrypted: encryptToken(credentialTokenResponse.access_token),
+        refreshTokenEncrypted: credentialTokenResponse.refresh_token
+          ? encryptToken(credentialTokenResponse.refresh_token)
           : undefined,
-        tokenType: tokenResponse.token_type ?? "Bearer",
+        tokenType: credentialTokenResponse.token_type ?? "Bearer",
         scopes,
         expiresAt
       }
