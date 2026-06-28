@@ -54,11 +54,14 @@ export function MediaUploader({ workspaceId, token, media, onMediaChange }: Medi
   }
 
   return (
-    <section className="composer-panel">
+    <section className="composer-panel media-panel">
       <div className="row">
-        <h2>素材</h2>
+        <div>
+          <p className="section-kicker">素材库</p>
+          <h2>图片与视频</h2>
+        </div>
         <span className="muted">
-          图片 {imageCount} / 视频 {videoCount}
+          {imageCount} 图 / {videoCount} 视频
         </span>
       </div>
 
@@ -85,7 +88,8 @@ export function MediaUploader({ workspaceId, token, media, onMediaChange }: Medi
           onClick={() => imageInputRef.current?.click()}
           type="button"
         >
-          <span>{uploadingType === "image" ? "图片上传中" : "添加图片"}</span>
+          <strong>{uploadingType === "image" ? "图片上传中" : "添加图片"}</strong>
+          <span>支持多张图片</span>
         </button>
         <button
           className="upload-drop video"
@@ -93,30 +97,35 @@ export function MediaUploader({ workspaceId, token, media, onMediaChange }: Medi
           onClick={() => videoInputRef.current?.click()}
           type="button"
         >
-          <span>{uploadingType === "video" ? "视频上传中" : "添加视频"}</span>
+          <strong>{uploadingType === "video" ? "视频上传中" : "添加视频"}</strong>
+          <span>用于 Reels、短视频或动态</span>
         </button>
       </div>
 
-      <div className="media-grid">
-        {media.map((asset) => (
-          <button
-            className="media-thumb"
-            key={asset.id}
-            onClick={() => removeMedia(asset.id)}
-            title="移除素材"
-            type="button"
-          >
-            {asset.mimeType.startsWith("video/") ? (
-              <>
-                <video muted preload="metadata" src={asset.fileUrl} />
-                <span className="media-badge">视频</span>
-              </>
-            ) : (
-              <img alt="" src={asset.fileUrl} />
-            )}
-          </button>
-        ))}
-      </div>
+      {media.length ? (
+        <div className="media-grid">
+          {media.map((asset) => (
+            <button
+              className="media-thumb"
+              key={asset.id}
+              onClick={() => removeMedia(asset.id)}
+              title="点击移除素材"
+              type="button"
+            >
+              {asset.mimeType.startsWith("video/") ? (
+                <>
+                  <video muted preload="metadata" src={asset.fileUrl} />
+                  <span className="media-badge">视频</span>
+                </>
+              ) : (
+                <img alt="" src={asset.fileUrl} />
+              )}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="upload-hint">上传后会显示缩略图；点击缩略图可移除素材。</p>
+      )}
 
       {error ? <p className="error">{error}</p> : null}
     </section>

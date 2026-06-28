@@ -12,7 +12,7 @@ type PlatformTabsProps = {
 
 export function PlatformTabs({ selected, active, onActiveChange, onToggle }: PlatformTabsProps) {
   return (
-    <div className="platform-tabs">
+    <div className="platform-tabs" aria-label="平台版本">
       {composerPlatforms.map((platform) => {
         const isSelected = selected.includes(platform.platform);
         return (
@@ -23,7 +23,10 @@ export function PlatformTabs({ selected, active, onActiveChange, onToggle }: Pla
               onActiveChange(platform.platform);
             }}
           >
-            <span>{platform.label}</span>
+            <span>
+              <strong>{platform.label}</strong>
+              <small>{platform.maxTextLength.toLocaleString()} 字以内</small>
+            </span>
             <input
               aria-label={`启用 ${platform.label}`}
               checked={isSelected}

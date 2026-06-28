@@ -18,7 +18,10 @@ export function PlatformEditor({ platform, text, mediaCount, onChange }: Platfor
   return (
     <section className="composer-panel editor-surface">
       <div className="row">
-        <h2>{limit.label}</h2>
+        <div>
+          <p className="section-kicker">平台版本</p>
+          <h2>{limit.label}</h2>
+        </div>
         <span className={overTextLimit ? "counter danger" : "counter"}>
           {text.length}/{limit.maxTextLength}
         </span>
@@ -27,7 +30,7 @@ export function PlatformEditor({ platform, text, mediaCount, onChange }: Platfor
       <textarea
         className="composer-textarea"
         onChange={(event) => onChange(event.target.value)}
-        placeholder={`撰写 ${limit.label} 版本`}
+        placeholder={`撰写 ${limit.label} 专属版本`}
         value={text}
       />
 

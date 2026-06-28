@@ -20,9 +20,9 @@ type AppShellProps = {
 };
 
 const navItems = [
-  { href: "/dashboard", label: "控制台" },
-  { href: "/composer", label: "内容编辑" },
-  { href: "/calendar", label: "排程日历" }
+  { href: "/dashboard", label: "控制台", helper: "工作区与渠道" },
+  { href: "/composer", label: "内容编辑", helper: "文案与素材" },
+  { href: "/calendar", label: "排程日历", helper: "周/月计划" }
 ];
 
 type SidebarProvider = Pick<
@@ -100,13 +100,13 @@ function channelInitial(platform: SidebarProvider["platform"]) {
 
 function channelDescription(platform: SidebarProvider["platform"]) {
   const descriptions: Record<SidebarProvider["platform"], string> = {
-    instagram: "账号或主页",
-    linkedin: "个人或组织",
-    facebook: "页面或群组",
-    youtube: "频道",
-    tiktok: "商业或个人",
-    pinterest: "企业或简介",
-    x: "账号"
+    instagram: "图片、短视频与 Reels",
+    linkedin: "个人主页或公司主页",
+    facebook: "公共主页发布",
+    youtube: "频道视频发布",
+    tiktok: "短视频账号",
+    pinterest: "图钉与看板",
+    x: "短文与动态"
   };
 
   return descriptions[platform];
@@ -126,6 +126,20 @@ function channelStatusText(account: SocialAccount | undefined, provider: Sidebar
   }
 
   return provider.configured ? "可一键授权" : "待配置";
+}
+
+function mergeProviderStatuses(statuses: OAuthProviderStatus[]) {
+  if (!statuses.length) {
+    return defaultChannelProviders;
+  }
+
+  const byPlatform = new Map<SidebarProvider["platform"], SidebarProvider>();
+  defaultChannelProviders.forEach((provider) => byPlatform.set(provider.platform, provider));
+  statuses.forEach((provider) => byPlatform.set(provider.platform, provider));
+
+  return defaultChannelProviders
+    .map((provider) => byPlatform.get(provider.platform))
+    .filter(Boolean) as SidebarProvider[];
 }
 
 export function AppShell({ title, subtitle, userLabel, wide = false, children }: AppShellProps) {
@@ -196,10 +210,15 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
     };
   }, []);
 
-  const channelProviders = providerStatuses.length ? providerStatuses : defaultChannelProviders;
+  const channelProviders = useMemo(
+    () => mergeProviderStatuses(providerStatuses),
+    [providerStatuses]
+  );
   const sidebarProviders = channelProviders.filter((provider) =>
     sidebarChannelOrder.includes(provider.platform)
   );
+  const connectedCount = channels.filter((account) => account.status === "active").length;
+  const totalPrimaryChannels = sidebarProviders.length;
   const channelItems = useMemo(
     () =>
       channelProviders.map((provider) => ({
@@ -240,7 +259,7 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
 
     if (!provider.configured) {
       setChannelActionError(
-        `${provider.displayName} 还没配置开发者密钥：${provider.requiredEnv.join(" / ")}`
+        `${provider.displayName} 还没有配置开发者密钥：${provider.requiredEnv.join(" / ")}`
       );
       return;
     }
@@ -281,14 +300,20 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
           </div>
         </div>
 
-        <nav className="software-nav">
+        <Link className="compose-entry" href="/composer">
+          <span>+</span>
+          新建内容
+        </Link>
+
+        <nav className="software-nav" aria-label="主导航">
           {navItems.map((item) => (
             <Link
               className={pathname === item.href ? "active" : ""}
               href={item.href}
               key={item.href}
             >
-              {item.label}
+              <strong>{item.label}</strong>
+              <small>{item.helper}</small>
             </Link>
           ))}
         </nav>
@@ -345,6 +370,18 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
           </div>
         </section>
 
+        <div className="channel-progress">
+          <div className="row">
+            <strong>渠道状态</strong>
+            <span>
+              {connectedCount}/{totalPrimaryChannels}
+            </span>
+          </div>
+          <div className="progress-track">
+            <span style={{ width: `${(connectedCount / Math.max(totalPrimaryChannels, 1)) * 100}%` }} />
+          </div>
+        </div>
+
         <div className="software-sidebar-footer">
           <span>{userLabel || "已登录"}</span>
           <button className="button secondary" onClick={signOut} type="button">
@@ -358,6 +395,17 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
           <div>
             <h1>{title}</h1>
             {subtitle ? <p className="muted">{subtitle}</p> : null}
+          </div>
+          <div className="topbar-actions">
+            <Link className="button secondary" href="/dashboard#social-channels">
+              连接渠道
+            </Link>
+            <Link className="button secondary" href="/calendar">
+              查看日历
+            </Link>
+            <Link className="button" href="/composer">
+              新建内容
+            </Link>
           </div>
         </header>
 
@@ -375,7 +423,10 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
         >
           <section className="channel-modal" aria-modal="true" role="dialog">
             <header className="channel-modal-header">
-              <h2>连接新频道</h2>
+              <div>
+                <h2>连接新频道</h2>
+                <p>选择平台后会跳转到对应平台登录授权页面。</p>
+              </div>
               <button
                 aria-label="关闭连接频道弹窗"
                 onClick={() => setIsChannelModalOpen(false)}
@@ -391,10 +442,10 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
               {channelItems.map(({ provider, account }) => {
                 const connected = account?.status === "active";
                 const actionText = connected
-                  ? "已连接"
+                  ? "已连接，点击查看"
                   : provider.configured
                     ? "点击授权"
-                    : "待配置";
+                    : "待配置密钥";
 
                 return (
                   <button

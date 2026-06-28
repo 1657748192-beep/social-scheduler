@@ -13,7 +13,7 @@ export function accountStatusLabel(status: string) {
   const labels: Record<string, string> = {
     active: "已连接",
     disconnected: "已断开",
-    token_expired: "授权过期"
+    token_expired: "授权已过期"
   };
 
   return labels[status] ?? status;
@@ -67,8 +67,8 @@ export function publishJobStatusLabel(status: string) {
 
 export function platformLabel(platform: string) {
   const labels: Record<string, string> = {
-    x: "X / Twitter",
-    twitter: "X / Twitter",
+    x: "Twitter / X",
+    twitter: "Twitter / X",
     instagram: "Instagram",
     facebook: "Facebook",
     linkedin: "LinkedIn",

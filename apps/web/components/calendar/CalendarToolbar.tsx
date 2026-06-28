@@ -38,6 +38,7 @@ export function CalendarToolbar({
   return (
     <section className="calendar-toolbar">
       <div>
+        <p className="section-kicker">内容排期</p>
         <h1>{title}</h1>
         <p className="muted">拖动已排程内容，可以调整到新的日期或小时。</p>
       </div>

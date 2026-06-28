@@ -6,20 +6,26 @@ import { platformLimits } from "./platformConfig";
 type PostPreviewProps = {
   platforms: ComposerPlatform[];
   texts: Record<ComposerPlatform, string>;
+  baseText: string;
   media: MediaAsset[];
 };
 
-export function PostPreview({ platforms, texts, media }: PostPreviewProps) {
+export function PostPreview({ platforms, texts, baseText, media }: PostPreviewProps) {
   return (
     <section className="composer-panel preview-rail">
       <div className="row">
-        <h2>预览</h2>
+        <div>
+          <p className="section-kicker">实时预览</p>
+          <h2>发布效果</h2>
+        </div>
         <span className="muted">{platforms.length} 个平台</span>
       </div>
 
       <div className="preview-stack">
         {platforms.map((platform) => {
           const limit = platformLimits[platform];
+          const text = texts[platform] || baseText;
+
           return (
             <article className={`preview-card ${platform}`} key={platform}>
               <div className="preview-top">
@@ -29,7 +35,7 @@ export function PostPreview({ platforms, texts, media }: PostPreviewProps) {
                   <div className="muted">@已绑定账号</div>
                 </div>
               </div>
-              <p>{texts[platform] || "这里会显示该平台的专属文案。"}</p>
+              <p>{text || "这里会显示该平台的专属文案。"}</p>
               {media.length ? (
                 <div className={`preview-images count-${Math.min(media.length, 4)}`}>
                   {media.slice(0, 4).map((asset) =>

@@ -55,7 +55,7 @@ export function AuthForm({ mode }: AuthFormProps) {
       <h1>{mode === "register" ? "创建账号" : "登录"}</h1>
       <p className="muted">
         {mode === "register"
-          ? "创建账号后会自动生成默认工作空间。"
+          ? "创建账号后会自动生成默认工作区。"
           : "使用账号进入社交内容排程后台。"}
       </p>
 
