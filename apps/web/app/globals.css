@@ -227,7 +227,21 @@ textarea {
   background: #b9ee8f;
 }
 
-.channel-row,
+.channel-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: #121c27;
+  color: #c7d1df;
+  padding: 4px;
+}
+
+.channel-row-main,
 .channel-more {
   width: 100%;
   display: grid;
@@ -245,7 +259,15 @@ textarea {
   cursor: pointer;
 }
 
+.channel-row-main {
+  min-height: 36px;
+  border: 0;
+  background: transparent;
+  padding: 3px 4px;
+}
+
 .channel-row:hover,
+.channel-row:hover .channel-row-main,
 .channel-more:hover {
   background: #1f2c3a;
   color: #ffffff;
@@ -258,6 +280,29 @@ textarea {
 .channel-row.connected {
   background: #10252f;
   border-color: #2f9cb3;
+}
+
+.channel-row-action {
+  height: 30px;
+  min-width: 42px;
+  border: 1px solid #3b4b5d;
+  border-radius: 7px;
+  background: #172332;
+  color: #dfe7f1;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.channel-row-action:hover {
+  border-color: #f2c6c2;
+  background: #342027;
+  color: #ffcbc6;
+}
+
+.channel-row-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .channel-icon {
@@ -434,7 +479,7 @@ textarea {
   background: #ffffff;
   color: #202732;
   padding: 20px;
-  cursor: pointer;
+  cursor: default;
   text-align: center;
 }
 
@@ -447,6 +492,39 @@ textarea {
 .channel-card.connected {
   border-color: #2f9cb3;
   background: #f0fbfd;
+}
+
+.channel-card-main {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: center;
+}
+
+.channel-card-disconnect {
+  margin-top: 8px;
+  border: 1px solid #f0c6c1;
+  border-radius: 8px;
+  background: #fff6f5;
+  color: #b42318;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 7px 10px;
+}
+
+.channel-card-disconnect:hover {
+  background: #ffe8e5;
+}
+
+.channel-card-disconnect:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .channel-card-icon {

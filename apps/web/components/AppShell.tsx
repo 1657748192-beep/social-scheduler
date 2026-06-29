@@ -112,6 +112,10 @@ function channelDescription(platform: SidebarProvider["platform"]) {
   return descriptions[platform];
 }
 
+function platformLabelFallback(platform: SidebarProvider["platform"]) {
+  return defaultChannelProviders.find((provider) => provider.platform === platform)?.displayName ?? platform;
+}
+
 function channelStatusText(account: SocialAccount | undefined, provider: SidebarProvider) {
   if (account?.status === "active") {
     return account.displayName || "已连接";
@@ -151,6 +155,7 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
   const [channelsLoading, setChannelsLoading] = useState(true);
   const [isChannelModalOpen, setIsChannelModalOpen] = useState(false);
   const [channelActionError, setChannelActionError] = useState<string | null>(null);
+  const [disconnectingChannelId, setDisconnectingChannelId] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -275,6 +280,54 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
     }
   }
 
+  async function disconnectChannel(account: SocialAccount) {
+    setChannelActionError(null);
+
+    const token = localStorage.getItem("social_scheduler_token");
+
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+
+    if (!workspaceId) {
+      setChannelActionError("请先创建或选择一个工作区。");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `确定解除绑定 ${account.displayName || platformLabelFallback(account.platform)} 吗？`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDisconnectingChannelId(account.id);
+
+    try {
+      await apiRequest(`/workspaces/${workspaceId}/social-accounts/${account.id}`, {
+        method: "DELETE",
+        token
+      });
+
+      setChannels((current) =>
+        current.map((item) =>
+          item.id === account.id
+            ? {
+                ...item,
+                status: "disconnected"
+              }
+            : item
+        )
+      );
+    } catch (error) {
+      setChannelActionError(error instanceof Error ? error.message : "解除绑定失败");
+    } finally {
+      setDisconnectingChannelId(null);
+    }
+  }
+
   async function signOut() {
     const token = localStorage.getItem("social_scheduler_token");
 
@@ -340,20 +393,33 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
                   : "channel-row";
 
               return (
-                <button
-                  className={rowClassName}
-                  key={provider.platform}
-                  onClick={() => openChannel(provider, account)}
-                  type="button"
-                >
-                  <span className={`channel-icon ${provider.platform}`}>
-                    {channelInitial(provider.platform)}
-                  </span>
-                  <span className="channel-copy">
-                    <strong>{provider.displayName}</strong>
-                    <small>{channelStatusText(account, provider)}</small>
-                  </span>
-                </button>
+                <div className={rowClassName} key={provider.platform}>
+                  <button
+                    className="channel-row-main"
+                    onClick={() => openChannel(provider, account)}
+                    type="button"
+                  >
+                    <span className={`channel-icon ${provider.platform}`}>
+                      {channelInitial(provider.platform)}
+                    </span>
+                    <span className="channel-copy">
+                      <strong>{provider.displayName}</strong>
+                      <small>{channelStatusText(account, provider)}</small>
+                    </span>
+                  </button>
+
+                  {connected && account ? (
+                    <button
+                      aria-label={`解除绑定 ${provider.displayName}`}
+                      className="channel-row-action"
+                      disabled={disconnectingChannelId === account.id}
+                      onClick={() => disconnectChannel(account)}
+                      type="button"
+                    >
+                      解绑
+                    </button>
+                  ) : null}
+                </div>
               );
             })}
 
@@ -448,19 +514,34 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
                     : "待配置密钥";
 
                 return (
-                  <button
+                  <article
                     className={connected ? "channel-card connected" : "channel-card"}
                     key={provider.platform}
-                    onClick={() => openChannel(provider, account)}
-                    type="button"
                   >
-                    <span className={`channel-card-icon ${provider.platform}`}>
-                      {channelInitial(provider.platform)}
-                    </span>
-                    <strong>{provider.displayName}</strong>
-                    <small>{channelDescription(provider.platform)}</small>
-                    <em>{actionText}</em>
-                  </button>
+                    <button
+                      className="channel-card-main"
+                      onClick={() => openChannel(provider, connected ? undefined : account)}
+                      type="button"
+                    >
+                      <span className={`channel-card-icon ${provider.platform}`}>
+                        {channelInitial(provider.platform)}
+                      </span>
+                      <strong>{provider.displayName}</strong>
+                      <small>{channelDescription(provider.platform)}</small>
+                      <em>{connected ? "重新授权" : actionText}</em>
+                    </button>
+
+                    {connected && account ? (
+                      <button
+                        className="channel-card-disconnect"
+                        disabled={disconnectingChannelId === account.id}
+                        onClick={() => disconnectChannel(account)}
+                        type="button"
+                      >
+                        解除绑定
+                      </button>
+                    ) : null}
+                  </article>
                 );
               })}
             </div>
