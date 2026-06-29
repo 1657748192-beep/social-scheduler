@@ -65,6 +65,27 @@ function configuredScopes(rawValue: string | undefined, fallbackScopes: string[]
   return scopes.length ? scopes : fallbackScopes;
 }
 
+const facebookPageScopes = [
+  "public_profile",
+  "pages_show_list",
+  "pages_read_engagement",
+  "pages_manage_posts"
+];
+
+function facebookDefaultScopes() {
+  const scopes = configuredScopes(config.FACEBOOK_OAUTH_SCOPES, ["public_profile"]);
+  const hasPageScopes =
+    scopes.includes("pages_show_list") ||
+    scopes.includes("pages_read_engagement") ||
+    scopes.includes("pages_manage_posts");
+
+  if (hasPageScopes) {
+    return scopes;
+  }
+
+  return config.FACEBOOK_LOGIN_CONFIG_ID ? facebookPageScopes : scopes;
+}
+
 const providerConfigs: Record<Platform, OAuthProviderConfig> = {
   instagram: {
     platform: "instagram",
@@ -101,7 +122,7 @@ const providerConfigs: Record<Platform, OAuthProviderConfig> = {
     authorizationUrl: "https://www.facebook.com/v20.0/dialog/oauth",
     tokenUrl: "https://graph.facebook.com/v20.0/oauth/access_token",
     profileUrl: "https://graph.facebook.com/me?fields=id,name,picture",
-    defaultScopes: configuredScopes(config.FACEBOOK_OAUTH_SCOPES, ["public_profile"]),
+    defaultScopes: facebookDefaultScopes(),
     usesPkce: false,
     clientAuthentication: "body"
   },
