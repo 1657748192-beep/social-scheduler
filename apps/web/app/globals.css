@@ -703,6 +703,30 @@ textarea {
   resize: vertical;
 }
 
+.beijing-datetime-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.beijing-datetime-picker input[type="hidden"] {
+  display: none;
+}
+
+.beijing-datetime-picker input[type="date"] {
+  grid-column: 1 / -1;
+}
+
+.beijing-datetime-picker select {
+  text-align: center;
+}
+
+.beijing-datetime-separator {
+  color: var(--muted);
+  font-weight: 800;
+}
+
 .button {
   display: inline-flex;
   align-items: center;

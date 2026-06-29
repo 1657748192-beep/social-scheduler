@@ -1,4 +1,4 @@
-export const APP_TIME_ZONE_LABEL = "中国时间 UTC+8";
+export const APP_TIME_ZONE_LABEL = "北京时间 UTC+8";
 
 const CHINA_OFFSET_MS = 8 * 60 * 60 * 1000;
 

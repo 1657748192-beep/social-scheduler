@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "../../components/AppShell";
+import { BeijingDateTimePicker } from "../../components/BeijingDateTimePicker";
 import {
   apiRequest,
   type CurrentUser,
@@ -29,6 +30,12 @@ type DemoScheduleResponse = {
   queueDelayMs: number;
 };
 
+function createDefaultScheduleTime() {
+  const date = new Date(Date.now() + 60_000);
+  date.setSeconds(0, 0);
+  return toChinaDatetimeLocalValue(date);
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
@@ -43,6 +50,7 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [createdJob, setCreatedJob] = useState<DemoScheduleResponse | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [demoScheduledAt, setDemoScheduledAt] = useState(createDefaultScheduleTime);
 
   const selectedWorkspace = workspaces.find((workspace) => workspace.id === selectedWorkspaceId);
   const canManageMembers =
@@ -104,12 +112,6 @@ export default function DashboardPage() {
       setError(requestError instanceof Error ? requestError.message : "请求失败");
     });
   }, [token, selectedWorkspaceId, canManageMembers]);
-
-  const defaultDateTime = useMemo(() => {
-    const date = new Date(Date.now() + 60_000);
-    date.setSeconds(0, 0);
-    return toChinaDatetimeLocalValue(date);
-  }, []);
 
   const connectedAccounts = socialAccounts.filter((account) => account.status === "active");
   const configuredProviders = oauthStatuses.filter((provider) => provider.configured);
@@ -445,10 +447,16 @@ export default function DashboardPage() {
               </label>
 
               <label className="field">
-                <span>发布时间</span>
-                <input name="scheduledAt" type="datetime-local" defaultValue={defaultDateTime} />
+                <span>北京时间</span>
+                <BeijingDateTimePicker
+                  min={toChinaDatetimeLocalValue(new Date())}
+                  name="scheduledAt"
+                  onChange={setDemoScheduledAt}
+                  required
+                  value={demoScheduledAt}
+                />
               </label>
-              <p className="muted">按中国时间 UTC+8 保存。</p>
+              <p className="muted">按北京时间 UTC+8 保存，使用 24 小时制。</p>
 
               <button className="button" disabled={isSubmitting || !selectedWorkspace} type="submit">
                 {isSubmitting ? "排程中" : "加入排程"}
