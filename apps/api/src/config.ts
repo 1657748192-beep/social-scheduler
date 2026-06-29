@@ -18,7 +18,7 @@ const envSchema = z.object({
   X_CLIENT_SECRET: z.string().optional().default(""),
   FACEBOOK_CLIENT_ID: z.string().optional().default(""),
   FACEBOOK_CLIENT_SECRET: z.string().optional().default(""),
-  FACEBOOK_OAUTH_SCOPES: z.string().optional().default("public_profile,email"),
+  FACEBOOK_OAUTH_SCOPES: z.string().optional().default("public_profile"),
   INSTAGRAM_CLIENT_ID: z.string().optional().default(""),
   INSTAGRAM_CLIENT_SECRET: z.string().optional().default(""),
   LINKEDIN_CLIENT_ID: z.string().optional().default(""),

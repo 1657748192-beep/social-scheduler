@@ -101,7 +101,7 @@ const providerConfigs: Record<Platform, OAuthProviderConfig> = {
     authorizationUrl: "https://www.facebook.com/v20.0/dialog/oauth",
     tokenUrl: "https://graph.facebook.com/v20.0/oauth/access_token",
     profileUrl: "https://graph.facebook.com/me?fields=id,name,picture",
-    defaultScopes: configuredScopes(config.FACEBOOK_OAUTH_SCOPES, ["public_profile", "email"]),
+    defaultScopes: configuredScopes(config.FACEBOOK_OAUTH_SCOPES, ["public_profile"]),
     usesPkce: false,
     clientAuthentication: "body"
   },
