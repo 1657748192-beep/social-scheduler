@@ -5,8 +5,12 @@ import {
 } from "../integrations/oauth/oauthProviders";
 import {
   completeOAuth,
+  createAuthorizationLink,
+  createAuthorizationLinkSchema,
   disconnectSocialAccount,
+  getAuthorizationLink,
   listSocialAccounts,
+  startSharedOAuth,
   startOAuth,
   startOAuthSchema
 } from "../services/socialAccountService";
@@ -35,15 +39,33 @@ export async function oauthCallbackController(req: Request, res: Response) {
     throw new HttpError(400, "Missing OAuth code or state");
   }
 
-  const account = await completeOAuth(req.params.platform, code, state);
-  return res.redirect(
-    `${config.WEB_APP_URL}/dashboard?oauth=connected&platform=${account.platform}`
-  );
+  const result = await completeOAuth(req.params.platform, code, state);
+  const redirectUrl = result.sharedAuthorization
+    ? `${config.WEB_APP_URL}/oauth/share/complete?platform=${result.account.platform}`
+    : `${config.WEB_APP_URL}/dashboard?oauth=connected&platform=${result.account.platform}`;
+
+  return res.redirect(redirectUrl);
 }
 
 export async function listSocialAccountsController(req: Request, res: Response) {
   const accounts = await listSocialAccounts(req.user!.id, req.params.workspaceId);
   return res.json(accounts);
+}
+
+export async function createAuthorizationLinkController(req: Request, res: Response) {
+  const body = createAuthorizationLinkSchema.parse(req.body);
+  const link = await createAuthorizationLink(req.user!.id, req.params.workspaceId, body);
+  return res.status(201).json(link);
+}
+
+export async function getAuthorizationLinkController(req: Request, res: Response) {
+  const link = await getAuthorizationLink(req.params.token);
+  return res.json(link);
+}
+
+export async function startSharedOAuthController(req: Request, res: Response) {
+  const result = await startSharedOAuth(req.params.token);
+  return res.redirect(result.authorizationUrl);
 }
 
 export async function disconnectSocialAccountController(req: Request, res: Response) {

@@ -1,9 +1,12 @@
 import { Router } from "express";
 import {
+  createAuthorizationLinkController,
   disconnectSocialAccountController,
+  getAuthorizationLinkController,
   listSocialAccountsController,
   oauthCallbackController,
   oauthProviderStatusController,
+  startSharedOAuthController,
   startOAuthController
 } from "../controllers/socialAccountController";
 import { requireAuth } from "../middleware/auth";
@@ -15,6 +18,14 @@ socialAccountRoutes.get(
   "/integrations/oauth/status",
   requireAuth,
   asyncHandler(oauthProviderStatusController)
+);
+socialAccountRoutes.get(
+  "/integrations/oauth/share/:token",
+  asyncHandler(getAuthorizationLinkController)
+);
+socialAccountRoutes.get(
+  "/integrations/oauth/share/:token/start",
+  asyncHandler(startSharedOAuthController)
 );
 socialAccountRoutes.get(
   "/integrations/:platform/oauth/start",
@@ -30,6 +41,11 @@ socialAccountRoutes.get(
   "/workspaces/:workspaceId/social-accounts",
   requireAuth,
   asyncHandler(listSocialAccountsController)
+);
+socialAccountRoutes.post(
+  "/workspaces/:workspaceId/social-accounts/authorization-links",
+  requireAuth,
+  asyncHandler(createAuthorizationLinkController)
 );
 socialAccountRoutes.delete(
   "/workspaces/:workspaceId/social-accounts/:socialAccountId",

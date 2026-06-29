@@ -109,6 +109,7 @@ model User {
   sentInvites  WorkspaceInvitation[] @relation("InvitationSender")
   acceptedInvites WorkspaceInvitation[] @relation("InvitationAccepter")
   oauthStates  OauthState[]
+  oauthAuthorizationLinks OauthAuthorizationLink[] @relation("OauthAuthorizationLinkCreator")
   uploadedMedia MediaAsset[]     @relation("MediaUploader")
 
   @@map("users")
@@ -142,6 +143,7 @@ model Workspace {
   invitations WorkspaceInvitation[]
   socialAccounts SocialAccount[]
   oauthStates OauthState[]
+  oauthAuthorizationLinks OauthAuthorizationLink[]
   mediaAssets MediaAsset[]
 
   @@map("workspaces")
@@ -215,12 +217,31 @@ model OauthCredential {
   @@map("oauth_credentials")
 }
 
+model OauthAuthorizationLink {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  platform    Platform
+  tokenHash   String    @unique @map("token_hash")
+  createdById String    @map("created_by_id") @db.Uuid
+  expiresAt   DateTime  @map("expires_at")
+  revokedAt   DateTime? @map("revoked_at")
+  lastUsedAt  DateTime? @map("last_used_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy   User      @relation("OauthAuthorizationLinkCreator", fields: [createdById], references: [id])
+  oauthStates OauthState[]
+
+  @@index([workspaceId, platform, expiresAt])
+  @@map("oauth_authorization_links")
+}
+
 model OauthState {
   id           String    @id @default(uuid()) @db.Uuid
   workspaceId  String    @map("workspace_id") @db.Uuid
   userId       String    @map("user_id") @db.Uuid
   platform     Platform
   state        String    @unique
+  authorizationLinkId String? @map("authorization_link_id") @db.Uuid
   codeVerifier String?   @map("code_verifier")
   redirectUri  String    @map("redirect_uri")
   scopes       String[]
@@ -228,6 +249,7 @@ model OauthState {
   createdAt    DateTime  @default(now()) @map("created_at")
   workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  authorizationLink OauthAuthorizationLink? @relation(fields: [authorizationLinkId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, platform, createdAt])
   @@index([expiresAt])

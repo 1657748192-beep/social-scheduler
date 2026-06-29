@@ -17,6 +17,10 @@ export const startOAuthSchema = z.object({
   workspaceId: z.string().uuid()
 });
 
+export const createAuthorizationLinkSchema = z.object({
+  platform: z.string().min(1)
+});
+
 type TokenResponse = {
   access_token: string;
   refresh_token?: string;
@@ -42,6 +46,10 @@ function base64UrlSha256(value: string) {
 
 function randomBase64Url(bytes = 32) {
   return randomBytes(bytes).toString("base64url");
+}
+
+function hashAuthorizationToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
 }
 
 function parseScopes(tokenResponse: TokenResponse, fallbackScopes: string[]) {
@@ -236,14 +244,30 @@ async function fetchFacebookPages(accessToken: string): Promise<FacebookPageProf
     }));
 }
 
-export async function startOAuth(userId: string, platformParam: string, workspaceId: string) {
+type CreateOAuthStateOptions = {
+  userId: string;
+  platformParam: string;
+  workspaceId: string;
+  authorizationLinkId?: string;
+  expiresAt?: Date;
+};
+
+async function createOAuthAuthorization({
+  userId,
+  platformParam,
+  workspaceId,
+  authorizationLinkId,
+  expiresAt
+}: CreateOAuthStateOptions) {
   const provider = getOAuthProvider(platformParam);
-  await requireWorkspaceManager(userId, workspaceId);
 
   const state = randomBase64Url();
   const codeVerifier = provider.usesPkce ? randomBase64Url(64) : undefined;
   const redirectUri = redirectUriFor(provider.platform);
   const scopes = provider.defaultScopes;
+  const defaultExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  const stateExpiresAt =
+    expiresAt && expiresAt.getTime() < defaultExpiresAt.getTime() ? expiresAt : defaultExpiresAt;
 
   await prisma.oauthState.create({
     data: {
@@ -251,10 +275,11 @@ export async function startOAuth(userId: string, platformParam: string, workspac
       userId,
       platform: provider.platform,
       state,
+      authorizationLinkId,
       codeVerifier,
       redirectUri,
       scopes,
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000)
+      expiresAt: stateExpiresAt
     }
   });
 
@@ -285,6 +310,116 @@ export async function startOAuth(userId: string, platformParam: string, workspac
     state,
     platform: provider.platform
   };
+}
+
+export async function startOAuth(userId: string, platformParam: string, workspaceId: string) {
+  await requireWorkspaceManager(userId, workspaceId);
+
+  return createOAuthAuthorization({
+    userId,
+    platformParam,
+    workspaceId
+  });
+}
+
+export async function createAuthorizationLink(
+  userId: string,
+  workspaceId: string,
+  input: z.infer<typeof createAuthorizationLinkSchema>
+) {
+  await requireWorkspaceManager(userId, workspaceId);
+
+  const provider = getOAuthProvider(input.platform);
+  const token = randomBase64Url();
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const link = await prisma.oauthAuthorizationLink.create({
+    data: {
+      workspaceId,
+      platform: provider.platform,
+      tokenHash: hashAuthorizationToken(token),
+      createdById: userId,
+      expiresAt
+    },
+    include: {
+      workspace: {
+        select: {
+          id: true,
+          name: true,
+          slug: true
+        }
+      }
+    }
+  });
+
+  return {
+    id: link.id,
+    platform: link.platform,
+    platformParam: provider.platformParam,
+    displayName: provider.displayName,
+    workspace: link.workspace,
+    expiresAt: link.expiresAt,
+    shareUrl: `${config.WEB_APP_URL}/oauth/share/${token}`,
+    startUrl: `${config.API_PUBLIC_URL}/api/v1/integrations/oauth/share/${token}/start`
+  };
+}
+
+export async function getAuthorizationLink(token: string) {
+  const link = await prisma.oauthAuthorizationLink.findUnique({
+    where: {
+      tokenHash: hashAuthorizationToken(token)
+    },
+    include: {
+      workspace: {
+        select: {
+          id: true,
+          name: true,
+          slug: true
+        }
+      }
+    }
+  });
+
+  if (!link || link.revokedAt) {
+    throw new HttpError(404, "Authorization link not found");
+  }
+
+  const provider = getOAuthProvider(link.platform);
+  const expired = link.expiresAt <= new Date();
+
+  return {
+    id: link.id,
+    platform: link.platform,
+    platformParam: provider.platformParam,
+    displayName: provider.displayName,
+    workspace: link.workspace,
+    expiresAt: link.expiresAt,
+    expired,
+    startUrl: `${config.API_PUBLIC_URL}/api/v1/integrations/oauth/share/${token}/start`
+  };
+}
+
+export async function startSharedOAuth(token: string) {
+  const link = await prisma.oauthAuthorizationLink.findUnique({
+    where: {
+      tokenHash: hashAuthorizationToken(token)
+    }
+  });
+
+  if (!link || link.revokedAt) {
+    throw new HttpError(404, "Authorization link not found");
+  }
+
+  if (link.expiresAt <= new Date()) {
+    throw new HttpError(410, "Authorization link expired");
+  }
+
+  return createOAuthAuthorization({
+    userId: link.createdById,
+    platformParam: link.platform,
+    workspaceId: link.workspaceId,
+    authorizationLinkId: link.id,
+    expiresAt: link.expiresAt
+  });
 }
 
 export async function completeOAuth(platformParam: string, code: string, state: string) {
@@ -459,7 +594,23 @@ export async function completeOAuth(platformParam: string, code: string, state: 
     return account;
   });
 
-  return socialAccount;
+  if (oauthState.authorizationLinkId) {
+    await prisma.oauthAuthorizationLink
+      .update({
+        where: {
+          id: oauthState.authorizationLinkId
+        },
+        data: {
+          lastUsedAt: new Date()
+        }
+      })
+      .catch(() => null);
+  }
+
+  return {
+    account: socialAccount,
+    sharedAuthorization: Boolean(oauthState.authorizationLinkId)
+  };
 }
 
 export async function listSocialAccounts(userId: string, workspaceId: string) {

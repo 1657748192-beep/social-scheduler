@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
 
 type ApiOptions = {
   token?: string | null;
@@ -116,6 +116,29 @@ export type OAuthStartResponse = {
   authorizationUrl: string;
   state: string;
   platform: string;
+};
+
+export type OAuthAuthorizationLink = {
+  id: string;
+  platform: "x" | "facebook" | "instagram" | "tiktok" | "linkedin" | "youtube" | "pinterest";
+  platformParam:
+    | "twitter"
+    | "facebook"
+    | "instagram"
+    | "tiktok"
+    | "linkedin"
+    | "youtube"
+    | "pinterest";
+  displayName: string;
+  workspace: {
+    id: string;
+    name: string;
+    slug: string;
+  };
+  expiresAt: string;
+  expired?: boolean;
+  shareUrl?: string;
+  startUrl: string;
 };
 
 export type OAuthProviderStatus = {

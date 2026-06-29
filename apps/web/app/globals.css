@@ -1073,6 +1073,32 @@ textarea {
   margin: 4px 0 0;
 }
 
+.provider-account-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.provider-account-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  border: 1px solid #d7e2ea;
+  border-radius: 999px;
+  background: #f6f9fb;
+  color: #263241;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  padding: 6px 9px;
+}
+
+.provider-account-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .provider-actions {
   display: flex;
   gap: 10px;
@@ -1174,6 +1200,66 @@ textarea {
   background: #f1f4f8;
   color: #263241;
   font-size: 12px;
+}
+
+.share-link-box {
+  border: 1px solid #cde7ef;
+  border-radius: 8px;
+  background: #f4fbfd;
+  padding: 10px;
+}
+
+.share-link-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.share-link-row input {
+  min-width: 0;
+  border: 1px solid #cbd8e3;
+  border-radius: 8px;
+  background: #fff;
+  color: #1e2a37;
+  padding: 9px 10px;
+}
+
+.share-auth-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: #eef3f7;
+}
+
+.share-auth-card {
+  width: min(520px, 100%);
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 22px 70px rgba(20, 30, 44, 0.12);
+  padding: 30px;
+}
+
+.share-auth-card h1 {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.2;
+}
+
+.share-auth-card p {
+  margin: 0;
+}
+
+.share-auth-primary {
+  width: 100%;
+}
+
+.share-auth-note {
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .composer-layout {

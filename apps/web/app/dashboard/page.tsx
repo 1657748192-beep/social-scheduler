@@ -7,6 +7,7 @@ import { BeijingDateTimePicker } from "../../components/BeijingDateTimePicker";
 import {
   apiRequest,
   type CurrentUser,
+  type OAuthAuthorizationLink,
   type OAuthProviderStatus,
   type OAuthStartResponse,
   type SocialAccount,
@@ -56,6 +57,10 @@ export default function DashboardPage() {
   const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([]);
   const [socialAccounts, setSocialAccounts] = useState<SocialAccount[]>([]);
   const [oauthStatuses, setOAuthStatuses] = useState<OAuthProviderStatus[]>([]);
+  const [authorizationLinks, setAuthorizationLinks] = useState<
+    Record<string, OAuthAuthorizationLink>
+  >({});
+  const [creatingAuthorizationLink, setCreatingAuthorizationLink] = useState<string | null>(null);
   const [latestInviteUrl, setLatestInviteUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [createdJob, setCreatedJob] = useState<DemoScheduleResponse | null>(null);
@@ -243,6 +248,49 @@ export default function DashboardPage() {
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "请求失败");
     }
+  }
+
+  async function createAuthorizationShareLink(provider: OAuthProviderStatus) {
+    if (!token || !selectedWorkspace) {
+      return;
+    }
+
+    setError(null);
+    setCreatingAuthorizationLink(provider.platform);
+
+    try {
+      const link = await apiRequest<OAuthAuthorizationLink>(
+        `/workspaces/${selectedWorkspace.id}/social-accounts/authorization-links`,
+        {
+          method: "POST",
+          token,
+          body: {
+            platform: provider.platform
+          }
+        }
+      );
+
+      setAuthorizationLinks((current) => ({
+        ...current,
+        [provider.platform]: link
+      }));
+
+      if (link.shareUrl) {
+        await navigator.clipboard?.writeText(link.shareUrl).catch(() => null);
+      }
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "生成分享授权链接失败");
+    } finally {
+      setCreatingAuthorizationLink(null);
+    }
+  }
+
+  async function copyAuthorizationShareLink(link: OAuthAuthorizationLink) {
+    if (!link.shareUrl) {
+      return;
+    }
+
+    await navigator.clipboard?.writeText(link.shareUrl).catch(() => null);
   }
 
   async function disconnectSocialAccount(accountId: string) {
@@ -496,9 +544,10 @@ export default function DashboardPage() {
           {canManageMembers ? (
             <div className="provider-grid">
               {oauthStatuses.map((provider) => {
-                const account = socialAccounts.find(
+                const providerAccounts = socialAccounts.filter(
                   (item) => item.platform === provider.platform && item.status === "active"
                 );
+                const shareLink = authorizationLinks[provider.platform];
                 const facebookBasicMode =
                   provider.platform === "facebook" && !provider.scopes.includes("pages_manage_posts");
 
@@ -507,12 +556,26 @@ export default function DashboardPage() {
                     <div className="row">
                       <div>
                         <strong>{provider.displayName}</strong>
-                        <p className="muted">{account ? account.displayName : "尚未绑定账号"}</p>
+                        <p className="muted">
+                          {providerAccounts.length
+                            ? `${providerAccounts.length} 个账号已绑定`
+                            : "尚未绑定账号"}
+                        </p>
                       </div>
                       <span className={provider.configured ? "status-pill ready" : "status-pill warning"}>
                         {provider.configured ? "已配置" : "未配置"}
                       </span>
                     </div>
+
+                    {providerAccounts.length ? (
+                      <div className="provider-account-list">
+                        {providerAccounts.map((account) => (
+                          <span className="provider-account-chip" key={account.id}>
+                            <span>{account.displayName}</span>
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
 
                     {provider.platform === "facebook" ? (
                       <div className="oauth-config-box">
@@ -532,18 +595,49 @@ export default function DashboardPage() {
                         onClick={() => connectSocialAccount(provider.platformParam)}
                         type="button"
                       >
-                        {account ? "重新授权" : provider.configured ? "去授权" : "等待配置"}
+                        {provider.configured ? "添加账号" : "等待配置"}
                       </button>
-                      {account ? (
+                      <button
+                        className="button secondary"
+                        disabled={!provider.configured || creatingAuthorizationLink === provider.platform}
+                        onClick={() => createAuthorizationShareLink(provider)}
+                        type="button"
+                      >
+                        {creatingAuthorizationLink === provider.platform ? "生成中" : "分享授权"}
+                      </button>
+                      {providerAccounts.map((account) => (
                         <button
                           className="button danger-button"
+                          key={account.id}
                           onClick={() => disconnectSocialAccount(account.id)}
                           type="button"
                         >
-                          解除绑定
+                          解绑 {account.displayName}
                         </button>
-                      ) : null}
+                      ))}
                     </div>
+
+                    {shareLink?.shareUrl ? (
+                      <div className="oauth-config-box share-link-box">
+                        <span>24 小时授权链接</span>
+                        <div className="share-link-row">
+                          <input readOnly value={shareLink.shareUrl} />
+                          <button
+                            className="button secondary"
+                            onClick={() => copyAuthorizationShareLink(shareLink)}
+                            type="button"
+                          >
+                            复制
+                          </button>
+                        </div>
+                        <small className="muted">
+                          到期时间：{new Date(shareLink.expiresAt).toLocaleString("zh-CN", {
+                            hour12: false,
+                            timeZone: "Asia/Shanghai"
+                          })}
+                        </small>
+                      </div>
+                    ) : null}
 
                     <div className="oauth-links">
                       <a href={provider.developerUrl} rel="noreferrer" target="_blank">
