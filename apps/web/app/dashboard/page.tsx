@@ -60,6 +60,7 @@ export default function DashboardPage() {
   const [authorizationLinks, setAuthorizationLinks] = useState<
     Record<string, OAuthAuthorizationLink>
   >({});
+  const [bindingProvider, setBindingProvider] = useState<OAuthProviderStatus | null>(null);
   const [creatingAuthorizationLink, setCreatingAuthorizationLink] = useState<string | null>(null);
   const [latestInviteUrl, setLatestInviteUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -170,6 +171,12 @@ export default function DashboardPage() {
       done: Boolean(createdJob)
     }
   ];
+  const bindingProviderAccounts = bindingProvider
+    ? connectedAccounts.filter((account) => account.platform === bindingProvider.platform)
+    : [];
+  const bindingShareLink = bindingProvider ? authorizationLinks[bindingProvider.platform] : undefined;
+  const bindingFacebookBasicMode =
+    bindingProvider?.platform === "facebook" && !bindingProvider.scopes.includes("pages_manage_posts");
 
   async function createWorkspace(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -592,7 +599,7 @@ export default function DashboardPage() {
                       <button
                         className="button"
                         disabled={!provider.configured}
-                        onClick={() => connectSocialAccount(provider.platformParam)}
+                        onClick={() => setBindingProvider(provider)}
                         type="button"
                       >
                         {provider.configured ? "添加账号" : "等待配置"}
@@ -718,6 +725,165 @@ export default function DashboardPage() {
             {!invitations.length ? <li className="muted">暂无邀请</li> : null}
           </ul>
         </section>
+
+        {bindingProvider ? (
+          <div
+            className="channel-modal-backdrop"
+            onClick={() => setBindingProvider(null)}
+            role="presentation"
+          >
+            <section
+              aria-modal="true"
+              className="channel-modal binding-modal"
+              onClick={(event) => event.stopPropagation()}
+              role="dialog"
+            >
+              <div className="channel-modal-header">
+                <div>
+                  <h2>连接到 {bindingProvider.displayName} 账号</h2>
+                  <p>选择直接授权，或生成 24 小时分享授权链接给别人绑定。</p>
+                </div>
+                <button aria-label="关闭" onClick={() => setBindingProvider(null)} type="button">
+                  ×
+                </button>
+              </div>
+
+              <div className="binding-modal-body">
+                <div className="binding-modal-hero">
+                  <div className={`channel-card-icon ${bindingProvider.platform}`}>
+                    {platformLabel(bindingProvider.platform).slice(0, 1)}
+                  </div>
+                  <div>
+                    <strong>{bindingProvider.displayName}</strong>
+                    <p className="muted">
+                      {bindingProvider.configured
+                        ? "已接入平台 OAuth，可继续添加多个账号。"
+                        : "服务器暂未配置该平台的 Client ID / Secret。"}
+                    </p>
+                  </div>
+                  <span className={bindingProvider.configured ? "status-pill ready" : "status-pill warning"}>
+                    {bindingProvider.configured ? "已配置" : "未配置"}
+                  </span>
+                </div>
+
+                <div className="binding-modal-section">
+                  <div className="row">
+                    <h3>已绑定账号</h3>
+                    <span className="muted">{bindingProviderAccounts.length} 个</span>
+                  </div>
+                  {bindingProviderAccounts.length ? (
+                    <div className="binding-account-list">
+                      {bindingProviderAccounts.map((account) => (
+                        <div className="binding-account-item" key={account.id}>
+                          <div>
+                            <strong>{account.displayName}</strong>
+                            <small className="muted">
+                              {account.accountType ?? "account"} · {accountStatusLabel(account.status)}
+                            </small>
+                          </div>
+                          <button
+                            className="text-button danger-text"
+                            onClick={() => disconnectSocialAccount(account.id)}
+                            type="button"
+                          >
+                            解除绑定
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="muted">当前平台还没有绑定账号。</p>
+                  )}
+                </div>
+
+                {bindingProvider.platform === "facebook" ? (
+                  <div className="oauth-config-box">
+                    <span>当前模式</span>
+                    <code>
+                      {bindingFacebookBasicMode
+                        ? "基础绑定：可登录授权，暂不能发布 Facebook Page"
+                        : "Page 发布：可请求主页列表与发帖权限"}
+                    </code>
+                  </div>
+                ) : null}
+
+                <div className="binding-action-panel">
+                  <div>
+                    <strong>官方授权登录</strong>
+                    <p className="muted">点击后会跳转到平台官方 OAuth 页面完成授权。</p>
+                  </div>
+                  <button
+                    className="button"
+                    disabled={!bindingProvider.configured}
+                    onClick={() => connectSocialAccount(bindingProvider.platformParam)}
+                    type="button"
+                  >
+                    立即连接
+                  </button>
+                </div>
+
+                <div className="binding-action-panel">
+                  <div>
+                    <strong>分享授权链接</strong>
+                    <p className="muted">复制给对方后，对方 24 小时内打开即可授权绑定到当前工作区。</p>
+                  </div>
+                  <button
+                    className="button secondary"
+                    disabled={
+                      !bindingProvider.configured || creatingAuthorizationLink === bindingProvider.platform
+                    }
+                    onClick={() => createAuthorizationShareLink(bindingProvider)}
+                    type="button"
+                  >
+                    {creatingAuthorizationLink === bindingProvider.platform ? "生成中" : "生成链接"}
+                  </button>
+                </div>
+
+                {bindingShareLink?.shareUrl ? (
+                  <div className="oauth-config-box share-link-box">
+                    <span>24 小时授权链接</span>
+                    <div className="share-link-row">
+                      <input readOnly value={bindingShareLink.shareUrl} />
+                      <button
+                        className="button secondary"
+                        onClick={() => copyAuthorizationShareLink(bindingShareLink)}
+                        type="button"
+                      >
+                        复制
+                      </button>
+                    </div>
+                    <small className="muted">
+                      到期时间：{new Date(bindingShareLink.expiresAt).toLocaleString("zh-CN", {
+                        hour12: false,
+                        timeZone: "Asia/Shanghai"
+                      })}
+                    </small>
+                  </div>
+                ) : null}
+
+                <div className="binding-modal-grid">
+                  <div className="oauth-config-box">
+                    <span>OAuth 回调地址</span>
+                    <code>{bindingProvider.redirectUri}</code>
+                  </div>
+                  <div className="oauth-config-box">
+                    <span>服务器配置项</span>
+                    <code>{bindingProvider.requiredEnv.join(" / ")}</code>
+                  </div>
+                </div>
+
+                <div className="oauth-links">
+                  <a href={bindingProvider.developerUrl} rel="noreferrer" target="_blank">
+                    开发者后台
+                  </a>
+                  <a href={bindingProvider.docsUrl} rel="noreferrer" target="_blank">
+                    配置文档
+                  </a>
+                </div>
+              </div>
+            </section>
+          </div>
+        ) : null}
       </div>
     </AppShell>
   );

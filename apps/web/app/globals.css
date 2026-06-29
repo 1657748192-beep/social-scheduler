@@ -1224,6 +1224,91 @@ textarea {
   padding: 9px 10px;
 }
 
+.binding-modal {
+  width: min(760px, 100%);
+}
+
+.binding-modal-body {
+  display: grid;
+  gap: 16px;
+  padding: 24px 34px 34px;
+}
+
+.binding-modal-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid #dfe7ef;
+  border-radius: 8px;
+  background: #fff;
+  padding: 14px;
+}
+
+.binding-modal-hero strong {
+  font-size: 18px;
+}
+
+.binding-modal-hero p {
+  margin: 3px 0 0;
+}
+
+.binding-modal-section {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 14px;
+}
+
+.binding-modal-section h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.binding-account-list {
+  display: grid;
+  gap: 8px;
+}
+
+.binding-account-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #e4eaf1;
+  border-radius: 8px;
+  background: #f9fbfd;
+  padding: 10px 12px;
+}
+
+.binding-account-item strong,
+.binding-account-item small {
+  display: block;
+}
+
+.binding-action-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid #dce6ef;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.binding-action-panel p {
+  margin: 4px 0 0;
+}
+
+.binding-modal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .share-auth-page {
   min-height: 100vh;
   display: grid;
@@ -1945,6 +2030,17 @@ textarea {
   .channel-modal-grid {
     grid-template-columns: 1fr;
     padding: 18px 16px 24px;
+  }
+
+  .binding-modal-body {
+    padding: 18px 16px 24px;
+  }
+
+  .binding-modal-hero,
+  .binding-action-panel,
+  .binding-account-item,
+  .binding-modal-grid {
+    grid-template-columns: 1fr;
   }
 
   .channel-card {
