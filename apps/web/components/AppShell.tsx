@@ -223,7 +223,7 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
     sidebarChannelOrder.includes(provider.platform)
   );
   const connectedCount = channels.filter((account) => account.status === "active").length;
-  const totalPrimaryChannels = sidebarProviders.length;
+  const totalChannelCount = channelProviders.length;
   const channelItems = useMemo(
     () =>
       channelProviders.map((provider) => ({
@@ -438,13 +438,20 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
 
         <div className="channel-progress">
           <div className="row">
-            <strong>渠道状态</strong>
+            <strong>连接通道数量</strong>
             <span>
-              {connectedCount}/{totalPrimaryChannels}
+              {connectedCount}/{totalChannelCount}
             </span>
           </div>
           <div className="progress-track">
-            <span style={{ width: `${(connectedCount / Math.max(totalPrimaryChannels, 1)) * 100}%` }} />
+            <span
+              style={{
+                width: `${Math.min(
+                  (connectedCount / Math.max(totalChannelCount, 1)) * 100,
+                  100
+                )}%`
+              }}
+            />
           </div>
         </div>
 
