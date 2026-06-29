@@ -771,6 +771,13 @@ textarea {
   font-size: 14px;
 }
 
+.success-text {
+  margin: 0;
+  color: #047857;
+  font-size: 14px;
+  font-weight: 700;
+}
+
 .section-kicker {
   margin: 0 0 6px;
   color: var(--primary);
@@ -1942,6 +1949,30 @@ textarea {
   border-radius: 8px;
   padding: 12px;
   background: #f9fbfd;
+}
+
+.schedule-edit-form {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #f9fbfd;
+}
+
+.schedule-edit-form .field textarea {
+  min-height: 132px;
+}
+
+.schedule-edit-form .muted,
+.schedule-edit-form .error {
+  margin: 0;
+}
+
+.schedule-edit-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .detail-media-grid {

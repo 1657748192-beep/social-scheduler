@@ -121,6 +121,19 @@ export function ContentCalendar({ token, workspaces }: ContentCalendarProps) {
     }
   }
 
+  function handleScheduleUpdated(updated: CalendarSchedule) {
+    setSchedules((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+    setSelectedSchedule(updated);
+  }
+
+  function handleScheduleDeleted(scheduleId: string) {
+    setSchedules((current) => current.filter((item) => item.id !== scheduleId));
+
+    if (selectedSchedule?.id === scheduleId) {
+      setSelectedSchedule(null);
+    }
+  }
+
   return (
     <div className="calendar-layout">
       <main className="calendar-main">
@@ -153,7 +166,14 @@ export function ContentCalendar({ token, workspaces }: ContentCalendarProps) {
         )}
       </main>
 
-      <ScheduleDetailPanel onClose={() => setSelectedSchedule(null)} schedule={selectedSchedule} />
+      <ScheduleDetailPanel
+        onClose={() => setSelectedSchedule(null)}
+        onDeleted={handleScheduleDeleted}
+        onUpdated={handleScheduleUpdated}
+        schedule={selectedSchedule}
+        token={token}
+        workspaceId={workspaceId}
+      />
     </div>
   );
 }

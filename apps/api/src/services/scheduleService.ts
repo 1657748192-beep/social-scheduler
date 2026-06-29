@@ -27,7 +27,8 @@ export const listSchedulesSchema = z.object({
 
 export const rescheduleSchema = z.object({
   scheduledAt: z.string().datetime(),
-  timezone: z.string().min(1).max(80).optional()
+  timezone: z.string().min(1).max(80).optional(),
+  text: z.string().trim().min(1).max(63206).optional()
 });
 
 const scheduleInclude = {
@@ -216,7 +217,9 @@ export async function listSchedules(
   return prisma.schedule.findMany({
     where: {
       workspaceId,
-      status: query.status,
+      status: query.status ?? {
+        not: "canceled"
+      },
       scheduledAt: {
         gte: query.from ? new Date(query.from) : undefined,
         lte: query.to ? new Date(query.to) : undefined
@@ -299,6 +302,17 @@ export async function rescheduleSchedule(
         lockedAt: null
       }
     });
+
+    if (input.text !== undefined) {
+      await tx.postVariant.update({
+        where: {
+          id: schedule.postVariantId
+        },
+        data: {
+          text: input.text
+        }
+      });
+    }
 
     return tx.schedule.update({
       where: {
