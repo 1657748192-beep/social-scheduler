@@ -16,7 +16,18 @@ const worker = new Worker<PublishQueuePayload, unknown, typeof publishQueueJobNa
       include: {
         schedule: {
           include: {
-            postVariant: true
+            postVariant: {
+              include: {
+                media: {
+                  include: {
+                    mediaAsset: true
+                  },
+                  orderBy: {
+                    sortOrder: "asc"
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -67,6 +78,11 @@ const worker = new Worker<PublishQueuePayload, unknown, typeof publishQueueJobNa
       workspaceId: publishJob.workspaceId,
       platform: publishJob.schedule.postVariant.platform,
       text: publishJob.schedule.postVariant.text,
+      media: publishJob.schedule.postVariant.media.map((item) => ({
+        id: item.mediaAsset.id,
+        fileUrl: item.mediaAsset.fileUrl,
+        mimeType: item.mediaAsset.mimeType
+      })),
       idempotencyKey: publishJob.idempotencyKey
     });
 

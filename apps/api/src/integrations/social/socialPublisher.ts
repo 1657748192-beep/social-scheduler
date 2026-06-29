@@ -1,16 +1,23 @@
-import type { Platform } from "@prisma/client";
+import type { Platform, Prisma } from "@prisma/client";
 
 export type PublishInput = {
   workspaceId: string;
   platform: Platform;
   text: string;
+  media: PublishMediaAsset[];
   idempotencyKey: string;
+};
+
+export type PublishMediaAsset = {
+  id: string;
+  fileUrl: string;
+  mimeType: string;
 };
 
 export type PublishResult = {
   providerPostId: string;
   providerPermalink: string;
-  rawResponse: Record<string, string | number | boolean | null>;
+  rawResponse: Prisma.InputJsonValue;
 };
 
 export interface SocialPublisher {
