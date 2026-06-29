@@ -262,8 +262,14 @@ export async function startOAuth(userId: string, platformParam: string, workspac
   authorizationUrl.searchParams.set("response_type", "code");
   authorizationUrl.searchParams.set(provider.authorizationClientIdParam ?? "client_id", provider.clientId);
   authorizationUrl.searchParams.set("redirect_uri", redirectUri);
-  authorizationUrl.searchParams.set("scope", scopes.join(provider.scopeSeparator ?? " "));
   authorizationUrl.searchParams.set("state", state);
+
+  if (provider.platform === "facebook" && config.FACEBOOK_LOGIN_CONFIG_ID) {
+    authorizationUrl.searchParams.set("config_id", config.FACEBOOK_LOGIN_CONFIG_ID);
+    authorizationUrl.searchParams.set("override_default_response_type", "true");
+  } else {
+    authorizationUrl.searchParams.set("scope", scopes.join(provider.scopeSeparator ?? " "));
+  }
 
   Object.entries(provider.authorizationParams ?? {}).forEach(([key, value]) => {
     authorizationUrl.searchParams.set(key, value);
