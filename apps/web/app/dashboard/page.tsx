@@ -115,6 +115,10 @@ export default function DashboardPage() {
   const configuredProviders = oauthStatuses.filter((provider) => provider.configured);
   const pendingInvitations = invitations.filter((invitation) => invitation.status === "pending");
   const facebookAccount = connectedAccounts.find((account) => account.platform === "facebook");
+  const facebookPageAccount = connectedAccounts.find(
+    (account) => account.platform === "facebook" && account.accountType === "page"
+  );
+  const facebookBasicAccount = facebookAccount && !facebookPageAccount ? facebookAccount : null;
   const dashboardStats = [
     { label: "工作区", value: workspaces.length, detail: selectedWorkspace?.plan ?? "MVP" },
     { label: "已连接渠道", value: connectedAccounts.length, detail: "可用于排程" },
@@ -136,8 +140,12 @@ export default function DashboardPage() {
     },
     {
       title: "Facebook Page 授权",
-      detail: facebookAccount ? `已绑定 ${facebookAccount.displayName}` : "需要重新授权并选择要发布的 Page。",
-      done: Boolean(facebookAccount)
+      detail: facebookPageAccount
+        ? `已绑定可发布 Page：${facebookPageAccount.displayName}`
+        : facebookBasicAccount
+          ? "已完成基础绑定，但还不能发布 Page。Meta 通过 Page 权限后需要重新授权。"
+          : "需要重新授权并选择要发布的 Page。",
+      done: Boolean(facebookPageAccount)
     },
     {
       title: "真实发布测试",
@@ -472,6 +480,8 @@ export default function DashboardPage() {
                 const account = socialAccounts.find(
                   (item) => item.platform === provider.platform && item.status === "active"
                 );
+                const facebookBasicMode =
+                  provider.platform === "facebook" && !provider.scopes.includes("pages_manage_posts");
 
                 return (
                   <article className="provider-card" key={provider.platform}>
@@ -484,6 +494,17 @@ export default function DashboardPage() {
                         {provider.configured ? "已配置" : "未配置"}
                       </span>
                     </div>
+
+                    {provider.platform === "facebook" ? (
+                      <div className="oauth-config-box">
+                        <span>当前模式</span>
+                        <code>
+                          {facebookBasicMode
+                            ? "基础绑定：可登录授权，暂不能发布 Facebook Page"
+                            : "Page 发布：可请求主页列表与发帖权限"}
+                        </code>
+                      </div>
+                    ) : null}
 
                     <div className="provider-actions">
                       <button

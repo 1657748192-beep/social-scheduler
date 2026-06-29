@@ -120,6 +120,7 @@ prepare_env() {
   ensure_env_value JWT_EXPIRES_IN "7d"
   ensure_env_value TOKEN_ENCRYPTION_KEY "$(random_hex 32)"
   ensure_env_value FACEBOOK_CLIENT_ID "${FACEBOOK_CLIENT_ID:-1743484710132300}"
+  ensure_env_value FACEBOOK_OAUTH_SCOPES "public_profile,email"
 
   if is_missing_or_placeholder "$(env_value FACEBOOK_CLIENT_SECRET)"; then
     log "WARNING: FACEBOOK_CLIENT_SECRET is empty or still a placeholder. Facebook OAuth will not work until it is set in $WORK_DIR/.env"

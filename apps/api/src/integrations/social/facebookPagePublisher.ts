@@ -41,6 +41,20 @@ export class FacebookPagePublisher implements SocialPublisher {
     });
 
     if (!account?.credential) {
+      const basicAccount = await prisma.socialAccount.findFirst({
+        where: {
+          workspaceId: input.workspaceId,
+          platform: "facebook",
+          status: "active"
+        }
+      });
+
+      if (basicAccount) {
+        throw new Error(
+          "Facebook is connected in basic mode only. To publish to a Page, approve pages_show_list, pages_read_engagement and pages_manage_posts in Meta, then reconnect Facebook."
+        );
+      }
+
       throw new Error("No connected Facebook Page is available for this workspace");
     }
 

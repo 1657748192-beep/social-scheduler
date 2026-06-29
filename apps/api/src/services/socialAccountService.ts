@@ -306,8 +306,10 @@ export async function completeOAuth(platformParam: string, code: string, state: 
   );
   const credentialTokenResponse = await exchangeFacebookLongLivedToken(provider, tokenResponse);
   const profile = await fetchProviderProfile(provider, credentialTokenResponse.access_token);
+  const canReadFacebookPages =
+    provider.platform === "facebook" && oauthState.scopes.includes("pages_show_list");
   const facebookPages =
-    provider.platform === "facebook"
+    canReadFacebookPages
       ? await fetchFacebookPages(credentialTokenResponse.access_token)
       : [];
   const scopes = parseScopes(credentialTokenResponse, oauthState.scopes);

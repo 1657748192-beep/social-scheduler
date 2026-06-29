@@ -56,6 +56,15 @@ const oauthPlatforms: Platform[] = [
   "x"
 ];
 
+function configuredScopes(rawValue: string | undefined, fallbackScopes: string[]) {
+  const scopes = (rawValue ?? "")
+    .split(/[,\s]+/)
+    .map((scope) => scope.trim())
+    .filter(Boolean);
+
+  return scopes.length ? scopes : fallbackScopes;
+}
+
 const providerConfigs: Record<Platform, OAuthProviderConfig> = {
   instagram: {
     platform: "instagram",
@@ -92,7 +101,7 @@ const providerConfigs: Record<Platform, OAuthProviderConfig> = {
     authorizationUrl: "https://www.facebook.com/v20.0/dialog/oauth",
     tokenUrl: "https://graph.facebook.com/v20.0/oauth/access_token",
     profileUrl: "https://graph.facebook.com/me?fields=id,name,picture",
-    defaultScopes: ["public_profile", "pages_show_list", "pages_read_engagement", "pages_manage_posts"],
+    defaultScopes: configuredScopes(config.FACEBOOK_OAUTH_SCOPES, ["public_profile", "email"]),
     usesPkce: false,
     clientAuthentication: "body"
   },
