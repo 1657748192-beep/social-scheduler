@@ -30,6 +30,16 @@ type DemoScheduleResponse = {
   queueDelayMs: number;
 };
 
+const quickSchedulePlatforms = [
+  "instagram",
+  "linkedin",
+  "facebook",
+  "youtube",
+  "tiktok",
+  "pinterest",
+  "x"
+] as const;
+
 function createDefaultScheduleTime() {
   const date = new Date(Date.now() + 60_000);
   date.setSeconds(0, 0);
@@ -434,10 +444,11 @@ export default function DashboardPage() {
               <label className="field">
                 <span>平台</span>
                 <select name="platform" defaultValue="facebook">
-                  <option value="facebook">Facebook</option>
-                  <option value="instagram">Instagram</option>
-                  <option value="x">Twitter / X</option>
-                  <option value="tiktok">TikTok</option>
+                  {quickSchedulePlatforms.map((platform) => (
+                    <option key={platform} value={platform}>
+                      {platformLabel(platform)}
+                    </option>
+                  ))}
                 </select>
               </label>
 
