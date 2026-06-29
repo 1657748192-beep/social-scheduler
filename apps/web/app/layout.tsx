@@ -6,6 +6,9 @@ export const metadata: Metadata = {
   description: "社交媒体内容排程 SaaS",
   icons: {
     icon: "/app-icon-1024.png"
+  },
+  other: {
+    "facebook-domain-verification": "g8dii6lm4xjnlxehhp67meorkasude"
   }
 };
 
