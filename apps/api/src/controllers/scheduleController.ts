@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
+import { composerPlatformOrder } from "../config/platformLimits";
 import { prisma } from "../prisma";
 import {
   cancelSchedule,
@@ -18,7 +19,7 @@ import { requireWorkspaceMembership } from "../services/workspaceService";
 const createDemoScheduleSchema = z.object({
   workspaceId: z.string().uuid(),
   text: z.string().min(1).max(280),
-  platform: z.enum(["x", "instagram", "facebook", "tiktok"]).default("x"),
+  platform: z.enum(composerPlatformOrder).default("x"),
   scheduledAt: z.string().datetime()
 });
 

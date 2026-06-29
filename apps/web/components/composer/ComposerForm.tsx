@@ -20,19 +20,33 @@ type ComposerFormProps = {
   workspaces: Workspace[];
 };
 
-const defaultPlatforms: ComposerPlatform[] = ["x", "instagram", "facebook"];
+const allComposerPlatforms: ComposerPlatform[] = [
+  "instagram",
+  "linkedin",
+  "facebook",
+  "youtube",
+  "tiktok",
+  "pinterest",
+  "x"
+];
+
+const defaultPlatforms: ComposerPlatform[] = ["instagram", "facebook", "x"];
+
+function createVariantTextMap(value = "") {
+  return Object.fromEntries(
+    allComposerPlatforms.map((platform) => [platform, value])
+  ) as Record<ComposerPlatform, string>;
+}
 
 export function ComposerForm({ token, workspaces }: ComposerFormProps) {
   const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? "");
   const [title, setTitle] = useState("");
   const [baseText, setBaseText] = useState("");
   const [selectedPlatforms, setSelectedPlatforms] = useState<ComposerPlatform[]>(defaultPlatforms);
-  const [activePlatform, setActivePlatform] = useState<ComposerPlatform>("x");
-  const [variantTexts, setVariantTexts] = useState<Record<ComposerPlatform, string>>({
-    x: "",
-    instagram: "",
-    facebook: ""
-  });
+  const [activePlatform, setActivePlatform] = useState<ComposerPlatform>(defaultPlatforms[0]);
+  const [variantTexts, setVariantTexts] = useState<Record<ComposerPlatform, string>>(() =>
+    createVariantTextMap()
+  );
   const [media, setMedia] = useState<MediaAsset[]>([]);
   const [scheduledAt, setScheduledAt] = useState("");
   const [result, setResult] = useState<ComposerPost | null>(null);
@@ -85,11 +99,7 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
   }
 
   function applyBaseText() {
-    setVariantTexts({
-      x: baseText,
-      instagram: baseText,
-      facebook: baseText
-    });
+    setVariantTexts(createVariantTextMap(baseText));
   }
 
   async function savePost(event: FormEvent<HTMLFormElement>) {

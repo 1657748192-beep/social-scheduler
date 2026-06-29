@@ -2,6 +2,7 @@ import type { WorkspaceRole } from "@prisma/client";
 import { z } from "zod";
 import { config } from "../config";
 import {
+  composerPlatformOrder,
   composerPlatformLimits,
   getComposerPlatformLimit,
   type ComposerPlatform
@@ -14,7 +15,7 @@ import { requireWorkspaceMembership } from "./workspaceService";
 const writableRoles: WorkspaceRole[] = ["owner", "admin", "editor"];
 
 const variantSchema = z.object({
-  platform: z.enum(["x", "instagram", "facebook"]),
+  platform: z.enum(composerPlatformOrder),
   text: z.string().default(""),
   mediaAssetIds: z.array(z.string().uuid()).default([])
 });
@@ -22,12 +23,12 @@ const variantSchema = z.object({
 export const createComposerPostSchema = z.object({
   title: z.string().max(120).optional(),
   baseText: z.string().min(1).max(63206),
-  variants: z.array(variantSchema).min(1).max(3),
+  variants: z.array(variantSchema).min(1).max(composerPlatformOrder.length),
   scheduledAt: z.string().datetime().optional()
 });
 
 export const updateComposerPostSchema = createComposerPostSchema.partial().extend({
-  variants: z.array(variantSchema).min(1).max(3).optional()
+  variants: z.array(variantSchema).min(1).max(composerPlatformOrder.length).optional()
 });
 
 export function getComposerPlatforms() {

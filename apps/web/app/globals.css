@@ -1206,7 +1206,7 @@ textarea {
 
 .platform-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 10px;
 }
 
@@ -1381,6 +1381,22 @@ textarea {
 
 .preview-card.facebook {
   border-left-color: #1877f2;
+}
+
+.preview-card.linkedin {
+  border-left-color: #0a66c2;
+}
+
+.preview-card.youtube {
+  border-left-color: #ff0000;
+}
+
+.preview-card.tiktok {
+  border-left-color: #111827;
+}
+
+.preview-card.pinterest {
+  border-left-color: #e60023;
 }
 
 .preview-top {

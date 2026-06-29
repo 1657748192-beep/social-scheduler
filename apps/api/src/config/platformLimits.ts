@@ -1,6 +1,16 @@
 import type { Platform } from "@prisma/client";
 
-export type ComposerPlatform = Extract<Platform, "x" | "instagram" | "facebook">;
+export const composerPlatformOrder = [
+  "instagram",
+  "linkedin",
+  "facebook",
+  "youtube",
+  "tiktok",
+  "pinterest",
+  "x"
+] as const;
+
+export type ComposerPlatform = (typeof composerPlatformOrder)[number];
 
 export type PlatformLimit = {
   platform: ComposerPlatform;
@@ -10,23 +20,47 @@ export type PlatformLimit = {
 };
 
 export const composerPlatformLimits: Record<ComposerPlatform, PlatformLimit> = {
-  x: {
-    platform: "x",
-    label: "Twitter / X",
-    maxTextLength: 280,
-    maxImages: 4
-  },
   instagram: {
     platform: "instagram",
     label: "Instagram",
     maxTextLength: 2200,
     maxImages: 10
   },
+  linkedin: {
+    platform: "linkedin",
+    label: "LinkedIn",
+    maxTextLength: 3000,
+    maxImages: 9
+  },
   facebook: {
     platform: "facebook",
     label: "Facebook",
     maxTextLength: 63206,
     maxImages: 10
+  },
+  youtube: {
+    platform: "youtube",
+    label: "YouTube",
+    maxTextLength: 5000,
+    maxImages: 1
+  },
+  tiktok: {
+    platform: "tiktok",
+    label: "TikTok",
+    maxTextLength: 2200,
+    maxImages: 1
+  },
+  pinterest: {
+    platform: "pinterest",
+    label: "Pinterest",
+    maxTextLength: 500,
+    maxImages: 1
+  },
+  x: {
+    platform: "x",
+    label: "Twitter / X",
+    maxTextLength: 280,
+    maxImages: 4
   }
 };
 
@@ -35,5 +69,5 @@ export function getComposerPlatformLimit(platform: ComposerPlatform) {
 }
 
 export function isComposerPlatform(platform: Platform): platform is ComposerPlatform {
-  return platform === "x" || platform === "instagram" || platform === "facebook";
+  return composerPlatformOrder.includes(platform as ComposerPlatform);
 }

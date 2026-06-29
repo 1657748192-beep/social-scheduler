@@ -140,7 +140,14 @@ export type OAuthProviderStatus = {
   scopes: string[];
 };
 
-export type ComposerPlatform = "x" | "instagram" | "facebook";
+export type ComposerPlatform =
+  | "instagram"
+  | "linkedin"
+  | "facebook"
+  | "youtube"
+  | "tiktok"
+  | "pinterest"
+  | "x";
 
 export type PlatformLimit = {
   platform: ComposerPlatform;
@@ -177,7 +184,7 @@ export type CalendarSchedule = {
   status: "scheduled" | "locked" | "published" | "failed" | "canceled";
   postVariant: {
     id: string;
-    platform: "x" | "instagram" | "facebook" | "tiktok";
+    platform: "x" | "instagram" | "facebook" | "tiktok" | "linkedin" | "youtube" | "pinterest";
     text: string;
     publishStatus: string;
     post: {
