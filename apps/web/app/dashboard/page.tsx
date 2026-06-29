@@ -646,26 +646,6 @@ export default function DashboardPage() {
                       </div>
                     ) : null}
 
-                    <div className="oauth-links">
-                      <a href={provider.developerUrl} rel="noreferrer" target="_blank">
-                        开发者后台
-                      </a>
-                      <a href={provider.docsUrl} rel="noreferrer" target="_blank">
-                        配置文档
-                      </a>
-                    </div>
-
-                    <div className="oauth-config-box">
-                      <span>OAuth 回调地址</span>
-                      <code>{provider.redirectUri}</code>
-                    </div>
-
-                    {!provider.configured ? (
-                      <div className="oauth-config-box">
-                        <span>服务器需要配置</span>
-                        <code>{provider.requiredEnv.join(" / ")}</code>
-                      </div>
-                    ) : null}
                   </article>
                 );
               })}
@@ -861,25 +841,6 @@ export default function DashboardPage() {
                   </div>
                 ) : null}
 
-                <div className="binding-modal-grid">
-                  <div className="oauth-config-box">
-                    <span>OAuth 回调地址</span>
-                    <code>{bindingProvider.redirectUri}</code>
-                  </div>
-                  <div className="oauth-config-box">
-                    <span>服务器配置项</span>
-                    <code>{bindingProvider.requiredEnv.join(" / ")}</code>
-                  </div>
-                </div>
-
-                <div className="oauth-links">
-                  <a href={bindingProvider.developerUrl} rel="noreferrer" target="_blank">
-                    开发者后台
-                  </a>
-                  <a href={bindingProvider.docsUrl} rel="noreferrer" target="_blank">
-                    配置文档
-                  </a>
-                </div>
               </div>
             </section>
           </div>
