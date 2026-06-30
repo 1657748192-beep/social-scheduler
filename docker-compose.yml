@@ -39,6 +39,14 @@ services:
       JWT_SECRET: dev-secret-change-me
       JWT_EXPIRES_IN: 30d
       ADMIN_EMAILS: ""
+      PASSWORD_RESET_TOKEN_MINUTES: 30
+      PASSWORD_RESET_DEBUG_LINKS: "false"
+      SMTP_HOST: ""
+      SMTP_PORT: 587
+      SMTP_SECURE: "false"
+      SMTP_USER: ""
+      SMTP_PASS: ""
+      SMTP_FROM: ""
       API_PORT: 4000
       API_PUBLIC_URL: http://localhost:4000
       CORS_ORIGIN: http://localhost:3000
@@ -81,6 +89,14 @@ services:
       JWT_SECRET: dev-secret-change-me
       JWT_EXPIRES_IN: 30d
       ADMIN_EMAILS: ""
+      PASSWORD_RESET_TOKEN_MINUTES: 30
+      PASSWORD_RESET_DEBUG_LINKS: "false"
+      SMTP_HOST: ""
+      SMTP_PORT: 587
+      SMTP_SECURE: "false"
+      SMTP_USER: ""
+      SMTP_PASS: ""
+      SMTP_FROM: ""
       API_PORT: 4000
       API_PUBLIC_URL: http://localhost:4000
       CORS_ORIGIN: http://localhost:3000

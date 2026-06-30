@@ -1,10 +1,11 @@
 import bcrypt from "bcryptjs";
-import { randomUUID } from "crypto";
+import { createHash, randomBytes, randomUUID } from "crypto";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { config } from "../config";
 import { prisma } from "../prisma";
 import { HttpError } from "../utils/errors";
+import { sendPasswordResetEmail } from "./emailService";
 
 export const registerSchema = z.object({
   email: z.string().email().transform((value) => value.toLowerCase()),
@@ -15,6 +16,15 @@ export const registerSchema = z.object({
 export const loginSchema = z.object({
   email: z.string().email().transform((value) => value.toLowerCase()),
   password: z.string().min(1)
+});
+
+export const requestPasswordResetSchema = z.object({
+  email: z.string().email().transform((value) => value.toLowerCase())
+});
+
+export const confirmPasswordResetSchema = z.object({
+  token: z.string().min(20),
+  password: z.string().min(8)
 });
 
 function parseDurationMs(duration: string) {
@@ -75,6 +85,14 @@ function signToken(user: { id: string; email: string }, sessionId: string, token
 function workspaceSlugFromEmail(email: string) {
   const prefix = email.split("@")[0].replace(/[^a-z0-9]+/gi, "-").toLowerCase();
   return `${prefix}-${Date.now()}`;
+}
+
+function hashResetToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+function buildPasswordResetUrl(token: string) {
+  return `${config.WEB_APP_URL.replace(/\/$/, "")}/reset-password?token=${encodeURIComponent(token)}`;
 }
 
 export async function register(input: z.infer<typeof registerSchema>) {
@@ -156,6 +174,90 @@ export async function login(input: z.infer<typeof loginSchema>) {
       name: user.name
     }
   };
+}
+
+export async function requestPasswordReset(input: z.infer<typeof requestPasswordResetSchema>) {
+  const user = await prisma.user.findUnique({
+    where: { email: input.email }
+  });
+
+  if (!user) {
+    return { ok: true };
+  }
+
+  const token = randomBytes(32).toString("base64url");
+  const tokenHash = hashResetToken(token);
+  const expiresAt = new Date(Date.now() + config.PASSWORD_RESET_TOKEN_MINUTES * 60 * 1000);
+  const resetUrl = buildPasswordResetUrl(token);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.passwordResetToken.updateMany({
+      where: {
+        userId: user.id,
+        usedAt: null
+      },
+      data: {
+        usedAt: new Date()
+      }
+    });
+
+    await tx.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        tokenHash,
+        expiresAt
+      }
+    });
+  });
+
+  await sendPasswordResetEmail({
+    to: user.email,
+    resetUrl,
+    expiresInMinutes: config.PASSWORD_RESET_TOKEN_MINUTES
+  });
+
+  return {
+    ok: true,
+    resetUrl: config.PASSWORD_RESET_DEBUG_LINKS ? resetUrl : undefined
+  };
+}
+
+export async function confirmPasswordReset(input: z.infer<typeof confirmPasswordResetSchema>) {
+  const tokenHash = hashResetToken(input.token);
+  const resetToken = await prisma.passwordResetToken.findUnique({
+    where: { tokenHash }
+  });
+
+  if (!resetToken || resetToken.usedAt || resetToken.expiresAt <= new Date()) {
+    throw new HttpError(400, "Password reset link is invalid or expired");
+  }
+
+  const passwordHash = await bcrypt.hash(input.password, 12);
+  const usedAt = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: resetToken.userId },
+      data: { passwordHash }
+    });
+
+    await tx.passwordResetToken.update({
+      where: { id: resetToken.id },
+      data: { usedAt }
+    });
+
+    await tx.userSession.updateMany({
+      where: {
+        userId: resetToken.userId,
+        revokedAt: null
+      },
+      data: {
+        revokedAt: usedAt
+      }
+    });
+  });
+
+  return { ok: true };
 }
 
 export async function logout(sessionId: string) {

@@ -733,6 +733,24 @@ textarea {
   font-weight: 600;
 }
 
+.field-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.field-heading a {
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.field-heading a:hover {
+  text-decoration: underline;
+}
+
 .field input,
 .field textarea,
 .field select {
@@ -821,6 +839,33 @@ textarea {
   margin: 0;
   color: #047857;
   font-size: 14px;
+  font-weight: 700;
+}
+
+.reset-message {
+  margin-top: 14px;
+}
+
+.reset-link-box {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  border: 1px solid #cde7ef;
+  border-radius: 8px;
+  background: #f4fbfd;
+  padding: 12px;
+}
+
+.reset-link-box span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.reset-link-box a {
+  overflow-wrap: anywhere;
+  color: var(--primary);
+  font-size: 13px;
   font-weight: 700;
 }
 

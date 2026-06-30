@@ -18,6 +18,7 @@ const copy = {
   name: "\u59d3\u540d",
   email: "\u90ae\u7bb1",
   password: "\u5bc6\u7801",
+  forgotPassword: "\u5fd8\u8bb0\u5bc6\u7801\uff1f",
   submitting: "\u8bf7\u7a0d\u7b49...",
   requestFailed: "\u8bf7\u6c42\u5931\u8d25",
   goLogin: "\u53bb\u767b\u5f55",
@@ -93,7 +94,10 @@ export function AuthForm({ mode }: AuthFormProps) {
         </label>
 
         <label className="field">
-          <span>{copy.password}</span>
+          <span className="field-heading">
+            <span>{copy.password}</span>
+            {!isRegister ? <Link href="/forgot-password">{copy.forgotPassword}</Link> : null}
+          </span>
           <input
             name="password"
             type="password"

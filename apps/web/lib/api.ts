@@ -53,6 +53,15 @@ export type AuthResponse = {
   };
 };
 
+export type PasswordResetRequestResponse = {
+  ok: true;
+  resetUrl?: string;
+};
+
+export type PasswordResetConfirmResponse = {
+  ok: true;
+};
+
 export type CurrentUser = {
   id: string;
   email: string;
