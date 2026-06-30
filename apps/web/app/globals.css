@@ -1850,12 +1850,88 @@ textarea {
 }
 
 .calendar-more {
-  border: 0;
-  background: transparent;
-  color: var(--muted);
+  min-height: 28px;
+  border: 1px solid #d8e3ee;
+  border-radius: 8px;
+  background: #f8fbff;
+  color: var(--primary);
   cursor: pointer;
-  text-align: left;
+  text-align: center;
   font-size: 12px;
+  font-weight: 800;
+}
+
+.calendar-more:hover,
+.calendar-more:focus-visible {
+  border-color: var(--primary);
+  background: #eef8fb;
+}
+
+.calendar-day-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 32, 0.58);
+}
+
+.calendar-day-modal {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(560px, 100%);
+  max-height: min(680px, calc(100vh - 48px));
+  overflow: hidden;
+  border: 1px solid #dce2ea;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 24px 80px rgba(10, 15, 22, 0.28);
+}
+
+.calendar-day-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--line);
+  padding: 18px 20px;
+}
+
+.calendar-day-modal-header h2 {
+  margin: 4px 0 3px;
+  font-size: 20px;
+}
+
+.calendar-day-modal-header span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.calendar-day-modal-header button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #d4dae3;
+  border-radius: 8px;
+  background: #fff;
+  color: #485568;
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.calendar-day-modal-header button:hover {
+  background: #f0f3f7;
+}
+
+.calendar-day-modal-list {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  overflow: auto;
+  padding: 14px;
 }
 
 .calendar-week {
