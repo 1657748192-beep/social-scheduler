@@ -65,6 +65,56 @@ export type CurrentUser = {
   }>;
 };
 
+export type AdminUsersResponse = {
+  generatedAt: string;
+  users: AdminUser[];
+};
+
+export type AdminUser = {
+  id: string;
+  email: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  password: {
+    storedAs: "bcrypt_hash";
+    viewable: false;
+    note: string;
+  };
+  sessionSummary: {
+    totalSessions: number;
+    activeSessions: number;
+    latestSessionCreatedAt?: string | null;
+    latestSessionExpiresAt?: string | null;
+    latestSessionRevokedAt?: string | null;
+  };
+  stats: {
+    workspaceMemberships: number;
+    authoredPosts: number;
+    uploadedMedia: number;
+  };
+  workspaces: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    role: "owner" | "admin" | "editor" | "viewer";
+    status: "active" | "invited" | "disabled";
+    plan: string;
+    joinedAt: string;
+    memberCount: number;
+    postCount: number;
+    socialAccountCount: number;
+    socialAccounts: Array<{
+      id: string;
+      platform: "x" | "facebook" | "instagram" | "tiktok" | "linkedin" | "youtube" | "pinterest";
+      displayName: string;
+      accountType?: string | null;
+      status: "active" | "disconnected" | "token_expired";
+      createdAt: string;
+    }>;
+  }>;
+};
+
 export type Workspace = {
   id: string;
   name: string;

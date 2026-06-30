@@ -5,6 +5,7 @@ import morgan from "morgan";
 import { config } from "./config";
 import { uploadRoot } from "./middleware/upload";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
+import { adminRoutes } from "./routes/adminRoutes";
 import { authRoutes } from "./routes/authRoutes";
 import { composerRoutes } from "./routes/composerRoutes";
 import { healthRoutes } from "./routes/healthRoutes";
@@ -28,6 +29,7 @@ export function createApp() {
 
   app.use("/api/v1", healthRoutes);
   app.use("/api/v1/auth", authRoutes);
+  app.use("/api/v1", adminRoutes);
   app.use("/api/v1", workspaceRoutes);
   app.use("/api/v1", socialAccountRoutes);
   app.use("/api/v1", composerRoutes);

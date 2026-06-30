@@ -118,6 +118,7 @@ prepare_env() {
   ensure_env_value POSTGRES_PASSWORD "$(random_hex 24)"
   ensure_env_value JWT_SECRET "$(random_hex 48)"
   force_env_value JWT_EXPIRES_IN "30d"
+  ensure_env_value ADMIN_EMAILS "${ADMIN_EMAILS:-1657748192@qq.com}"
   ensure_env_value TOKEN_ENCRYPTION_KEY "$(random_hex 32)"
   ensure_env_value FACEBOOK_CLIENT_ID "${FACEBOOK_CLIENT_ID:-1743484710132300}"
   force_env_value FACEBOOK_OAUTH_SCOPES "public_profile,pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_metadata"

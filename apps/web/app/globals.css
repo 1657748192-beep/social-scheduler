@@ -1934,6 +1934,148 @@ textarea {
   padding: 14px;
 }
 
+.admin-layout {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-metrics article {
+  display: grid;
+  gap: 8px;
+  min-height: 110px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 18px;
+}
+
+.admin-metrics span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.admin-metrics strong {
+  font-size: 30px;
+  line-height: 1;
+}
+
+.admin-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 360px);
+  gap: 16px;
+  align-items: center;
+}
+
+.admin-toolbar input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: #fff;
+}
+
+.admin-user-list {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-user-card {
+  display: grid;
+  gap: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 18px;
+}
+
+.admin-user-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-user-card h3 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+.admin-user-card p {
+  margin: 0;
+}
+
+.admin-user-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.admin-user-facts div {
+  border-radius: 8px;
+  background: #f4f7fa;
+  padding: 12px;
+}
+
+.admin-user-facts dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-user-facts dd {
+  margin: 5px 0 0;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.admin-workspace-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-workspace {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #dfe6ee;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.admin-workspace .row span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.admin-channel-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.admin-channel-chips span,
+.admin-channel-chips em {
+  border-radius: 999px;
+  background: #edf4f8;
+  color: #3f5368;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+  padding: 6px 9px;
+}
+
+.admin-denied {
+  max-width: 720px;
+}
+
 .calendar-week {
   display: grid;
   grid-template-columns: 72px repeat(7, minmax(120px, 1fr));
