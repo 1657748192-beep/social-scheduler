@@ -9,10 +9,28 @@ type AuthFormProps = {
   mode: "login" | "register";
 };
 
+const copy = {
+  brandSubtitle: "\u793e\u4ea4\u5a92\u4f53\u5185\u5bb9\u6392\u7a0b\u5de5\u4f5c\u53f0",
+  loginTitle: "\u767b\u5f55\u540e\u53f0",
+  registerTitle: "\u521b\u5efa\u8d26\u53f7",
+  loginDescription: "\u4f7f\u7528\u8d26\u53f7\u8fdb\u5165 Social Scheduler \u5185\u5bb9\u6392\u7a0b\u540e\u53f0\u3002",
+  registerDescription: "\u521b\u5efa\u8d26\u53f7\u540e\u4f1a\u81ea\u52a8\u751f\u6210\u9ed8\u8ba4\u5de5\u4f5c\u533a\u3002",
+  name: "\u59d3\u540d",
+  email: "\u90ae\u7bb1",
+  password: "\u5bc6\u7801",
+  submitting: "\u8bf7\u7a0d\u7b49...",
+  requestFailed: "\u8bf7\u6c42\u5931\u8d25",
+  goLogin: "\u53bb\u767b\u5f55",
+  createOne: "\u521b\u5efa\u4e00\u4e2a",
+  alreadyAccount: "\u5df2\u6709\u8d26\u53f7\uff1f",
+  noAccount: "\u8fd8\u6ca1\u6709\u8d26\u53f7\uff1f"
+};
+
 export function AuthForm({ mode }: AuthFormProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isRegister = mode === "register";
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -20,31 +38,27 @@ export function AuthForm({ mode }: AuthFormProps) {
     setIsSubmitting(true);
 
     const formData = new FormData(event.currentTarget);
-    const payload =
-      mode === "register"
-        ? {
-            name: String(formData.get("name") ?? ""),
-            email: String(formData.get("email") ?? ""),
-            password: String(formData.get("password") ?? "")
-          }
-        : {
-            email: String(formData.get("email") ?? ""),
-            password: String(formData.get("password") ?? "")
-          };
+    const payload = isRegister
+      ? {
+          name: String(formData.get("name") ?? ""),
+          email: String(formData.get("email") ?? ""),
+          password: String(formData.get("password") ?? "")
+        }
+      : {
+          email: String(formData.get("email") ?? ""),
+          password: String(formData.get("password") ?? "")
+        };
 
     try {
-      const response = await apiRequest<AuthResponse>(
-        mode === "register" ? "/auth/register" : "/auth/login",
-        {
-          method: "POST",
-          body: payload
-        }
-      );
+      const response = await apiRequest<AuthResponse>(isRegister ? "/auth/register" : "/auth/login", {
+        method: "POST",
+        body: payload
+      });
 
       localStorage.setItem("social_scheduler_token", response.token);
       router.push("/dashboard");
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "请求失败");
+      setError(requestError instanceof Error ? requestError.message : copy.requestFailed);
     } finally {
       setIsSubmitting(false);
     }
@@ -52,52 +66,60 @@ export function AuthForm({ mode }: AuthFormProps) {
 
   return (
     <section className="auth-card">
-      <h1>{mode === "register" ? "创建账号" : "登录"}</h1>
-      <p className="muted">
-        {mode === "register"
-          ? "创建账号后会自动生成默认工作区。"
-          : "使用账号进入社交内容排程后台。"}
-      </p>
+      <div className="auth-brand">
+        <span className="brand-mark">S</span>
+        <div>
+          <h1>Social Scheduler</h1>
+          <p>{copy.brandSubtitle}</p>
+        </div>
+      </div>
+
+      <div className="auth-intro">
+        <h2>{isRegister ? copy.registerTitle : copy.loginTitle}</h2>
+        <p className="muted">{isRegister ? copy.registerDescription : copy.loginDescription}</p>
+      </div>
 
       <form className="form" onSubmit={onSubmit}>
-        {mode === "register" ? (
+        {isRegister ? (
           <label className="field">
-            <span>姓名</span>
+            <span>{copy.name}</span>
             <input name="name" autoComplete="name" required />
           </label>
         ) : null}
 
         <label className="field">
-          <span>邮箱</span>
+          <span>{copy.email}</span>
           <input name="email" type="email" autoComplete="email" required />
         </label>
 
         <label className="field">
-          <span>密码</span>
+          <span>{copy.password}</span>
           <input
             name="password"
             type="password"
-            autoComplete={mode === "register" ? "new-password" : "current-password"}
-            minLength={mode === "register" ? 8 : undefined}
+            autoComplete={isRegister ? "new-password" : "current-password"}
+            minLength={isRegister ? 8 : undefined}
             required
           />
         </label>
 
         <button className="button" disabled={isSubmitting} type="submit">
-          {isSubmitting ? "请稍等" : mode === "register" ? "创建账号" : "登录"}
+          {isSubmitting ? copy.submitting : isRegister ? copy.registerTitle : copy.loginTitle}
         </button>
       </form>
 
       {error ? <p className="error">{error}</p> : null}
 
-      <p className="muted">
-        {mode === "register" ? (
+      <p className="muted auth-switch">
+        {isRegister ? (
           <>
-            已有账号？<Link href="/login">去登录</Link>
+            {copy.alreadyAccount}
+            <Link href="/login">{copy.goLogin}</Link>
           </>
         ) : (
           <>
-            还没有账号？<Link href="/register">创建一个</Link>
+            {copy.noAccount}
+            <Link href="/register">{copy.createOne}</Link>
           </>
         )}
       </p>

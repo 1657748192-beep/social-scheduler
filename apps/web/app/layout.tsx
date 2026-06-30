@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Social Scheduler",
-  description: "Social Scheduler 社交媒体内容排程 SaaS",
+  description: "Social Scheduler social media content scheduling dashboard",
   icons: {
     icon: "/app-icon-1024.png"
   },
