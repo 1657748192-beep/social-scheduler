@@ -4,8 +4,8 @@ export default function HomePage() {
   return (
     <main className="page">
       <section className="auth-card">
-        <h1>社交内容排程后台</h1>
-        <p className="muted">登录后创建内容、绑定社交账号，并安排定时发布。</p>
+        <h1>Social Scheduler</h1>
+        <p className="muted">社交内容排程后台。登录后创建内容、绑定社交账号，并安排定时发布。</p>
         <div className="form">
           <Link className="button" href="/register">
             创建账号
