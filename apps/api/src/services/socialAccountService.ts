@@ -453,6 +453,13 @@ export async function completeOAuth(platformParam: string, code: string, state: 
     canReadFacebookPages
       ? await fetchFacebookPages(credentialTokenResponse.access_token)
       : [];
+  if (canReadFacebookPages && !facebookPages.length) {
+    await prisma.oauthState.delete({ where: { id: oauthState.id } }).catch(() => null);
+    throw new HttpError(
+      400,
+      "Facebook Page was not returned. Confirm the user is a Page admin, allow pages_show_list/pages_read_engagement/pages_manage_posts/pages_manage_metadata, then authorize again."
+    );
+  }
   const scopes = parseScopes(credentialTokenResponse, oauthState.scopes);
   const expiresAt = credentialTokenResponse.expires_in
     ? new Date(Date.now() + credentialTokenResponse.expires_in * 1000)

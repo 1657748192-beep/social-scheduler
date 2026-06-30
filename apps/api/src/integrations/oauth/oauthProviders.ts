@@ -69,7 +69,8 @@ const facebookPageScopes = [
   "public_profile",
   "pages_show_list",
   "pages_read_engagement",
-  "pages_manage_posts"
+  "pages_manage_posts",
+  "pages_manage_metadata"
 ];
 
 function facebookDefaultScopes() {
@@ -124,7 +125,10 @@ const providerConfigs: Record<Platform, OAuthProviderConfig> = {
     profileUrl: "https://graph.facebook.com/me?fields=id,name,picture",
     defaultScopes: facebookDefaultScopes(),
     usesPkce: false,
-    clientAuthentication: "body"
+    clientAuthentication: "body",
+    authorizationParams: {
+      auth_type: "rerequest"
+    }
   },
   youtube: {
     platform: "youtube",
