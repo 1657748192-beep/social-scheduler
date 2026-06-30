@@ -18,7 +18,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-social_scheduler}?schema=public
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-30d}
       API_PUBLIC_URL: ${PUBLIC_API_URL}
       CORS_ORIGIN: ${PUBLIC_WEB_URL}
       WEB_APP_URL: ${PUBLIC_WEB_URL}
@@ -48,7 +48,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-social_scheduler}?schema=public
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-30d}
       API_PUBLIC_URL: ${PUBLIC_API_URL}
       CORS_ORIGIN: ${PUBLIC_WEB_URL}
       WEB_APP_URL: ${PUBLIC_WEB_URL}

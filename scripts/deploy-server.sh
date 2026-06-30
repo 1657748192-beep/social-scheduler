@@ -117,7 +117,7 @@ prepare_env() {
   force_env_value PUBLIC_WEB_URL "${PUBLIC_WEB_URL:-https://app.bufferhelp.com}"
   ensure_env_value POSTGRES_PASSWORD "$(random_hex 24)"
   ensure_env_value JWT_SECRET "$(random_hex 48)"
-  ensure_env_value JWT_EXPIRES_IN "7d"
+  force_env_value JWT_EXPIRES_IN "30d"
   ensure_env_value TOKEN_ENCRYPTION_KEY "$(random_hex 32)"
   ensure_env_value FACEBOOK_CLIENT_ID "${FACEBOOK_CLIENT_ID:-1743484710132300}"
   ensure_env_value FACEBOOK_OAUTH_SCOPES "public_profile"
