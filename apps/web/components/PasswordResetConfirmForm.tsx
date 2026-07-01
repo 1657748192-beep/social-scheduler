@@ -30,13 +30,14 @@ export function PasswordResetConfirmForm() {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
 
     if (!token) {
       setError(copy.missingToken);
       return;
     }
 
-    const formData = new FormData(event.currentTarget);
+    const formData = new FormData(form);
     const password = String(formData.get("password") ?? "");
     const confirmPassword = String(formData.get("confirmPassword") ?? "");
 
@@ -59,7 +60,7 @@ export function PasswordResetConfirmForm() {
       });
 
       setMessage(copy.success);
-      event.currentTarget.reset();
+      form.reset();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : copy.requestFailed);
     } finally {

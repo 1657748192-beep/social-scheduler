@@ -180,13 +180,14 @@ export default function DashboardPage() {
 
   async function createWorkspace(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
 
     if (!token) {
       return;
     }
 
     setError(null);
-    const formData = new FormData(event.currentTarget);
+    const formData = new FormData(form);
 
     try {
       await apiRequest<Workspace>("/workspaces", {
@@ -197,7 +198,7 @@ export default function DashboardPage() {
           timezone: String(formData.get("timezone") ?? "Asia/Shanghai")
         }
       });
-      event.currentTarget.reset();
+      form.reset();
       await loadAccount(token);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "请求失败");
@@ -206,6 +207,7 @@ export default function DashboardPage() {
 
   async function inviteMember(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
 
     if (!token || !selectedWorkspace) {
       return;
@@ -213,7 +215,7 @@ export default function DashboardPage() {
 
     setError(null);
     setLatestInviteUrl(null);
-    const formData = new FormData(event.currentTarget);
+    const formData = new FormData(form);
 
     try {
       const invitation = await apiRequest<WorkspaceInvitation>(
@@ -229,7 +231,7 @@ export default function DashboardPage() {
       );
 
       setLatestInviteUrl(invitation.inviteUrl ?? null);
-      event.currentTarget.reset();
+      form.reset();
       await loadWorkspaceDetails(token, selectedWorkspace.id);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "请求失败");
