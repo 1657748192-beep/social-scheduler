@@ -280,7 +280,8 @@ const providerSetup: Record<
 
 export function redirectUriFor(platform: Platform) {
   const publicPlatform = platform === "x" ? "twitter" : platform;
-  return `${config.API_PUBLIC_URL}/api/v1/integrations/${publicPlatform}/oauth/callback`;
+  const apiPublicUrl = config.API_PUBLIC_URL.replace(/\/+$/, "");
+  return `${apiPublicUrl}/api/v1/integrations/${publicPlatform}/oauth/callback`;
 }
 
 export function listOAuthProviderStatuses(): OAuthProviderStatus[] {
