@@ -676,12 +676,9 @@ export async function disconnectSocialAccount(
       }
     });
 
-    return tx.socialAccount.update({
+    return tx.socialAccount.delete({
       where: {
         id: account.id
-      },
-      data: {
-        status: "disconnected"
       },
       select: {
         id: true,

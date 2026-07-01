@@ -621,7 +621,7 @@ export default function DashboardPage() {
                           onClick={() => disconnectSocialAccount(account.id)}
                           type="button"
                         >
-                          解绑 {account.displayName}
+                          {account.status === "disconnected" ? "删除记录" : "解除绑定"} {account.displayName}
                         </button>
                       ))}
                     </div>
@@ -676,7 +676,7 @@ export default function DashboardPage() {
                       type="button"
                       onClick={() => disconnectSocialAccount(account.id)}
                     >
-                      解除绑定
+                      {account.status === "disconnected" ? "删除记录" : "解除绑定"}
                     </button>
                   ) : (
                     "-"
@@ -768,7 +768,7 @@ export default function DashboardPage() {
                             onClick={() => disconnectSocialAccount(account.id)}
                             type="button"
                           >
-                            解除绑定
+                            {account.status === "disconnected" ? "删除记录" : "解除绑定"}
                           </button>
                         </div>
                       ))}

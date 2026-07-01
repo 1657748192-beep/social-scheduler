@@ -311,16 +311,7 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
         token
       });
 
-      setChannels((current) =>
-        current.map((item) =>
-          item.id === account.id
-            ? {
-                ...item,
-                status: "disconnected"
-              }
-            : item
-        )
-      );
+      setChannels((current) => current.filter((item) => item.id !== account.id));
     } catch (error) {
       setChannelActionError(error instanceof Error ? error.message : "解除绑定失败");
     } finally {
