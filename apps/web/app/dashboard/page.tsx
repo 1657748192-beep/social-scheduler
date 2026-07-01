@@ -175,8 +175,6 @@ export default function DashboardPage() {
     ? connectedAccounts.filter((account) => account.platform === bindingProvider.platform)
     : [];
   const bindingShareLink = bindingProvider ? authorizationLinks[bindingProvider.platform] : undefined;
-  const bindingFacebookBasicMode =
-    bindingProvider?.platform === "facebook" && !bindingProvider.scopes.includes("pages_manage_posts");
 
   async function createWorkspace(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -557,9 +555,6 @@ export default function DashboardPage() {
                   (item) => item.platform === provider.platform && item.status === "active"
                 );
                 const shareLink = authorizationLinks[provider.platform];
-                const facebookBasicMode =
-                  provider.platform === "facebook" && !provider.scopes.includes("pages_manage_posts");
-
                 return (
                   <article className="provider-card" key={provider.platform}>
                     <div className="row">
@@ -583,17 +578,6 @@ export default function DashboardPage() {
                             <span>{account.displayName}</span>
                           </span>
                         ))}
-                      </div>
-                    ) : null}
-
-                    {provider.platform === "facebook" ? (
-                      <div className="oauth-config-box">
-                        <span>当前模式</span>
-                        <code>
-                          {facebookBasicMode
-                            ? "基础绑定：可登录授权，暂不能发布 Facebook Page"
-                            : "Page 发布：可请求主页列表与发帖权限"}
-                        </code>
                       </div>
                     ) : null}
 
@@ -777,17 +761,6 @@ export default function DashboardPage() {
                     <p className="muted">当前平台还没有绑定账号。</p>
                   )}
                 </div>
-
-                {bindingProvider.platform === "facebook" ? (
-                  <div className="oauth-config-box">
-                    <span>当前模式</span>
-                    <code>
-                      {bindingFacebookBasicMode
-                        ? "基础绑定：可登录授权，暂不能发布 Facebook Page"
-                        : "Page 发布：可请求主页列表与发帖权限"}
-                    </code>
-                  </div>
-                ) : null}
 
                 <div className="binding-action-panel">
                   <div>
