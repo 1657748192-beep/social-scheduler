@@ -220,6 +220,17 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
 
   return (
     <form className="composer-layout" onSubmit={savePost}>
+      <section className="composer-platform-bar" aria-label="选择发布平台">
+        <PlatformTabs
+          accountsByPlatform={accountsByPlatform}
+          active={activePlatform}
+          loading={accountsLoading}
+          onActiveChange={setActivePlatform}
+          onToggle={togglePlatform}
+          selected={selectedPlatforms}
+        />
+      </section>
+
       <aside className="composer-sidebar">
         <section className="composer-panel">
           <p className="section-kicker">发布设置</p>
@@ -303,15 +314,6 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
             <span>{videoCount} 个视频</span>
           </div>
         </section>
-
-        <PlatformTabs
-          accountsByPlatform={accountsByPlatform}
-          active={activePlatform}
-          loading={accountsLoading}
-          onActiveChange={setActivePlatform}
-          onToggle={togglePlatform}
-          selected={selectedPlatforms}
-        />
 
         <PlatformEditor
           mediaCount={media.length}

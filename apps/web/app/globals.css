@@ -1452,6 +1452,10 @@ textarea {
   align-items: start;
 }
 
+.composer-platform-bar {
+  grid-column: 1 / -1;
+}
+
 .composer-sidebar,
 .composer-main,
 .preview-rail {
