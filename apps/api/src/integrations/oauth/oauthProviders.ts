@@ -92,14 +92,22 @@ const providerConfigs: Record<Platform, OAuthProviderConfig> = {
     platform: "instagram",
     platformParam: "instagram",
     displayName: "Instagram",
-    clientId: config.INSTAGRAM_CLIENT_ID || config.FACEBOOK_CLIENT_ID,
-    clientSecret: config.INSTAGRAM_CLIENT_SECRET || config.FACEBOOK_CLIENT_SECRET,
-    authorizationUrl: "https://www.facebook.com/v20.0/dialog/oauth",
-    tokenUrl: "https://graph.facebook.com/v20.0/oauth/access_token",
-    profileUrl: "https://graph.facebook.com/me?fields=id,name,picture",
-    defaultScopes: ["instagram_basic", "instagram_content_publish", "pages_show_list"],
+    clientId: config.INSTAGRAM_CLIENT_ID,
+    clientSecret: config.INSTAGRAM_CLIENT_SECRET,
+    authorizationUrl: "https://www.instagram.com/oauth/authorize",
+    tokenUrl: "https://api.instagram.com/oauth/access_token",
+    profileUrl: "https://graph.instagram.com/v20.0/me?fields=id,user_id,username,account_type,profile_picture_url",
+    defaultScopes: configuredScopes(config.INSTAGRAM_OAUTH_SCOPES, [
+      "instagram_business_basic",
+      "instagram_business_content_publish"
+    ]),
     usesPkce: false,
-    clientAuthentication: "body"
+    clientAuthentication: "body",
+    scopeSeparator: ",",
+    authorizationParams: {
+      enable_fb_login: "0",
+      force_authentication: "1"
+    }
   },
   linkedin: {
     platform: "linkedin",
@@ -218,7 +226,7 @@ const providerSetup: Record<
     displayName: "Instagram",
     developerUrl: "https://developers.facebook.com/apps/",
     docsUrl: "https://developers.facebook.com/docs/instagram-platform/",
-    requiredEnv: ["INSTAGRAM_CLIENT_ID 或 FACEBOOK_CLIENT_ID", "INSTAGRAM_CLIENT_SECRET 或 FACEBOOK_CLIENT_SECRET"]
+    requiredEnv: ["INSTAGRAM_CLIENT_ID", "INSTAGRAM_CLIENT_SECRET", "INSTAGRAM_OAUTH_SCOPES"]
   },
   linkedin: {
     platform: "linkedin",

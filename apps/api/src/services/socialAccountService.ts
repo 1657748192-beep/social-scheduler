@@ -150,6 +150,21 @@ async function fetchProviderProfile(provider: OAuthProviderConfig, accessToken: 
     };
   }
 
+  if (provider.platform === "instagram") {
+    const providerAccountId = payload.user_id || payload.id;
+
+    if (!providerAccountId) {
+      throw new HttpError(400, "Instagram profile was not found", payload);
+    }
+
+    return {
+      providerAccountId,
+      displayName: payload.username || payload.name || "Instagram account",
+      avatarUrl: payload.profile_picture_url,
+      accountType: payload.account_type || "profile"
+    };
+  }
+
   if (provider.platform === "youtube") {
     const channel = payload.items?.[0];
 
@@ -219,6 +234,34 @@ async function exchangeFacebookLongLivedToken(provider: OAuthProviderConfig, tok
     ...tokenResponse,
     ...payload
   };
+}
+
+async function exchangeInstagramLongLivedToken(provider: OAuthProviderConfig, tokenResponse: TokenResponse) {
+  if (provider.platform !== "instagram" || !provider.clientSecret) {
+    return tokenResponse;
+  }
+
+  const url = new URL("https://graph.instagram.com/access_token");
+  url.searchParams.set("grant_type", "ig_exchange_token");
+  url.searchParams.set("client_secret", provider.clientSecret);
+  url.searchParams.set("access_token", tokenResponse.access_token);
+
+  const response = await fetch(url);
+  const payload = (await response.json().catch(() => null)) as TokenResponse | null;
+
+  if (!response.ok || !payload?.access_token) {
+    return tokenResponse;
+  }
+
+  return {
+    ...tokenResponse,
+    ...payload
+  };
+}
+
+async function exchangeLongLivedToken(provider: OAuthProviderConfig, tokenResponse: TokenResponse) {
+  const facebookTokenResponse = await exchangeFacebookLongLivedToken(provider, tokenResponse);
+  return exchangeInstagramLongLivedToken(provider, facebookTokenResponse);
 }
 
 async function fetchFacebookPages(accessToken: string): Promise<FacebookPageProfile[]> {
@@ -445,7 +488,7 @@ export async function completeOAuth(platformParam: string, code: string, state: 
     oauthState.redirectUri,
     oauthState.codeVerifier ?? undefined
   );
-  const credentialTokenResponse = await exchangeFacebookLongLivedToken(provider, tokenResponse);
+  const credentialTokenResponse = await exchangeLongLivedToken(provider, tokenResponse);
   const profile = await fetchProviderProfile(provider, credentialTokenResponse.access_token);
   const canReadFacebookPages =
     provider.platform === "facebook" && oauthState.scopes.includes("pages_show_list");
