@@ -1,11 +1,12 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   apiRequest,
   type ComposerPlatform,
   type ComposerPost,
   type MediaAsset,
+  type SocialAccount,
   type Workspace
 } from "../../lib/api";
 import { chinaLocalInputToISOString } from "../../lib/chinaTime";
@@ -30,8 +31,6 @@ const allComposerPlatforms: ComposerPlatform[] = [
   "x"
 ];
 
-const defaultPlatforms: ComposerPlatform[] = ["instagram", "facebook", "x"];
-
 function createVariantTextMap(value = "") {
   return Object.fromEntries(
     allComposerPlatforms.map((platform) => [platform, value])
@@ -42,11 +41,14 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
   const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? "");
   const [title, setTitle] = useState("");
   const [baseText, setBaseText] = useState("");
-  const [selectedPlatforms, setSelectedPlatforms] = useState<ComposerPlatform[]>(defaultPlatforms);
-  const [activePlatform, setActivePlatform] = useState<ComposerPlatform>(defaultPlatforms[0]);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<ComposerPlatform[]>([]);
+  const [activePlatform, setActivePlatform] = useState<ComposerPlatform>("instagram");
   const [variantTexts, setVariantTexts] = useState<Record<ComposerPlatform, string>>(() =>
     createVariantTextMap()
   );
+  const [socialAccounts, setSocialAccounts] = useState<SocialAccount[]>([]);
+  const [accountsLoading, setAccountsLoading] = useState(false);
+  const [accountError, setAccountError] = useState<string | null>(null);
   const [media, setMedia] = useState<MediaAsset[]>([]);
   const [scheduledAt, setScheduledAt] = useState("");
   const [result, setResult] = useState<ComposerPost | null>(null);
@@ -57,11 +59,76 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
     () => workspaces.find((workspace) => workspace.id === workspaceId),
     [workspaceId, workspaces]
   );
+  const activeAccounts = useMemo(
+    () => socialAccounts.filter((account) => account.status === "active"),
+    [socialAccounts]
+  );
+  const accountsByPlatform = useMemo(() => {
+    const accounts: Partial<Record<ComposerPlatform, SocialAccount>> = {};
+
+    activeAccounts.forEach((account) => {
+      if (!accounts[account.platform]) {
+        accounts[account.platform] = account;
+      }
+    });
+
+    return accounts;
+  }, [activeAccounts]);
+  const unboundSelectedPlatforms = selectedPlatforms.filter((platform) => !accountsByPlatform[platform]);
   const imageCount = media.filter((asset) => asset.mimeType.startsWith("image/")).length;
   const videoCount = media.filter((asset) => asset.mimeType.startsWith("video/")).length;
   const hasAnyVariantText = selectedPlatforms.some(
     (platform) => (variantTexts[platform] || baseText).trim().length > 0
   );
+
+  useEffect(() => {
+    if (!workspaceId) {
+      setSocialAccounts([]);
+      setSelectedPlatforms([]);
+      return;
+    }
+
+    let cancelled = false;
+    setAccountsLoading(true);
+    setAccountError(null);
+    setSocialAccounts([]);
+    setSelectedPlatforms([]);
+    setActivePlatform("instagram");
+
+    apiRequest<SocialAccount[]>(`/workspaces/${workspaceId}/social-accounts`, { token })
+      .then((accounts) => {
+        if (cancelled) {
+          return;
+        }
+
+        const activePlatforms = allComposerPlatforms.filter((platform) =>
+          accounts.some((account) => account.platform === platform && account.status === "active")
+        );
+
+        setSocialAccounts(accounts);
+        setSelectedPlatforms(activePlatforms);
+        setActivePlatform(activePlatforms[0] ?? "instagram");
+      })
+      .catch((requestError) => {
+        if (cancelled) {
+          return;
+        }
+
+        setSocialAccounts([]);
+        setSelectedPlatforms([]);
+        setAccountError(requestError instanceof Error ? requestError.message : "无法读取绑定账号");
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setAccountsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, workspaceId]);
+
   const publishChecks = [
     {
       label: "基础文案",
@@ -70,6 +137,10 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
     {
       label: "发布平台",
       done: selectedPlatforms.length > 0
+    },
+    {
+      label: "账号绑定",
+      done: selectedPlatforms.length > 0 && unboundSelectedPlatforms.length === 0
     },
     {
       label: "图片或视频",
@@ -87,13 +158,9 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
       ? selectedPlatforms.filter((item) => item !== platform)
       : [...selectedPlatforms, platform];
 
-    if (!next.length) {
-      return;
-    }
-
     setSelectedPlatforms(next);
 
-    if (!next.includes(activePlatform)) {
+    if (next.length && !next.includes(activePlatform)) {
       setActivePlatform(next[0]);
     }
   }
@@ -107,6 +174,16 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
 
     if (!selectedWorkspace) {
       setError("请先选择工作区");
+      return;
+    }
+
+    if (!selectedPlatforms.length) {
+      setError("请先选择至少一个已绑定平台");
+      return;
+    }
+
+    if (unboundSelectedPlatforms.length) {
+      setError("请先绑定已选择的平台账号，或取消未绑定平台");
       return;
     }
 
@@ -228,7 +305,9 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
         </section>
 
         <PlatformTabs
+          accountsByPlatform={accountsByPlatform}
           active={activePlatform}
+          loading={accountsLoading}
           onActiveChange={setActivePlatform}
           onToggle={togglePlatform}
           selected={selectedPlatforms}
@@ -251,11 +330,19 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
             {isSaving ? "保存中" : scheduledAt ? "加入排程" : "保存草稿"}
           </button>
           {result ? <span className="muted">已保存内容：{result.id}</span> : null}
+          {accountError ? <span className="error">{accountError}</span> : null}
           {error ? <span className="error">{error}</span> : null}
         </div>
       </main>
 
-      <PostPreview baseText={baseText} media={media} platforms={selectedPlatforms} texts={variantTexts} />
+      <PostPreview
+        accountsByPlatform={accountsByPlatform}
+        baseText={baseText}
+        loading={accountsLoading}
+        media={media}
+        platforms={selectedPlatforms}
+        texts={variantTexts}
+      />
     </form>
   );
 }

@@ -1529,6 +1529,14 @@ textarea {
   font-size: 12px;
 }
 
+.platform-tab .account-state {
+  color: var(--danger);
+}
+
+.platform-tab .account-state.bound {
+  color: var(--muted);
+}
+
 .platform-tab input {
   width: 18px;
   height: 18px;
@@ -1662,6 +1670,18 @@ textarea {
   border-radius: 8px;
   padding: 14px;
   background: #fff;
+}
+
+.preview-card.unbound {
+  background: #fffafa;
+}
+
+.preview-empty {
+  margin: 0;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: var(--panel-muted);
 }
 
 .preview-card.x {

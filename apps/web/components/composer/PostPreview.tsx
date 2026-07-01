@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComposerPlatform, MediaAsset } from "../../lib/api";
+import type { ComposerPlatform, MediaAsset, SocialAccount } from "../../lib/api";
 import { platformLimits } from "./platformConfig";
 
 type PostPreviewProps = {
@@ -8,9 +8,18 @@ type PostPreviewProps = {
   texts: Record<ComposerPlatform, string>;
   baseText: string;
   media: MediaAsset[];
+  accountsByPlatform: Partial<Record<ComposerPlatform, SocialAccount>>;
+  loading: boolean;
 };
 
-export function PostPreview({ platforms, texts, baseText, media }: PostPreviewProps) {
+export function PostPreview({
+  platforms,
+  texts,
+  baseText,
+  media,
+  accountsByPlatform,
+  loading
+}: PostPreviewProps) {
   return (
     <section className="composer-panel preview-rail">
       <div className="row">
@@ -22,17 +31,28 @@ export function PostPreview({ platforms, texts, baseText, media }: PostPreviewPr
       </div>
 
       <div className="preview-stack">
+        {!platforms.length ? (
+          <p className="muted preview-empty">
+            {loading ? "正在读取绑定账号..." : "当前工作区还没有选择发布平台。"}
+          </p>
+        ) : null}
         {platforms.map((platform) => {
           const limit = platformLimits[platform];
           const text = texts[platform] || baseText;
+          const account = accountsByPlatform[platform];
+          const accountLabel = loading
+            ? "正在读取账号"
+            : account
+              ? `@${account.displayName}`
+              : "@未绑定账号";
 
           return (
-            <article className={`preview-card ${platform}`} key={platform}>
+            <article className={`preview-card ${platform} ${account ? "" : "unbound"}`} key={platform}>
               <div className="preview-top">
                 <div className="preview-avatar">{limit.label.slice(0, 1)}</div>
                 <div>
                   <strong>{limit.label}</strong>
-                  <div className="muted">@已绑定账号</div>
+                  <div className="muted">{accountLabel}</div>
                 </div>
               </div>
               <p>{text || "这里会显示该平台的专属文案。"}</p>
