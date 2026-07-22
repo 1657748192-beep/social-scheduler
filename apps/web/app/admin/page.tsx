@@ -236,7 +236,7 @@ export default function AdminPage() {
             <div>
               <h2>用户列表</h2>
               <p className="muted">
-                密码不会明文显示。系统只保存加密哈希，后续如需处理密码应做重置密码功能。
+                可查看用户登录状态、最近登录时间、内容与素材概览，并管理其测试发布权限。
               </p>
             </div>
             <input
@@ -276,8 +276,12 @@ export default function AdminPage() {
                     <dd>{sessionStatus(user)}</dd>
                   </div>
                   <div>
-                    <dt>密码</dt>
-                    <dd>不可查看，已加密保存</dd>
+                    <dt>最近登录</dt>
+                    <dd>
+                      {user.sessionSummary.latestSessionCreatedAt
+                        ? formatDate(user.sessionSummary.latestSessionCreatedAt)
+                        : "从未登录"}
+                    </dd>
                   </div>
                   <div>
                     <dt>内容/素材</dt>
