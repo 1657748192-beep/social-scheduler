@@ -973,6 +973,32 @@ textarea {
   font-size: 26px;
 }
 
+.publishing-access-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 22px;
+  border: 1px solid #ccebd8;
+  border-radius: 14px;
+  background: #f3fbf6;
+}
+
+.publishing-access-notice.warning {
+  border-color: #f4d3a6;
+  background: #fff8ee;
+}
+
+.publishing-access-notice h2 {
+  margin: 2px 0 6px;
+  font-size: 18px;
+}
+
+.publishing-access-notice .status-pill {
+  flex: 0 0 auto;
+  text-align: center;
+}
+
 .hero-actions {
   display: flex;
   gap: 10px;
@@ -3499,6 +3525,11 @@ textarea {
   }
 
   .dashboard-hero {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .publishing-access-notice {
     align-items: flex-start;
     flex-direction: column;
   }

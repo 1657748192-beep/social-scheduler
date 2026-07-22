@@ -22,6 +22,44 @@ import {
   roleLabel
 } from "../../lib/labels";
 
+function publishingAccessLabel(status?: Workspace["publishingAccessStatus"]) {
+  if (status === "disabled") {
+    return "发布权限已停用";
+  }
+
+  if (status === "expired") {
+    return "测试发布权限已到期";
+  }
+
+  return "测试发布权限生效中";
+}
+
+function formatBeijingDateTime(value?: string | null) {
+  if (!value) {
+    return "未设置";
+  }
+
+  return new Date(value).toLocaleString("zh-CN", {
+    hour12: false,
+    timeZone: "Asia/Shanghai"
+  });
+}
+
+function publishingAccessDescription(
+  status?: Workspace["publishingAccessStatus"],
+  expiresAt?: string | null
+) {
+  if (status === "disabled") {
+    return "管理员已停用你的发布权限。你仍可登录、查看后台和保存草稿，但不能上传素材、立即发布或创建排程。";
+  }
+
+  if (status === "expired") {
+    return "测试期限已结束。你仍可登录、查看后台和保存草稿，但不能上传素材、立即发布或创建排程。";
+  }
+
+  return `可发布至 ${formatBeijingDateTime(expiresAt)}（北京时间）。到期后仍可登录查看后台和保存草稿，但不能发布或创建排程。`;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
@@ -280,6 +318,36 @@ export default function DashboardPage() {
             </a>
           </div>
         </section>
+
+        {selectedWorkspace?.publishingAccessExpiresAt ||
+        selectedWorkspace?.publishingAccessStatus === "disabled" ||
+        selectedWorkspace?.publishingAccessStatus === "expired" ? (
+          <section
+            className={`publishing-access-notice ${
+              selectedWorkspace?.publishingAccessStatus === "active" ? "ready" : "warning"
+            }`}
+          >
+            <div>
+              <p className="section-kicker">测试人员发布权限</p>
+              <h2>{publishingAccessLabel(selectedWorkspace?.publishingAccessStatus)}</h2>
+              <p className="muted">
+                {publishingAccessDescription(
+                  selectedWorkspace?.publishingAccessStatus,
+                  selectedWorkspace?.publishingAccessExpiresAt
+                )}
+              </p>
+            </div>
+            <span
+              className={`status-pill ${
+                selectedWorkspace?.publishingAccessStatus === "active" ? "ready" : "warning"
+              }`}
+            >
+              {selectedWorkspace?.publishingAccessStatus === "active"
+                ? `截止：${formatBeijingDateTime(selectedWorkspace.publishingAccessExpiresAt)}`
+                : publishingAccessLabel(selectedWorkspace?.publishingAccessStatus)}
+            </span>
+          </section>
+        ) : null}
 
         <section className="metric-grid" aria-label="运营指标">
           {dashboardStats.map((item) => (
