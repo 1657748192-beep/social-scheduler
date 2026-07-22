@@ -126,7 +126,7 @@ export async function prepareCosMediaUpload(
       {
         action: [
           "name/cos:PutObject",
-          "name/cos:HeadObject",
+          "name/cos:GetObject",
           "name/cos:InitiateMultipartUpload",
           "name/cos:ListMultipartUploads",
           "name/cos:ListParts",
