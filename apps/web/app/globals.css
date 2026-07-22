@@ -1511,6 +1511,68 @@ textarea {
   min-height: 120px;
 }
 
+.text-insert-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: -6px;
+}
+
+.text-insert-trigger,
+.text-insert-option {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+}
+
+.text-insert-trigger {
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.text-insert-trigger:hover,
+.text-insert-trigger.active {
+  border-color: #b8d5ef;
+  background: #edf6ff;
+  color: var(--primary);
+}
+
+.text-insert-options {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.text-insert-option {
+  min-width: 30px;
+  padding: 4px 6px;
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.text-insert-option:hover {
+  border-color: #b8d5ef;
+  background: #fff;
+}
+
+.website-field {
+  margin-top: 4px;
+}
+
+.website-field small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .platform-tabs {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));

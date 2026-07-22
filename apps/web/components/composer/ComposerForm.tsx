@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   apiRequest,
   type ComposerPlatform,
@@ -11,12 +11,14 @@ import {
 } from "../../lib/api";
 import { chinaLocalInputToISOString } from "../../lib/chinaTime";
 import { AccountTargetSelector } from "./AccountTargetSelector";
+import { appendWebsiteToText, isValidWebsite } from "./contentUtils";
 import { MediaUploader } from "./MediaUploader";
 import { PlatformEditor } from "./PlatformEditor";
 import { platformLimits } from "./platformConfig";
 import { PlatformTabs } from "./PlatformTabs";
 import { PostPreview } from "./PostPreview";
 import { SchedulePicker } from "./SchedulePicker";
+import { TextInsertToolbar } from "./TextInsertToolbar";
 
 type ComposerFormProps = {
   token: string;
@@ -50,8 +52,12 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
   const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? "");
   const [title, setTitle] = useState("");
   const [baseText, setBaseText] = useState("");
+  const [baseWebsite, setBaseWebsite] = useState("");
   const [activePlatform, setActivePlatform] = useState<ComposerPlatform>("facebook");
   const [variantTexts, setVariantTexts] = useState<Record<ComposerPlatform, string>>(() =>
+    createVariantTextMap()
+  );
+  const [variantWebsites, setVariantWebsites] = useState<Record<ComposerPlatform, string>>(() =>
     createVariantTextMap()
   );
   const [socialAccounts, setSocialAccounts] = useState<SocialAccount[]>([]);
@@ -66,6 +72,7 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
   const [result, setResult] = useState<ComposerPost | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const baseTextAreaRef = useRef<HTMLTextAreaElement>(null);
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === workspaceId),
@@ -186,8 +193,22 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
     setSelectedAccountIds((current) => (current.length === activeAccounts.length ? [] : activeAccounts.map((account) => account.id)));
   }
 
-  function applyBaseText() {
+  function applyBaseContent() {
     setVariantTexts(createVariantTextMap(baseText));
+    setVariantWebsites(createVariantTextMap(baseWebsite));
+  }
+
+  function insertBaseText(value: string) {
+    const textArea = baseTextAreaRef.current;
+    const start = textArea?.selectionStart ?? baseText.length;
+    const end = textArea?.selectionEnd ?? baseText.length;
+    const nextText = `${baseText.slice(0, start)}${value}${baseText.slice(end)}`;
+
+    setBaseText(nextText);
+    requestAnimationFrame(() => {
+      textArea?.focus();
+      textArea?.setSelectionRange(start + value.length, start + value.length);
+    });
   }
 
   async function savePost(event: FormEvent<HTMLFormElement>) {
@@ -203,6 +224,15 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
       return;
     }
 
+    const hasInvalidWebsite = !isValidWebsite(baseWebsite) || selectedPlatforms.some(
+      (platform) => !isValidWebsite(variantWebsites[platform] || baseWebsite)
+    );
+
+    if (hasInvalidWebsite) {
+      setError("网站链接请输入以 http:// 或 https:// 开头的完整地址");
+      return;
+    }
+
     setError(null);
     setResult(null);
     setIsSaving(true);
@@ -215,7 +245,7 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
           token,
           body: {
             title: title || undefined,
-            baseText,
+            baseText: appendWebsiteToText(baseText, baseWebsite),
             scheduledAt:
               publishMode === "scheduled" && scheduledAt
                 ? chinaLocalInputToISOString(scheduledAt)
@@ -224,7 +254,10 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
             variants: selectedAccounts.map((account) => ({
               socialAccountId: account.id,
               platform: account.platform,
-              text: variantTexts[account.platform] || baseText,
+              text: appendWebsiteToText(
+                variantTexts[account.platform] || baseText,
+                variantWebsites[account.platform] || baseWebsite
+              ),
               mediaAssetIds: mediaByPlatform[account.platform].map((asset) => asset.id)
             }))
           }
@@ -269,8 +302,8 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
                 value={title}
               />
             </label>
-            <button className="button secondary apply-copy-button" onClick={applyBaseText} type="button">
-              应用基础文案
+            <button className="button secondary apply-copy-button" onClick={applyBaseContent} type="button">
+              应用基础内容
             </button>
           </div>
 
@@ -280,9 +313,22 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
               className="composer-textarea compact"
               onChange={(event) => setBaseText(event.target.value)}
               placeholder="先写一版通用文案，发布前可按平台调整。"
+              ref={baseTextAreaRef}
               required
               value={baseText}
             />
+          </label>
+          <TextInsertToolbar onInsert={insertBaseText} />
+          <label className="field website-field">
+            <span>基础网站链接（可选）</span>
+            <input
+              inputMode="url"
+              onChange={(event) => setBaseWebsite(event.target.value)}
+              placeholder="https://example.com"
+              type="url"
+              value={baseWebsite}
+            />
+            <small>默认会用于所有已选平台；可在平台版本中单独改写。</small>
           </label>
           <div className="content-summary">
             <span>{selectedAccounts.length} 个账号</span>
@@ -305,8 +351,15 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
                   [activePlatform]: value
                 }))
               }
+              onWebsiteChange={(value) =>
+                setVariantWebsites((current) => ({
+                  ...current,
+                  [activePlatform]: value
+                }))
+              }
               platform={activePlatform}
               text={variantTexts[activePlatform] || baseText}
+              website={variantWebsites[activePlatform] || baseWebsite}
             />
           ) : null}
         </section>
@@ -382,7 +435,9 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
           baseText={baseText}
           loading={accountsLoading}
           mediaByPlatform={mediaByPlatform}
+          baseWebsite={baseWebsite}
           texts={variantTexts}
+          websites={variantWebsites}
         />
 
         <section className="composer-panel checklist-panel publish-action-panel">

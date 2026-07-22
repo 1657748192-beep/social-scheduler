@@ -64,7 +64,7 @@
 
 - 任务内容：内容编辑器按具体 Facebook Page、YouTube Channel 等账号多选，而非只按平台选择；每个目标账号创建独立变体、排程和发布任务。
 - 涉及文件：`apps/web/components/composer/`、`apps/api/src/services/composerService.ts`、`apps/api/src/worker.ts`、`apps/api/src/integrations/social/`、`apps/api/prisma/`。
-- 当前状态：已实现账号选择界面、立即/定时/草稿三种发布方式、账号归属校验和按账号发布；素材按平台独立配置，同一平台的多个账号共享该平台素材；已添加数据库外键迁移，待线上用多个 Facebook Page / YouTube Channel 做真实发布验证。
+- 当前状态：已实现账号选择界面、立即/定时/草稿三种发布方式、账号归属校验和按账号发布；文案支持按基础/平台分别设置可选网站链接及表情/特殊符号插入；素材按平台独立配置，同一平台的多个账号共享该平台素材；已添加数据库外键迁移，待线上用多个 Facebook Page / YouTube Channel 做真实发布验证。
 - 完成标准：一次选择 N 个账号后，生成 N 条独立任务；每条任务、日历详情和真实发布均指向被选定账号，任一账号失败不影响其他账号。
 - 依赖条件：Facebook/YouTube 对应账号已连接、授权有效，且各平台真实发布能力可用。
 

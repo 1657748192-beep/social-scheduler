@@ -1,19 +1,46 @@
 "use client";
 
+import { useRef } from "react";
 import type { ComposerPlatform } from "../../lib/api";
+import { appendWebsiteToText } from "./contentUtils";
 import { platformLimits } from "./platformConfig";
+import { TextInsertToolbar } from "./TextInsertToolbar";
 
 type PlatformEditorProps = {
   platform: ComposerPlatform;
   text: string;
+  website: string;
   mediaCount: number;
   onChange: (value: string) => void;
+  onWebsiteChange: (value: string) => void;
 };
 
-export function PlatformEditor({ platform, text, mediaCount, onChange }: PlatformEditorProps) {
+export function PlatformEditor({
+  platform,
+  text,
+  website,
+  mediaCount,
+  onChange,
+  onWebsiteChange
+}: PlatformEditorProps) {
+  const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const limit = platformLimits[platform];
-  const overTextLimit = text.length > limit.maxTextLength;
+  const contentWithWebsite = appendWebsiteToText(text, website);
+  const overTextLimit = contentWithWebsite.length > limit.maxTextLength;
   const overMediaLimit = mediaCount > limit.maxImages;
+
+  function insertText(value: string) {
+    const textArea = textAreaRef.current;
+    const start = textArea?.selectionStart ?? text.length;
+    const end = textArea?.selectionEnd ?? text.length;
+    const nextText = `${text.slice(0, start)}${value}${text.slice(end)}`;
+
+    onChange(nextText);
+    requestAnimationFrame(() => {
+      textArea?.focus();
+      textArea?.setSelectionRange(start + value.length, start + value.length);
+    });
+  }
 
   return (
     <section className="composer-panel editor-surface">
@@ -23,7 +50,7 @@ export function PlatformEditor({ platform, text, mediaCount, onChange }: Platfor
           <h2>{limit.label}</h2>
         </div>
         <span className={overTextLimit ? "counter danger" : "counter"}>
-          {text.length}/{limit.maxTextLength}
+          {contentWithWebsite.length}/{limit.maxTextLength}
         </span>
       </div>
 
@@ -31,8 +58,22 @@ export function PlatformEditor({ platform, text, mediaCount, onChange }: Platfor
         className="composer-textarea"
         onChange={(event) => onChange(event.target.value)}
         placeholder={`撰写 ${limit.label} 专属版本`}
+        ref={textAreaRef}
         value={text}
       />
+      <TextInsertToolbar onInsert={insertText} />
+
+      <label className="field website-field">
+        <span>{limit.label} 网站链接（可选）</span>
+        <input
+          inputMode="url"
+          onChange={(event) => onWebsiteChange(event.target.value)}
+          placeholder="https://example.com"
+          type="url"
+          value={website}
+        />
+        <small>链接会附在该平台文案末尾，并计入字数限制。</small>
+      </label>
 
       <div className="validation-strip">
         <span className={overTextLimit ? "danger" : ""}>

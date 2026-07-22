@@ -1,17 +1,28 @@
 "use client";
 
 import type { ComposerPlatform, MediaAsset, SocialAccount } from "../../lib/api";
+import { appendWebsiteToText } from "./contentUtils";
 import { platformLimits } from "./platformConfig";
 
 type PostPreviewProps = {
   accounts: SocialAccount[];
   texts: Record<ComposerPlatform, string>;
+  websites: Record<ComposerPlatform, string>;
   baseText: string;
+  baseWebsite: string;
   mediaByPlatform: Record<ComposerPlatform, MediaAsset[]>;
   loading: boolean;
 };
 
-export function PostPreview({ accounts, texts, baseText, mediaByPlatform, loading }: PostPreviewProps) {
+export function PostPreview({
+  accounts,
+  texts,
+  websites,
+  baseText,
+  baseWebsite,
+  mediaByPlatform,
+  loading
+}: PostPreviewProps) {
   const groups = new Map<ComposerPlatform, SocialAccount[]>();
   const totalMediaCount = Object.values(mediaByPlatform).reduce(
     (count, media) => count + media.length,
@@ -40,7 +51,10 @@ export function PostPreview({ accounts, texts, baseText, mediaByPlatform, loadin
       <div className="publish-summary-list">
         {[...groups.entries()].map(([platform, platformAccounts]) => {
           const limit = platformLimits[platform];
-          const text = texts[platform] || baseText;
+          const text = appendWebsiteToText(
+            texts[platform] || baseText,
+            websites[platform] || baseWebsite
+          );
           const platformMedia = mediaByPlatform[platform];
 
           return (
