@@ -13,6 +13,7 @@ import { chinaLocalInputToISOString } from "../../lib/chinaTime";
 import { AccountTargetSelector } from "./AccountTargetSelector";
 import { MediaUploader } from "./MediaUploader";
 import { PlatformEditor } from "./PlatformEditor";
+import { platformLimits } from "./platformConfig";
 import { PlatformTabs } from "./PlatformTabs";
 import { PostPreview } from "./PostPreview";
 import { SchedulePicker } from "./SchedulePicker";
@@ -38,6 +39,13 @@ function createVariantTextMap(value = "") {
   ) as Record<ComposerPlatform, string>;
 }
 
+function createPlatformMediaMap(): Record<ComposerPlatform, MediaAsset[]> {
+  return allComposerPlatforms.reduce<Record<ComposerPlatform, MediaAsset[]>>((media, platform) => {
+    media[platform] = [];
+    return media;
+  }, {} as Record<ComposerPlatform, MediaAsset[]>);
+}
+
 export function ComposerForm({ token, workspaces }: ComposerFormProps) {
   const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? "");
   const [title, setTitle] = useState("");
@@ -50,7 +58,9 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [accountError, setAccountError] = useState<string | null>(null);
-  const [media, setMedia] = useState<MediaAsset[]>([]);
+  const [mediaByPlatform, setMediaByPlatform] = useState<Record<ComposerPlatform, MediaAsset[]>>(() =>
+    createPlatformMediaMap()
+  );
   const [scheduledAt, setScheduledAt] = useState("");
   const [publishMode, setPublishMode] = useState<"draft" | "scheduled" | "now">("draft");
   const [result, setResult] = useState<ComposerPost | null>(null);
@@ -81,8 +91,10 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
       }, {}),
     [selectedAccounts]
   );
-  const imageCount = media.filter((asset) => asset.mimeType.startsWith("image/")).length;
-  const videoCount = media.filter((asset) => asset.mimeType.startsWith("video/")).length;
+  const activeMedia = mediaByPlatform[activePlatform];
+  const activePlatformLabel = platformLimits[activePlatform].label;
+  const imageCount = activeMedia.filter((asset) => asset.mimeType.startsWith("image/")).length;
+  const videoCount = activeMedia.filter((asset) => asset.mimeType.startsWith("video/")).length;
   const hasAnyVariantText = selectedPlatforms.some(
     (platform) => (variantTexts[platform] || baseText).trim().length > 0
   );
@@ -99,6 +111,7 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
     setAccountError(null);
     setSocialAccounts([]);
     setSelectedAccountIds([]);
+    setMediaByPlatform(createPlatformMediaMap());
 
     apiRequest<SocialAccount[]>(`/workspaces/${workspaceId}/social-accounts`, { token })
       .then((accounts) => {
@@ -212,7 +225,7 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
               socialAccountId: account.id,
               platform: account.platform,
               text: variantTexts[account.platform] || baseText,
-              mediaAssetIds: media.map((asset) => asset.id)
+              mediaAssetIds: mediaByPlatform[account.platform].map((asset) => asset.id)
             }))
           }
         }
@@ -273,8 +286,8 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
           </label>
           <div className="content-summary">
             <span>{selectedAccounts.length} 个账号</span>
-            <span>{imageCount} 张图片</span>
-            <span>{videoCount} 个视频</span>
+            <span>{activePlatformLabel}：{imageCount} 张图片</span>
+            <span>{activePlatformLabel}：{videoCount} 个视频</span>
           </div>
 
           <PlatformTabs
@@ -285,7 +298,7 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
           />
           {selectedPlatforms.length ? (
             <PlatformEditor
-              mediaCount={media.length}
+              mediaCount={activeMedia.length}
               onChange={(value) =>
                 setVariantTexts((current) => ({
                   ...current,
@@ -300,8 +313,14 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
 
         {selectedWorkspace ? (
           <MediaUploader
-            media={media}
-            onMediaChange={setMedia}
+            media={activeMedia}
+            onMediaChange={(nextMedia) =>
+              setMediaByPlatform((current) => ({
+                ...current,
+                [activePlatform]: nextMedia
+              }))
+            }
+            platformLabel={platformLimits[activePlatform].label}
             token={token}
             workspaceId={selectedWorkspace.id}
           />
@@ -362,7 +381,7 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
           accounts={selectedAccounts}
           baseText={baseText}
           loading={accountsLoading}
-          media={media}
+          mediaByPlatform={mediaByPlatform}
           texts={variantTexts}
         />
 
