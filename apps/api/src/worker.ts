@@ -73,9 +73,18 @@ const worker = new Worker<PublishQueuePayload, unknown, typeof publishQueueJobNa
       })
     ]);
 
+    const socialAccountId = publishJob.schedule.postVariant.socialAccountId;
+
+    if (!socialAccountId) {
+      throw new Error(
+        "This scheduled post has no target social account. Edit the post and select the account before publishing."
+      );
+    }
+
     const publisher = getSocialPublisher(publishJob.schedule.postVariant.platform);
     const publishResult = await publisher.publish({
       workspaceId: publishJob.workspaceId,
+      socialAccountId,
       platform: publishJob.schedule.postVariant.platform,
       text: publishJob.schedule.postVariant.text,
       media: publishJob.schedule.postVariant.media.map((item) => ({

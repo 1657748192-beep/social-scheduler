@@ -153,6 +153,8 @@ export function ScheduleDetailPanel({
       <dl className="detail-list">
         <dt>平台</dt>
         <dd>{platformLabel(schedule.postVariant.platform)}</dd>
+        <dt>发布账号</dt>
+        <dd>{schedule.postVariant.socialAccount?.displayName ?? "未指定（旧任务）"}</dd>
         <dt>发布时间</dt>
         <dd>{formatDateTime(scheduledAt)}</dd>
         <dt>状态</dt>

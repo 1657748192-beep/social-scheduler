@@ -267,6 +267,12 @@ export type CalendarSchedule = {
   postVariant: {
     id: string;
     platform: "x" | "instagram" | "facebook" | "tiktok" | "linkedin" | "youtube" | "pinterest";
+    socialAccount?: {
+      id: string;
+      displayName: string;
+      platform: "x" | "instagram" | "facebook" | "tiktok" | "linkedin" | "youtube" | "pinterest";
+      avatarUrl?: string | null;
+    } | null;
     text: string;
     publishStatus: string;
     post: {

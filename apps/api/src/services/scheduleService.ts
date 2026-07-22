@@ -35,6 +35,14 @@ const scheduleInclude = {
   postVariant: {
     include: {
       post: true,
+      socialAccount: {
+        select: {
+          id: true,
+          displayName: true,
+          platform: true,
+          avatarUrl: true
+        }
+      },
       media: {
         include: {
           mediaAsset: true

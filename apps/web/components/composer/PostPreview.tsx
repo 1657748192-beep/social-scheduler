@@ -4,72 +4,51 @@ import type { ComposerPlatform, MediaAsset, SocialAccount } from "../../lib/api"
 import { platformLimits } from "./platformConfig";
 
 type PostPreviewProps = {
-  platforms: ComposerPlatform[];
+  accounts: SocialAccount[];
   texts: Record<ComposerPlatform, string>;
   baseText: string;
   media: MediaAsset[];
-  accountsByPlatform: Partial<Record<ComposerPlatform, SocialAccount>>;
   loading: boolean;
 };
 
-export function PostPreview({
-  platforms,
-  texts,
-  baseText,
-  media,
-  accountsByPlatform,
-  loading
-}: PostPreviewProps) {
+export function PostPreview({ accounts, texts, baseText, media, loading }: PostPreviewProps) {
+  const groups = new Map<ComposerPlatform, SocialAccount[]>();
+
+  for (const account of accounts) {
+    groups.set(account.platform, [...(groups.get(account.platform) ?? []), account]);
+  }
+
   return (
-    <section className="composer-panel preview-rail">
+    <section className="composer-panel publish-summary-panel">
       <div className="row">
         <div>
-          <p className="section-kicker">实时预览</p>
-          <h2>发布效果</h2>
+          <p className="section-kicker">发布摘要</p>
+          <h2>将创建 {accounts.length} 个任务</h2>
         </div>
-        <span className="muted">{platforms.length} 个平台</span>
+        <span className="muted">{media.length} 个素材</span>
       </div>
 
-      <div className="preview-stack">
-        {!platforms.length ? (
-          <p className="muted preview-empty">
-            {loading ? "正在读取绑定账号..." : "当前工作区还没有选择发布平台。"}
-          </p>
-        ) : null}
-        {platforms.map((platform) => {
+      {loading ? <p className="muted">正在读取目标账号…</p> : null}
+      {!loading && !accounts.length ? <p className="muted">请先在左侧选择至少一个已连接账号。</p> : null}
+
+      <div className="publish-summary-list">
+        {[...groups.entries()].map(([platform, platformAccounts]) => {
           const limit = platformLimits[platform];
           const text = texts[platform] || baseText;
-          const account = accountsByPlatform[platform];
-          const accountLabel = loading
-            ? "正在读取账号"
-            : account
-              ? `@${account.displayName}`
-              : "@未绑定账号";
 
           return (
-            <article className={`preview-card ${platform} ${account ? "" : "unbound"}`} key={platform}>
-              <div className="preview-top">
-                <div className="preview-avatar">{limit.label.slice(0, 1)}</div>
-                <div>
-                  <strong>{limit.label}</strong>
-                  <div className="muted">{accountLabel}</div>
-                </div>
+            <article className="publish-summary-group" key={platform}>
+              <div className="publish-summary-heading">
+                <strong>{limit.label}</strong>
+                <span>{platformAccounts.length} 个账号</span>
               </div>
-              <p>{text || "这里会显示该平台的专属文案。"}</p>
-              {media.length ? (
-                <div className={`preview-images count-${Math.min(media.length, 4)}`}>
-                  {media.slice(0, 4).map((asset) =>
-                    asset.mimeType.startsWith("video/") ? (
-                      <div className="preview-video" key={asset.id}>
-                        <video muted preload="metadata" src={asset.fileUrl} />
-                        <span>视频</span>
-                      </div>
-                    ) : (
-                      <img alt="" key={asset.id} src={asset.fileUrl} />
-                    )
-                  )}
-                </div>
-              ) : null}
+              <p>{text || "将使用基础文案"}</p>
+              <div className="account-chip-list">
+                {platformAccounts.slice(0, 4).map((account) => (
+                  <span className="account-chip" key={account.id}>{account.displayName}</span>
+                ))}
+                {platformAccounts.length > 4 ? <span className="account-chip">+{platformAccounts.length - 4}</span> : null}
+              </div>
             </article>
           );
         })}

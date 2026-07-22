@@ -10,6 +10,7 @@ import {
   type Workspace
 } from "../../lib/api";
 import { chinaLocalInputToISOString } from "../../lib/chinaTime";
+import { AccountTargetSelector } from "./AccountTargetSelector";
 import { MediaUploader } from "./MediaUploader";
 import { PlatformEditor } from "./PlatformEditor";
 import { PlatformTabs } from "./PlatformTabs";
@@ -41,16 +42,17 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
   const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? "");
   const [title, setTitle] = useState("");
   const [baseText, setBaseText] = useState("");
-  const [selectedPlatforms, setSelectedPlatforms] = useState<ComposerPlatform[]>([]);
-  const [activePlatform, setActivePlatform] = useState<ComposerPlatform>("instagram");
+  const [activePlatform, setActivePlatform] = useState<ComposerPlatform>("facebook");
   const [variantTexts, setVariantTexts] = useState<Record<ComposerPlatform, string>>(() =>
     createVariantTextMap()
   );
   const [socialAccounts, setSocialAccounts] = useState<SocialAccount[]>([]);
+  const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [accountError, setAccountError] = useState<string | null>(null);
   const [media, setMedia] = useState<MediaAsset[]>([]);
   const [scheduledAt, setScheduledAt] = useState("");
+  const [publishMode, setPublishMode] = useState<"draft" | "scheduled" | "now">("draft");
   const [result, setResult] = useState<ComposerPost | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -63,18 +65,22 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
     () => socialAccounts.filter((account) => account.status === "active"),
     [socialAccounts]
   );
-  const accountsByPlatform = useMemo(() => {
-    const accounts: Partial<Record<ComposerPlatform, SocialAccount>> = {};
-
-    activeAccounts.forEach((account) => {
-      if (!accounts[account.platform]) {
-        accounts[account.platform] = account;
-      }
-    });
-
-    return accounts;
-  }, [activeAccounts]);
-  const unboundSelectedPlatforms = selectedPlatforms.filter((platform) => !accountsByPlatform[platform]);
+  const selectedAccounts = useMemo(() => {
+    const selectedIds = new Set(selectedAccountIds);
+    return activeAccounts.filter((account) => selectedIds.has(account.id));
+  }, [activeAccounts, selectedAccountIds]);
+  const selectedPlatforms = useMemo(
+    () => allComposerPlatforms.filter((platform) => selectedAccounts.some((account) => account.platform === platform)),
+    [selectedAccounts]
+  );
+  const accountCountByPlatform = useMemo(
+    () =>
+      selectedAccounts.reduce<Partial<Record<ComposerPlatform, number>>>((counts, account) => {
+        counts[account.platform] = (counts[account.platform] ?? 0) + 1;
+        return counts;
+      }, {}),
+    [selectedAccounts]
+  );
   const imageCount = media.filter((asset) => asset.mimeType.startsWith("image/")).length;
   const videoCount = media.filter((asset) => asset.mimeType.startsWith("video/")).length;
   const hasAnyVariantText = selectedPlatforms.some(
@@ -84,7 +90,7 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
   useEffect(() => {
     if (!workspaceId) {
       setSocialAccounts([]);
-      setSelectedPlatforms([]);
+      setSelectedAccountIds([]);
       return;
     }
 
@@ -92,8 +98,7 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
     setAccountsLoading(true);
     setAccountError(null);
     setSocialAccounts([]);
-    setSelectedPlatforms([]);
-    setActivePlatform("instagram");
+    setSelectedAccountIds([]);
 
     apiRequest<SocialAccount[]>(`/workspaces/${workspaceId}/social-accounts`, { token })
       .then((accounts) => {
@@ -101,13 +106,14 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
           return;
         }
 
+        const active = accounts.filter((account) => account.status === "active");
         const activePlatforms = allComposerPlatforms.filter((platform) =>
-          accounts.some((account) => account.platform === platform && account.status === "active")
+          active.some((account) => account.platform === platform)
         );
 
         setSocialAccounts(accounts);
-        setSelectedPlatforms(activePlatforms);
-        setActivePlatform(activePlatforms[0] ?? "instagram");
+        setSelectedAccountIds(active.map((account) => account.id));
+        setActivePlatform(activePlatforms[0] ?? "facebook");
       })
       .catch((requestError) => {
         if (cancelled) {
@@ -115,8 +121,8 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
         }
 
         setSocialAccounts([]);
-        setSelectedPlatforms([]);
-        setAccountError(requestError instanceof Error ? requestError.message : "无法读取绑定账号");
+        setSelectedAccountIds([]);
+        setAccountError(requestError instanceof Error ? requestError.message : "无法读取已连接账号");
       })
       .finally(() => {
         if (!cancelled) {
@@ -129,40 +135,42 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
     };
   }, [token, workspaceId]);
 
+  useEffect(() => {
+    if (selectedPlatforms.length && !selectedPlatforms.includes(activePlatform)) {
+      setActivePlatform(selectedPlatforms[0]);
+    }
+  }, [activePlatform, selectedPlatforms]);
+
   const publishChecks = [
     {
-      label: "基础文案",
+      label: "内容文案",
       done: baseText.trim().length > 0 || hasAnyVariantText
     },
     {
-      label: "发布平台",
-      done: selectedPlatforms.length > 0
+      label: "发布账号",
+      done: selectedAccounts.length > 0,
+      detail: selectedAccounts.length ? `已选 ${selectedAccounts.length} 个账号` : "请选择至少一个账号"
     },
     {
-      label: "账号绑定",
-      done: selectedPlatforms.length > 0 && unboundSelectedPlatforms.length === 0
-    },
-    {
-      label: "图片或视频",
-      done: media.length > 0,
-      optional: true
-    },
-    {
-      label: scheduledAt ? "已选择定时发布" : "保存为草稿",
-      done: true
+      label: publishMode === "scheduled" ? "定时发布时间" : "发布方式",
+      done: true,
+      detail:
+        publishMode === "now"
+          ? "保存后将立即分别发布"
+          : publishMode === "scheduled"
+            ? "已选择北京时间"
+            : "将保存为草稿"
     }
   ];
 
-  function togglePlatform(platform: ComposerPlatform) {
-    const next = selectedPlatforms.includes(platform)
-      ? selectedPlatforms.filter((item) => item !== platform)
-      : [...selectedPlatforms, platform];
+  function toggleAccount(accountId: string) {
+    setSelectedAccountIds((current) =>
+      current.includes(accountId) ? current.filter((id) => id !== accountId) : [...current, accountId]
+    );
+  }
 
-    setSelectedPlatforms(next);
-
-    if (next.length && !next.includes(activePlatform)) {
-      setActivePlatform(next[0]);
-    }
+  function toggleAllAccounts() {
+    setSelectedAccountIds((current) => (current.length === activeAccounts.length ? [] : activeAccounts.map((account) => account.id)));
   }
 
   function applyBaseText() {
@@ -177,13 +185,8 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
       return;
     }
 
-    if (!selectedPlatforms.length) {
-      setError("请先选择至少一个已绑定平台");
-      return;
-    }
-
-    if (unboundSelectedPlatforms.length) {
-      setError("请先绑定已选择的平台账号，或取消未绑定平台");
+    if (!selectedAccounts.length) {
+      setError("请先选择至少一个已连接账号");
       return;
     }
 
@@ -200,10 +203,15 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
           body: {
             title: title || undefined,
             baseText,
-            scheduledAt: scheduledAt ? chinaLocalInputToISOString(scheduledAt) : undefined,
-            variants: selectedPlatforms.map((platform) => ({
-              platform,
-              text: variantTexts[platform] || baseText,
+            scheduledAt:
+              publishMode === "scheduled" && scheduledAt
+                ? chinaLocalInputToISOString(scheduledAt)
+                : undefined,
+            publishNow: publishMode === "now",
+            variants: selectedAccounts.map((account) => ({
+              socialAccountId: account.id,
+              platform: account.platform,
+              text: variantTexts[account.platform] || baseText,
               mediaAssetIds: media.map((asset) => asset.id)
             }))
           }
@@ -219,32 +227,75 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
   }
 
   return (
-    <form className="composer-layout" onSubmit={savePost}>
-      <section className="composer-platform-bar" aria-label="选择发布平台">
-        <PlatformTabs
-          accountsByPlatform={accountsByPlatform}
-          active={activePlatform}
+    <form className="composer-layout multi-account-composer" onSubmit={savePost}>
+      <main className="composer-main">
+        <AccountTargetSelector
+          accounts={activeAccounts}
           loading={accountsLoading}
-          onActiveChange={setActivePlatform}
-          onToggle={togglePlatform}
-          selected={selectedPlatforms}
+          onToggleAccount={toggleAccount}
+          onToggleAll={toggleAllAccounts}
+          selectedAccountIds={selectedAccountIds}
         />
-      </section>
 
-      <aside className="composer-sidebar">
-        <section className="composer-panel">
-          <p className="section-kicker">发布设置</p>
-          <h2>工作区</h2>
+        <section className="composer-panel composer-head content-editor-panel">
+          <div className="step-heading">
+            <span className="step-badge">2</span>
+            <div>
+              <p className="section-kicker">内容编辑</p>
+              <h2>编辑帖子内容</h2>
+              <p className="muted">所有已选账号会使用此内容；可按平台单独调整文案。</p>
+            </div>
+          </div>
+
+          <div className="row">
+            <label className="field grow-field">
+              <span>内部标题（可选）</span>
+              <input
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="例如：夏季新品发布"
+                value={title}
+              />
+            </label>
+            <button className="button secondary apply-copy-button" onClick={applyBaseText} type="button">
+              应用基础文案
+            </button>
+          </div>
+
           <label className="field">
-            <span>发布位置</span>
-            <select value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)}>
-              {workspaces.map((workspace) => (
-                <option key={workspace.id} value={workspace.id}>
-                  {workspace.name}
-                </option>
-              ))}
-            </select>
+            <span>帖子文案</span>
+            <textarea
+              className="composer-textarea compact"
+              onChange={(event) => setBaseText(event.target.value)}
+              placeholder="先写一版通用文案，发布前可按平台调整。"
+              required
+              value={baseText}
+            />
           </label>
+          <div className="content-summary">
+            <span>{selectedAccounts.length} 个账号</span>
+            <span>{imageCount} 张图片</span>
+            <span>{videoCount} 个视频</span>
+          </div>
+
+          <PlatformTabs
+            accountCountByPlatform={accountCountByPlatform}
+            active={activePlatform}
+            onActiveChange={setActivePlatform}
+            platforms={selectedPlatforms}
+          />
+          {selectedPlatforms.length ? (
+            <PlatformEditor
+              mediaCount={media.length}
+              onChange={(value) =>
+                setVariantTexts((current) => ({
+                  ...current,
+                  [activePlatform]: value
+                }))
+              }
+              platform={activePlatform}
+              text={variantTexts[activePlatform] || baseText}
+            />
+          ) : null}
         </section>
 
         {selectedWorkspace ? (
@@ -255,96 +306,98 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
             workspaceId={selectedWorkspace.id}
           />
         ) : null}
+      </main>
 
-        <SchedulePicker onChange={setScheduledAt} value={scheduledAt} />
-
-        <section className="composer-panel checklist-panel">
-          <div className="row">
-            <h2>发布检查</h2>
-            <span className="muted">
-              {publishChecks.filter((item) => item.done).length}/{publishChecks.length}
-            </span>
+      <aside className="composer-sidebar composer-settings-rail">
+        <section className="composer-panel publishing-settings-panel">
+          <div className="step-heading">
+            <span className="step-badge">3</span>
+            <div>
+              <p className="section-kicker">发布设置</p>
+              <h2>安排发布时间</h2>
+            </div>
           </div>
+          <label className="field">
+            <span>工作区</span>
+            <select value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)}>
+              {workspaces.map((workspace) => (
+                <option key={workspace.id} value={workspace.id}>
+                  {workspace.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </section>
+
+        <section className="composer-panel publish-mode-panel">
+          <div className="publish-mode-toggle" role="group" aria-label="选择发布方式">
+            <button
+              className={publishMode === "now" ? "active" : ""}
+              onClick={() => setPublishMode("now")}
+              type="button"
+            >
+              立即发布
+            </button>
+            <button
+              className={publishMode === "scheduled" ? "active" : ""}
+              onClick={() => setPublishMode("scheduled")}
+              type="button"
+            >
+              定时发布
+            </button>
+            <button
+              className={publishMode === "draft" ? "active" : ""}
+              onClick={() => setPublishMode("draft")}
+              type="button"
+            >
+              保存草稿
+            </button>
+          </div>
+          {publishMode === "scheduled" ? <SchedulePicker onChange={setScheduledAt} value={scheduledAt} /> : null}
+          {publishMode === "now" ? <p className="muted">确认后会为每个已选账号分别入队并立即发布。</p> : null}
+          {publishMode === "draft" ? <p className="muted">稍后可从内容日历继续安排发布时间。</p> : null}
+        </section>
+
+        <PostPreview
+          accounts={selectedAccounts}
+          baseText={baseText}
+          loading={accountsLoading}
+          media={media}
+          texts={variantTexts}
+        />
+
+        <section className="composer-panel checklist-panel publish-action-panel">
           <ul className="check-list">
             {publishChecks.map((item) => (
               <li className={item.done ? "done" : ""} key={item.label}>
                 <span>{item.done ? "✓" : "!"}</span>
                 <div>
                   <strong>{item.label}</strong>
-                  {item.optional ? <small>可选，但有助于提升展示效果</small> : null}
+                  {item.detail ? <small>{item.detail}</small> : null}
                 </div>
               </li>
             ))}
           </ul>
+          <button className="button publish-confirm-button" disabled={isSaving || !selectedAccounts.length} type="submit">
+            {isSaving
+              ? "正在保存…"
+              : publishMode === "now"
+                ? `立即发布到 ${selectedAccounts.length} 个账号`
+                : publishMode === "scheduled"
+                  ? `确认定时发布到 ${selectedAccounts.length} 个账号`
+                  : `保存 ${selectedAccounts.length} 个账号的草稿`}
+          </button>
+          {result ? (
+            <p className="success-message">
+              {publishMode === "now"
+                ? `已为 ${selectedAccounts.length} 个账号分别创建即时发布任务。`
+                : `已创建 ${selectedAccounts.length} 个独立发布任务。`}
+            </p>
+          ) : null}
+          {accountError ? <p className="error">{accountError}</p> : null}
+          {error ? <p className="error">{error}</p> : null}
         </section>
       </aside>
-
-      <main className="composer-main">
-        <section className="composer-panel composer-head">
-          <div className="row">
-            <div>
-              <p className="section-kicker">内容生产</p>
-              <h1>多平台内容编辑器</h1>
-            </div>
-            <button className="button secondary" onClick={applyBaseText} type="button">
-              套用基础文案
-            </button>
-          </div>
-          <label className="field">
-            <span>内部标题</span>
-            <input
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="活动备注或草稿名称"
-              value={title}
-            />
-          </label>
-          <label className="field">
-            <span>基础文案</span>
-            <textarea
-              className="composer-textarea compact"
-              onChange={(event) => setBaseText(event.target.value)}
-              placeholder="先写一版基础文案，再按平台分别调整。"
-              required
-              value={baseText}
-            />
-          </label>
-          <div className="content-summary">
-            <span>{selectedPlatforms.length} 个平台</span>
-            <span>{imageCount} 张图片</span>
-            <span>{videoCount} 个视频</span>
-          </div>
-        </section>
-
-        <PlatformEditor
-          mediaCount={media.length}
-          onChange={(value) =>
-            setVariantTexts((current) => ({
-              ...current,
-              [activePlatform]: value
-            }))
-          }
-          platform={activePlatform}
-          text={variantTexts[activePlatform] || baseText}
-        />
-
-        <div className="composer-actions">
-          <button className="button" disabled={isSaving} type="submit">
-            {isSaving ? "保存中" : scheduledAt ? "加入排程" : "保存草稿"}
-          </button>
-          {result ? <span className="muted">已保存内容：{result.id}</span> : null}
-          {accountError ? <span className="error">{accountError}</span> : null}
-          {error ? <span className="error">{error}</span> : null}
-        </div>
-      </main>
-
-      <PostPreview
-        accountsByPlatform={accountsByPlatform}
-        baseText={baseText}
-        loading={accountsLoading}
-        media={media}
-        platforms={selectedPlatforms}
-        texts={variantTexts}
-      />
     </form>
   );
 }

@@ -212,6 +212,7 @@ model SocialAccount {
   createdAt         DateTime            @default(now()) @map("created_at")
   workspace         Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   credential        OauthCredential?
+  postVariants      PostVariant[]
 
   @@unique([workspaceId, platform, providerAccountId])
   @@map("social_accounts")
@@ -322,9 +323,11 @@ model PostVariant {
   createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime      @updatedAt @map("updated_at")
   post             Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  socialAccount    SocialAccount? @relation(fields: [socialAccountId], references: [id], onDelete: SetNull)
   schedules        Schedule[]
   media            PostVariantMedia[]
 
+  @@index([socialAccountId])
   @@map("post_variants")
 }
 

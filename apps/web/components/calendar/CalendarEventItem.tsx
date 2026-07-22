@@ -36,6 +36,7 @@ export function CalendarEventItem({ schedule, onClick }: CalendarEventItemProps)
       <span>
         <strong>{formatTime(scheduledAt)}</strong>
         {schedule.postVariant.post.title || schedule.postVariant.text}
+        {schedule.postVariant.socialAccount ? <small>{schedule.postVariant.socialAccount.displayName}</small> : null}
       </span>
     </button>
   );

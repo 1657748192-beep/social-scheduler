@@ -2,6 +2,7 @@ import type { Platform, Prisma } from "@prisma/client";
 
 export type PublishInput = {
   workspaceId: string;
+  socialAccountId: string;
   platform: Platform;
   text: string;
   media: PublishMediaAsset[];

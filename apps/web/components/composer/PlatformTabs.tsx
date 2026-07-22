@@ -1,53 +1,38 @@
 "use client";
 
-import type { ComposerPlatform, SocialAccount } from "../../lib/api";
-import { composerPlatforms } from "./platformConfig";
+import type { ComposerPlatform } from "../../lib/api";
+import { platformLimits } from "./platformConfig";
 
 type PlatformTabsProps = {
-  selected: ComposerPlatform[];
+  platforms: ComposerPlatform[];
   active: ComposerPlatform;
-  accountsByPlatform: Partial<Record<ComposerPlatform, SocialAccount>>;
-  loading: boolean;
+  accountCountByPlatform: Partial<Record<ComposerPlatform, number>>;
   onActiveChange: (platform: ComposerPlatform) => void;
-  onToggle: (platform: ComposerPlatform) => void;
 };
 
-export function PlatformTabs({
-  selected,
-  active,
-  accountsByPlatform,
-  loading,
-  onActiveChange,
-  onToggle
-}: PlatformTabsProps) {
+export function PlatformTabs({ platforms, active, accountCountByPlatform, onActiveChange }: PlatformTabsProps) {
+  if (!platforms.length) {
+    return null;
+  }
+
   return (
-    <div className="platform-tabs" aria-label="平台版本">
-      {composerPlatforms.map((platform) => {
-        const isSelected = selected.includes(platform.platform);
-        const account = accountsByPlatform[platform.platform];
-        const accountStatus = loading ? "正在读取账号" : account?.displayName ?? "未绑定账号";
+    <div className="platform-tabs platform-version-tabs" aria-label="按平台编辑文案">
+      {platforms.map((platform) => {
+        const limit = platformLimits[platform];
+        const accountCount = accountCountByPlatform[platform] ?? 0;
+
         return (
-          <label
-            className={`platform-tab ${active === platform.platform ? "active" : ""}`}
-            key={platform.platform}
-            onClick={() => {
-              onActiveChange(platform.platform);
-            }}
+          <button
+            className={`platform-tab ${active === platform ? "active" : ""}`}
+            key={platform}
+            onClick={() => onActiveChange(platform)}
+            type="button"
           >
             <span>
-              <strong>{platform.label}</strong>
-              <small>{platform.maxTextLength.toLocaleString()} 字以内</small>
-              <small className={account ? "account-state bound" : "account-state"}>
-                {accountStatus}
-              </small>
+              <strong>{limit.label}</strong>
+              <small>{accountCount} 个目标账号 · {limit.maxTextLength.toLocaleString()} 字以内</small>
             </span>
-            <input
-              aria-label={`启用 ${platform.label}`}
-              checked={isSelected}
-              onChange={() => onToggle(platform.platform)}
-              type="checkbox"
-            />
-          </label>
+          </button>
         );
       })}
     </div>

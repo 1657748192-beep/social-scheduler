@@ -13,8 +13,10 @@ import { enqueuePublishJobs } from "./scheduleService";
 import { requireWorkspaceMembership } from "./workspaceService";
 
 const writableRoles: WorkspaceRole[] = ["owner", "admin", "editor"];
+const maxPostTargets = 50;
 
 const variantSchema = z.object({
+  socialAccountId: z.string().uuid(),
   platform: z.enum(composerPlatformOrder),
   text: z.string().default(""),
   mediaAssetIds: z.array(z.string().uuid()).default([])
@@ -23,12 +25,13 @@ const variantSchema = z.object({
 export const createComposerPostSchema = z.object({
   title: z.string().max(120).optional(),
   baseText: z.string().min(1).max(63206),
-  variants: z.array(variantSchema).min(1).max(composerPlatformOrder.length),
-  scheduledAt: z.string().datetime().optional()
+  variants: z.array(variantSchema).min(1).max(maxPostTargets),
+  scheduledAt: z.string().datetime().optional(),
+  publishNow: z.boolean().optional().default(false)
 });
 
 export const updateComposerPostSchema = createComposerPostSchema.partial().extend({
-  variants: z.array(variantSchema).min(1).max(composerPlatformOrder.length).optional()
+  variants: z.array(variantSchema).min(1).max(maxPostTargets).optional()
 });
 
 export function getComposerPlatforms() {
@@ -88,6 +91,42 @@ async function assertMediaBelongsToWorkspace(workspaceId: string, mediaAssetIds:
   }
 }
 
+async function assertVariantsTargetActiveWorkspaceAccounts(
+  workspaceId: string,
+  variants: z.infer<typeof variantSchema>[]
+) {
+  const socialAccountIds = variants.map((variant) => variant.socialAccountId);
+
+  if (new Set(socialAccountIds).size !== socialAccountIds.length) {
+    throw new HttpError(400, "Each social account can only be selected once per post");
+  }
+
+  const accounts = await prisma.socialAccount.findMany({
+    where: {
+      id: { in: socialAccountIds },
+      workspaceId,
+      status: "active"
+    },
+    select: {
+      id: true,
+      platform: true
+    }
+  });
+
+  if (accounts.length !== socialAccountIds.length) {
+    throw new HttpError(400, "One or more selected social accounts are unavailable for this workspace");
+  }
+
+  const accountsById = new Map(accounts.map((account) => [account.id, account]));
+  const mismatchedVariant = variants.find(
+    (variant) => accountsById.get(variant.socialAccountId)?.platform !== variant.platform
+  );
+
+  if (mismatchedVariant) {
+    throw new HttpError(400, "Selected social account does not match its post platform");
+  }
+}
+
 export async function createComposerPost(
   userId: string,
   workspaceId: string,
@@ -97,7 +136,10 @@ export async function createComposerPost(
   ensureCanWrite(membership.role);
 
   const allMediaIds = input.variants.flatMap((variant) => variant.mediaAssetIds);
-  await assertMediaBelongsToWorkspace(workspaceId, allMediaIds);
+  await Promise.all([
+    assertMediaBelongsToWorkspace(workspaceId, allMediaIds),
+    assertVariantsTargetActiveWorkspaceAccounts(workspaceId, input.variants)
+  ]);
 
   const validationErrors = input.variants.flatMap((variant) =>
     validateVariant(variant.platform, variant.text, variant.mediaAssetIds.length).map((error) => ({
@@ -106,13 +148,17 @@ export async function createComposerPost(
     }))
   );
 
-  if (input.scheduledAt && validationErrors.length) {
+  if ((input.scheduledAt || input.publishNow) && validationErrors.length) {
     throw new HttpError(400, "Cannot schedule a post with platform validation errors", validationErrors);
   }
 
-  const scheduledAt = input.scheduledAt ? new Date(input.scheduledAt) : null;
+  if (input.publishNow && input.scheduledAt) {
+    throw new HttpError(400, "Choose either publish now or a scheduled time, not both");
+  }
 
-  if (scheduledAt && scheduledAt.getTime() <= Date.now()) {
+  const scheduledAt = input.publishNow ? new Date() : input.scheduledAt ? new Date(input.scheduledAt) : null;
+
+  if (!input.publishNow && scheduledAt && scheduledAt.getTime() <= Date.now()) {
     throw new HttpError(400, "scheduledAt must be in the future");
   }
 
@@ -134,6 +180,7 @@ export async function createComposerPost(
       const createdVariant = await tx.postVariant.create({
         data: {
           postId: createdPost.id,
+          socialAccountId: variant.socialAccountId,
           platform: variant.platform,
           text: variant.text,
           validationErrors: errors,

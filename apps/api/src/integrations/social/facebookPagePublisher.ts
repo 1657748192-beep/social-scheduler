@@ -44,9 +44,10 @@ export class FacebookPagePublisher implements SocialPublisher {
     }
   }
 
-  async findPageAccount(workspaceId: string) {
+  async findPageAccount(workspaceId: string, socialAccountId: string) {
     return prisma.socialAccount.findFirst({
       where: {
+        id: socialAccountId,
         workspaceId,
         platform: "facebook",
         status: "active",
@@ -54,9 +55,6 @@ export class FacebookPagePublisher implements SocialPublisher {
       },
       include: {
         credential: true
-      },
-      orderBy: {
-        createdAt: "desc"
       }
     });
   }
@@ -64,24 +62,12 @@ export class FacebookPagePublisher implements SocialPublisher {
   async publish(input: PublishInput): Promise<PublishResult> {
     await this.validate(input);
 
-    const account = await this.findPageAccount(input.workspaceId);
+    const account = await this.findPageAccount(input.workspaceId, input.socialAccountId);
 
     if (!account?.credential) {
-      const basicAccount = await prisma.socialAccount.findFirst({
-        where: {
-          workspaceId: input.workspaceId,
-          platform: "facebook",
-          status: "active"
-        }
-      });
-
-      if (basicAccount) {
-        throw new Error(
-          "Facebook is connected in basic mode only. To publish to a Page, approve pages_show_list, pages_read_engagement and pages_manage_posts in Meta, then reconnect Facebook."
-        );
-      }
-
-      throw new Error("No connected Facebook Page is available for this workspace");
+      throw new Error(
+        "The selected Facebook Page is unavailable. Reconnect that Page and select it again before publishing."
+      );
     }
 
     const pageAccessToken = decryptToken(account.credential.accessTokenEncrypted);

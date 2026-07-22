@@ -46,10 +46,10 @@ export class YouTubePublisher implements SocialPublisher {
   async publish(input: PublishInput): Promise<PublishResult> {
     await this.validate(input);
 
-    const account = await this.findChannelAccount(input.workspaceId);
+    const account = await this.findChannelAccount(input.workspaceId, input.socialAccountId);
 
     if (!account?.credential) {
-      throw new Error("No connected YouTube channel is available for this workspace");
+      throw new Error("The selected YouTube channel is unavailable. Reconnect that channel and select it again before publishing.");
     }
 
     const accessToken = await this.getAccessToken(account);
@@ -73,9 +73,10 @@ export class YouTubePublisher implements SocialPublisher {
     };
   }
 
-  private async findChannelAccount(workspaceId: string) {
+  private async findChannelAccount(workspaceId: string, socialAccountId: string) {
     return prisma.socialAccount.findFirst({
       where: {
+        id: socialAccountId,
         workspaceId,
         platform: "youtube",
         status: "active",
@@ -83,9 +84,6 @@ export class YouTubePublisher implements SocialPublisher {
       },
       include: {
         credential: true
-      },
-      orderBy: {
-        createdAt: "desc"
       }
     });
   }
