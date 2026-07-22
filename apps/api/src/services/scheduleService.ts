@@ -463,8 +463,8 @@ export async function cancelSchedule(userId: string, workspaceId: string, schedu
     throw new HttpError(404, "Schedule not found");
   }
 
-  if (schedule.status !== "scheduled") {
-    throw new HttpError(400, "Only schedules that have not started can be canceled");
+  if (schedule.status !== "scheduled" && schedule.status !== "failed") {
+    throw new HttpError(400, "Only scheduled or failed items can be removed from the calendar");
   }
 
   await Promise.all(schedule.publishJobs.map((job) => removeQueueJob(job.id)));

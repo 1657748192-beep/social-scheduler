@@ -53,6 +53,7 @@ export function ScheduleDetailPanel({
   const scheduledAt = new Date(schedule.scheduledAt);
   const latestJob = schedule.publishJobs[0];
   const canEditSchedule = schedule.status === "scheduled";
+  const canDeleteSchedule = schedule.status === "scheduled" || schedule.status === "failed";
   const minDateTime = toChinaDatetimeLocalValue(new Date(Date.now() + 60 * 1000));
 
   async function handleSave(event: FormEvent<HTMLFormElement>) {
@@ -111,11 +112,15 @@ export function ScheduleDetailPanel({
   }
 
   async function handleDelete() {
-    if (!schedule || !canEditSchedule) {
+    if (!schedule || !canDeleteSchedule) {
       return;
     }
 
-    const confirmed = window.confirm("确定删除这个排程任务吗？删除后不会再自动发布。");
+    const confirmed = window.confirm(
+      schedule.status === "failed"
+        ? "确定从日历中删除这个发布失败的任务吗？素材和发布记录会保留，不会再自动重试。"
+        : "确定删除这个排程任务吗？删除后不会再自动发布。"
+    );
 
     if (!confirmed) {
       return;
@@ -208,7 +213,20 @@ export function ScheduleDetailPanel({
       ) : (
         <>
           <div className="detail-copy">{schedule.postVariant.text}</div>
-          <p className="muted">只有未开始的排程任务可以修改或删除。</p>
+          {schedule.status === "failed" ? (
+            <div className="schedule-edit-actions">
+              <button
+                className="button danger-button"
+                disabled={isDeleting}
+                onClick={handleDelete}
+                type="button"
+              >
+                {isDeleting ? "正在删除…" : "删除失败任务"}
+              </button>
+            </div>
+          ) : (
+            <p className="muted">此任务已完成，不能再修改或删除。</p>
+          )}
         </>
       )}
 
