@@ -222,7 +222,11 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
   const sidebarProviders = channelProviders.filter((provider) =>
     sidebarChannelOrder.includes(provider.platform)
   );
-  const connectedCount = channels.filter((account) => account.status === "active").length;
+  const connectedPlatformCount = new Set(
+    channels
+      .filter((account) => account.status === "active")
+      .map((account) => account.platform)
+  ).size;
   const totalChannelCount = channelProviders.length;
   const channelItems = useMemo(
     () =>
@@ -429,21 +433,22 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
 
         <div className="channel-progress">
           <div className="row">
-            <strong>连接通道数量</strong>
+            <strong>已连接平台数量</strong>
             <span>
-              {connectedCount}/{totalChannelCount}
+              {connectedPlatformCount}/{totalChannelCount}
             </span>
           </div>
           <div className="progress-track">
             <span
               style={{
                 width: `${Math.min(
-                  (connectedCount / Math.max(totalChannelCount, 1)) * 100,
+                  (connectedPlatformCount / Math.max(totalChannelCount, 1)) * 100,
                   100
                 )}%`
               }}
             />
           </div>
+          <small className="channel-progress-note">同一平台的账号数量不限</small>
         </div>
 
         <div className="software-sidebar-footer">

@@ -213,6 +213,11 @@ textarea {
   font-size: 12px;
 }
 
+.channel-progress-note {
+  color: #aab8c8;
+  font-size: 11px;
+}
+
 .progress-track {
   height: 6px;
   overflow: hidden;

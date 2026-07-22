@@ -114,6 +114,7 @@ D:\社媒
 - 左侧连接通道展示：Instagram、Facebook、Twitter/X、更多通道。
 - 连接通道页展示所有平台：Instagram、LinkedIn、Facebook、YouTube、TikTok、Pinterest、Twitter/X。
 - 平台多账号绑定架构，支持同平台多个账号记录。
+- 侧栏“已连接平台数量”按活跃平台种类计数；同一平台绑定的账号数量不设上限。
 - 分享授权链接，24 小时有效。
 - Facebook Page OAuth 授权、绑定、解绑、重新授权。
 - YouTube OAuth 授权和真实视频发布能力已经接入过；早期 `simulated: true` 已被识别为问题。
