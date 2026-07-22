@@ -5,7 +5,7 @@ import { redisConnection } from "./redis";
 import { publishQueueJobName, publishQueueName, type PublishQueuePayload } from "./queues/publishQueue";
 import { config } from "./config";
 import { cleanUpExpiredMedia, withResolvedMediaUrl } from "./services/mediaStorageService";
-import { recoverPendingPublishJobs } from "./services/scheduleService";
+import { recoverPendingPublishJobs, repairSimulatedInstagramPublishJobs } from "./services/scheduleService";
 
 const retryableJobStatuses = ["waiting", "retrying"] as const;
 const runnableScheduleStatuses = ["scheduled", "locked"] as const;
@@ -107,7 +107,7 @@ const worker = new Worker<PublishQueuePayload, unknown, typeof publishQueueJobNa
         data: {
           status: "succeeded",
           providerPostId: publishResult.providerPostId,
-          providerPermalink: publishResult.providerPermalink,
+          providerPermalink: publishResult.providerPermalink ?? null,
           rawResponse: publishResult.rawResponse,
           lastError: null
         }
@@ -137,13 +137,19 @@ const worker = new Worker<PublishQueuePayload, unknown, typeof publishQueueJobNa
   }
 );
 
-recoverPendingPublishJobs()
-  .then((count) => {
-    console.log(`Recovered ${count} pending publish jobs`);
-  })
-  .catch((error) => {
-    console.error("Failed to recover pending publish jobs", error);
-  });
+async function initializeWorker() {
+  const correctedCount = await repairSimulatedInstagramPublishJobs();
+  if (correctedCount) {
+    console.log(`Corrected ${correctedCount} simulated Instagram publish record(s)`);
+  }
+
+  const recoveredCount = await recoverPendingPublishJobs();
+  console.log(`Recovered ${recoveredCount} pending publish jobs`);
+}
+
+initializeWorker().catch((error) => {
+  console.error("Failed to initialize publish worker", error);
+});
 
 async function runMediaCleanup() {
   try {

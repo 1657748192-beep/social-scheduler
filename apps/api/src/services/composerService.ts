@@ -7,6 +7,7 @@ import {
   getComposerPlatformLimit,
   type ComposerPlatform
 } from "../config/platformLimits";
+import { isRealPublishingSupported } from "../integrations/social/registry";
 import { prisma } from "../prisma";
 import { HttpError } from "../utils/errors";
 import {
@@ -164,6 +165,19 @@ async function assertVariantsTargetActiveWorkspaceAccounts(
   }
 }
 
+function assertVariantsSupportRealPublishing(variants: z.infer<typeof variantSchema>[]) {
+  const unsupportedPlatforms = Array.from(
+    new Set(variants.map((variant) => variant.platform).filter((platform) => !isRealPublishingSupported(platform)))
+  );
+
+  if (unsupportedPlatforms.length) {
+    throw new HttpError(
+      409,
+      `Real publishing is not supported for ${unsupportedPlatforms.join(", ")} yet. Save this content as a draft instead.`
+    );
+  }
+}
+
 export async function createComposerPost(
   userId: string,
   workspaceId: string,
@@ -187,6 +201,10 @@ export async function createComposerPost(
 
   if ((input.scheduledAt || input.publishNow) && validationErrors.length) {
     throw new HttpError(400, "Cannot schedule a post with platform validation errors", validationErrors);
+  }
+
+  if (input.scheduledAt || input.publishNow) {
+    assertVariantsSupportRealPublishing(input.variants);
   }
 
   if (input.publishNow && input.scheduledAt) {

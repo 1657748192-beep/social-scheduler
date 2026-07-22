@@ -37,6 +37,7 @@ const allComposerPlatforms: ComposerPlatform[] = [
   "pinterest",
   "x"
 ];
+const realPublishingPlatforms = new Set<ComposerPlatform>(["instagram", "facebook", "youtube"]);
 
 type MediaSource = "shared" | "custom";
 
@@ -139,6 +140,13 @@ export function ComposerForm({ token, workspaces, copyPostId, initialWorkspaceId
   const hasAnyVariantText = selectedPlatforms.some(
     (platform) => (variantTexts[platform] || baseText).trim().length > 0
   );
+  const unsupportedPublishingPlatforms = selectedPlatforms.filter(
+    (platform) => !realPublishingPlatforms.has(platform)
+  );
+  const requiresDraftOnly = publishMode !== "draft" && unsupportedPublishingPlatforms.length > 0;
+  const unsupportedPublishingLabels = unsupportedPublishingPlatforms
+    .map((platform) => platformLimits[platform].label)
+    .join("、");
 
   useEffect(() => {
     if (!workspaceId) {
@@ -593,6 +601,11 @@ export function ComposerForm({ token, workspaces, copyPostId, initialWorkspaceId
           {publishMode === "scheduled" ? <SchedulePicker onChange={setScheduledAt} value={scheduledAt} /> : null}
           {publishMode === "now" ? <p className="muted">确认后会为每个已选账号分别入队并立即发布。</p> : null}
           {publishMode === "draft" ? <p className="muted">稍后可从内容日历继续安排发布时间。</p> : null}
+          {requiresDraftOnly ? (
+            <p className="error">
+              {unsupportedPublishingLabels} 暂不支持真实发布。请改为“保存草稿”，不要把它标记为已发布。
+            </p>
+          ) : null}
         </section>
 
         <PostPreview
@@ -618,9 +631,15 @@ export function ComposerForm({ token, workspaces, copyPostId, initialWorkspaceId
               </li>
             ))}
           </ul>
-          <button className="button publish-confirm-button" disabled={isSaving || !selectedAccounts.length} type="submit">
+          <button
+            className="button publish-confirm-button"
+            disabled={isSaving || !selectedAccounts.length || requiresDraftOnly}
+            type="submit"
+          >
             {isSaving
               ? "正在保存…"
+              : requiresDraftOnly
+                ? `${unsupportedPublishingLabels} 暂不支持真实发布`
               : publishMode === "now"
                 ? `立即发布到 ${selectedAccounts.length} 个账号`
                 : publishMode === "scheduled"

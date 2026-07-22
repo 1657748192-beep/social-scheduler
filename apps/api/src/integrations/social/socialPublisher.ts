@@ -18,7 +18,7 @@ export type PublishMediaAsset = {
 
 export type PublishResult = {
   providerPostId: string;
-  providerPermalink: string;
+  providerPermalink?: string;
   rawResponse: Prisma.InputJsonValue;
 };
 

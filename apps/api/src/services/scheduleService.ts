@@ -7,6 +7,7 @@ import {
   publishQueueJobName,
   publishQueueMaxAttempts
 } from "../queues/publishQueue";
+import { isRealPublishingSupported } from "../integrations/social/registry";
 import { HttpError } from "../utils/errors";
 import { withResolvedMediaUrl } from "./mediaStorageService";
 import { requireWorkspaceMembership } from "./workspaceService";
@@ -189,6 +190,13 @@ async function assertVariantIsSchedulable(workspaceId: string, postVariantId: st
 
   if (variant.publishStatus === "published") {
     throw new HttpError(400, "Published variants cannot be scheduled again");
+  }
+
+  if (!isRealPublishingSupported(variant.platform)) {
+    throw new HttpError(
+      409,
+      `Real publishing is not supported for ${variant.platform} yet. Save this content as a draft instead.`
+    );
   }
 
   if (variant.schedules.length) {
@@ -609,4 +617,57 @@ export async function recoverPendingPublishJobs() {
   );
 
   return pendingJobs.length;
+}
+
+export async function repairSimulatedInstagramPublishJobs() {
+  const successfulJobs = await prisma.publishJob.findMany({
+    where: {
+      status: "succeeded"
+    },
+    select: {
+      id: true,
+      scheduleId: true,
+      postVariantId: true,
+      rawResponse: true
+    },
+    take: 1000
+  });
+  const simulatedInstagramJobs = successfulJobs.filter((job) => {
+    if (!job.rawResponse || typeof job.rawResponse !== "object" || Array.isArray(job.rawResponse)) {
+      return false;
+    }
+
+    const response = job.rawResponse as { platform?: unknown; simulated?: unknown };
+    return response.platform === "instagram" && response.simulated === true;
+  });
+
+  for (const job of simulatedInstagramJobs) {
+    await prisma.$transaction([
+      prisma.publishJob.update({
+        where: { id: job.id },
+        data: {
+          status: "failed",
+          providerPostId: null,
+          providerPermalink: null,
+          lastError: "This Instagram task was previously marked as simulated success and was not sent to Instagram. Copy it and publish again."
+        }
+      }),
+      prisma.schedule.updateMany({
+        where: {
+          id: job.scheduleId,
+          status: "published"
+        },
+        data: { status: "failed" }
+      }),
+      prisma.postVariant.updateMany({
+        where: {
+          id: job.postVariantId,
+          publishStatus: "published"
+        },
+        data: { publishStatus: "failed" }
+      })
+    ]);
+  }
+
+  return simulatedInstagramJobs.length;
 }
