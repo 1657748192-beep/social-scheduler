@@ -2932,6 +2932,12 @@ textarea {
   white-space: nowrap;
 }
 
+.admin-system-account-note {
+  border-top: 1px solid #e3eaf1;
+  margin: 0;
+  padding-top: 12px;
+}
+
 
 .admin-denied {
   max-width: 720px;

@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import {
+  deleteAdminUser,
   listAdminUsers,
   updateAdminPublishingAccess,
   updateAdminPublishingAccessSchema
@@ -14,4 +15,9 @@ export async function updateAdminPublishingAccessController(req: Request, res: R
   const body = updateAdminPublishingAccessSchema.parse(req.body);
   const user = await updateAdminPublishingAccess(req.user!.email, req.params.userId, body);
   return res.json(user);
+}
+
+export async function deleteAdminUserController(req: Request, res: Response) {
+  const result = await deleteAdminUser(req.user!.email, req.params.userId);
+  return res.json(result);
 }

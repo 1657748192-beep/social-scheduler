@@ -117,6 +117,7 @@ export type AdminUser = {
   id: string;
   email: string;
   name: string;
+  isSystemAdmin: boolean;
   createdAt: string;
   updatedAt: string;
   publishingAccessExpiresAt?: string | null;

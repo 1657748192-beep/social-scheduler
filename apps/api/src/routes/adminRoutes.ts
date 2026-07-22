@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  deleteAdminUserController,
   listAdminUsersController,
   updateAdminPublishingAccessController
 } from "../controllers/adminController";
@@ -14,3 +15,4 @@ adminRoutes.patch(
   requireAuth,
   asyncHandler(updateAdminPublishingAccessController)
 );
+adminRoutes.delete("/admin/users/:userId", requireAuth, asyncHandler(deleteAdminUserController));

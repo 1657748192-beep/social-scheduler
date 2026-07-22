@@ -1,5 +1,7 @@
 import { config } from "../config";
 import { prisma } from "../prisma";
+import { publishQueue } from "../queues/publishQueue";
+import { deleteStoredMedia } from "./mediaStorageService";
 import { HttpError } from "../utils/errors";
 import { z } from "zod";
 
@@ -122,6 +124,7 @@ export async function listAdminUsers(requesterEmail: string) {
         id: user.id,
         email: user.email,
         name: user.name,
+        isSystemAdmin: configuredAdminEmails().has(user.email.toLowerCase()),
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
         publishingAccessExpiresAt: user.publishingAccessExpiresAt,
@@ -215,4 +218,122 @@ export async function updateAdminPublishingAccess(
       publishingAccessExpiresAt: true
     }
   });
+}
+
+async function removeQueuedPublishJobs(publishJobIds: string[]) {
+  await Promise.all(
+    publishJobIds.map(async (publishJobId) => {
+      const queueJob = await publishQueue.getJob(publishJobId);
+      await queueJob?.remove().catch(() => undefined);
+    })
+  );
+}
+
+export async function deleteAdminUser(requesterEmail: string, userId: string) {
+  assertAdmin(requesterEmail);
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      ownedSpaces: {
+        select: { id: true }
+      }
+    }
+  });
+
+  if (!user) {
+    throw new HttpError(404, "User not found");
+  }
+
+  if (configuredAdminEmails().has(user.email.toLowerCase())) {
+    throw new HttpError(400, "System administrators cannot be deleted here");
+  }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { publishingAccessDisabled: true }
+  });
+
+  const ownedWorkspaceIds = user.ownedSpaces.map((workspace) => workspace.id);
+  const [mediaAssets, schedules] = await Promise.all([
+    prisma.mediaAsset.findMany({
+      where: {
+        OR: [
+          { uploadedBy: user.id },
+          ...(ownedWorkspaceIds.length ? [{ workspaceId: { in: ownedWorkspaceIds } }] : [])
+        ]
+      },
+      select: {
+        id: true,
+        fileUrl: true,
+        storageKey: true
+      }
+    }),
+    prisma.schedule.findMany({
+      where: {
+        OR: [
+          { createdBy: user.id },
+          { postVariant: { post: { authorId: user.id } } },
+          ...(ownedWorkspaceIds.length ? [{ workspaceId: { in: ownedWorkspaceIds } }] : [])
+        ]
+      },
+      select: {
+        id: true,
+        publishJobs: {
+          select: {
+            id: true,
+            status: true
+          }
+        }
+      }
+    })
+  ]);
+
+  const activePublishJob = schedules
+    .flatMap((schedule) => schedule.publishJobs)
+    .find((job) => job.status === "active");
+
+  if (activePublishJob) {
+    throw new HttpError(409, "This user has content that is currently publishing. Try again in a moment.");
+  }
+
+  await removeQueuedPublishJobs(schedules.flatMap((schedule) => schedule.publishJobs.map((job) => job.id)));
+  await Promise.all(mediaAssets.map((asset) => deleteStoredMedia(asset)));
+
+  await prisma.$transaction(async (tx) => {
+    await tx.workspaceInvitation.deleteMany({
+      where: {
+        OR: [{ invitedById: user.id }, { acceptedById: user.id }]
+      }
+    });
+    await tx.oauthAuthorizationLink.deleteMany({
+      where: { createdById: user.id }
+    });
+    await tx.post.deleteMany({
+      where: { authorId: user.id }
+    });
+    await tx.mediaAsset.deleteMany({
+      where: {
+        OR: [
+          { uploadedBy: user.id },
+          ...(ownedWorkspaceIds.length ? [{ workspaceId: { in: ownedWorkspaceIds } }] : [])
+        ]
+      }
+    });
+    await tx.schedule.deleteMany({
+      where: { createdBy: user.id }
+    });
+    if (ownedWorkspaceIds.length) {
+      await tx.workspace.deleteMany({
+        where: { id: { in: ownedWorkspaceIds } }
+      });
+    }
+    await tx.user.delete({
+      where: { id: user.id }
+    });
+  });
+
+  return { ok: true, deletedUserId: user.id };
 }

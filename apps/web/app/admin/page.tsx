@@ -67,6 +67,7 @@ export default function AdminPage() {
   const [query, setQuery] = useState("");
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
 
   async function loadAdminUsers(authToken: string) {
     const result = await apiRequest<AdminUsersResponse>("/admin/users", { token: authToken });
@@ -129,6 +130,36 @@ export default function AdminPage() {
       { publishingAccessExpiresAt: value ? new Date(value).toISOString() : null },
       value ? "测试截止时间已保存。" : "已取消测试截止时间。"
     );
+  }
+
+  async function deleteUser(user: AdminUser) {
+    if (
+      !window.confirm(
+        `确定永久删除 ${user.email} 吗？\n\n该用户的登录、个人工作区、帖子、排程、素材和已绑定的发布任务都会被删除，无法恢复。`
+      )
+    ) {
+      return;
+    }
+
+    if (!token) {
+      return;
+    }
+
+    setActionMessage(null);
+    setDeletingUserId(user.id);
+
+    try {
+      await apiRequest(`/admin/users/${user.id}`, {
+        token,
+        method: "DELETE"
+      });
+      await loadAdminUsers(token);
+      setActionMessage(`已永久删除账号 ${user.email}。`);
+    } catch (requestError) {
+      setActionMessage(requestError instanceof Error ? requestError.message : "删除失败，请重试。");
+    } finally {
+      setDeletingUserId(null);
+    }
   }
 
   const filteredUsers = useMemo(() => {
@@ -256,6 +287,9 @@ export default function AdminPage() {
                   </div>
                 </dl>
 
+                {user.isSystemAdmin ? (
+                  <p className="muted admin-system-account-note">系统管理员账号受保护，不能在这里停用或删除。</p>
+                ) : (
                 <section className="admin-tester-access">
                   <div>
                     <strong>测试人员发布权限</strong>
@@ -277,7 +311,7 @@ export default function AdminPage() {
                     </label>
                     <button
                       className="button secondary"
-                      disabled={updatingUserId === user.id}
+                      disabled={updatingUserId === user.id || deletingUserId === user.id}
                       type="submit"
                     >
                       保存时间
@@ -288,7 +322,7 @@ export default function AdminPage() {
                     {user.publishingAccessStatus === "active" ? (
                       <button
                         className="button danger"
-                        disabled={updatingUserId === user.id}
+                        disabled={updatingUserId === user.id || deletingUserId === user.id}
                         onClick={() => {
                           if (window.confirm(`确定停用 ${user.email} 的发帖和排程权限吗？`)) {
                             void updatePublishingAccess(
@@ -305,7 +339,7 @@ export default function AdminPage() {
                     ) : user.publishingAccessStatus === "expired" ? (
                       <button
                         className="button"
-                        disabled={updatingUserId === user.id}
+                        disabled={updatingUserId === user.id || deletingUserId === user.id}
                         onClick={() =>
                           void updatePublishingAccess(
                             user.id,
@@ -320,7 +354,7 @@ export default function AdminPage() {
                     ) : (
                       <button
                         className="button"
-                        disabled={updatingUserId === user.id}
+                        disabled={updatingUserId === user.id || deletingUserId === user.id}
                         onClick={() =>
                           void updatePublishingAccess(
                             user.id,
@@ -333,8 +367,17 @@ export default function AdminPage() {
                         恢复发布
                       </button>
                     )}
+                    <button
+                      className="button danger-button"
+                      disabled={updatingUserId === user.id || deletingUserId === user.id}
+                      onClick={() => void deleteUser(user)}
+                      type="button"
+                    >
+                      {deletingUserId === user.id ? "正在删除…" : "删除账号"}
+                    </button>
                   </div>
                 </section>
+                )}
 
                 <div className="admin-workspace-list">
                   {user.workspaces.map((workspace) => (
