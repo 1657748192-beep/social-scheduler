@@ -3,7 +3,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "../../components/AppShell";
-import { BeijingDateTimePicker } from "../../components/BeijingDateTimePicker";
 import {
   apiRequest,
   type CurrentUser,
@@ -15,7 +14,6 @@ import {
   type WorkspaceInvitation,
   type WorkspaceMember
 } from "../../lib/api";
-import { chinaLocalInputToISOString, toChinaDatetimeLocalValue } from "../../lib/chinaTime";
 import {
   accountStatusLabel,
   invitationStatusLabel,
@@ -23,29 +21,6 @@ import {
   platformLabel,
   roleLabel
 } from "../../lib/labels";
-
-type DemoScheduleResponse = {
-  scheduleId: string;
-  publishJobId: string;
-  scheduledAt: string;
-  queueDelayMs: number;
-};
-
-const quickSchedulePlatforms = [
-  "instagram",
-  "linkedin",
-  "facebook",
-  "youtube",
-  "tiktok",
-  "pinterest",
-  "x"
-] as const;
-
-function createDefaultScheduleTime() {
-  const date = new Date(Date.now() + 60_000);
-  date.setSeconds(0, 0);
-  return toChinaDatetimeLocalValue(date);
-}
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -64,9 +39,6 @@ export default function DashboardPage() {
   const [creatingAuthorizationLink, setCreatingAuthorizationLink] = useState<string | null>(null);
   const [latestInviteUrl, setLatestInviteUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [createdJob, setCreatedJob] = useState<DemoScheduleResponse | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [demoScheduledAt, setDemoScheduledAt] = useState(createDefaultScheduleTime);
 
   const selectedWorkspace = workspaces.find((workspace) => workspace.id === selectedWorkspaceId);
   const canManageMembers =
@@ -130,46 +102,12 @@ export default function DashboardPage() {
   }, [token, selectedWorkspaceId, canManageMembers]);
 
   const connectedAccounts = socialAccounts.filter((account) => account.status === "active");
-  const configuredProviders = oauthStatuses.filter((provider) => provider.configured);
   const pendingInvitations = invitations.filter((invitation) => invitation.status === "pending");
-  const facebookAccount = connectedAccounts.find((account) => account.platform === "facebook");
-  const facebookPageAccount = connectedAccounts.find(
-    (account) => account.platform === "facebook" && account.accountType === "page"
-  );
-  const facebookBasicAccount = facebookAccount && !facebookPageAccount ? facebookAccount : null;
   const dashboardStats = [
     { label: "工作区", value: workspaces.length, detail: selectedWorkspace?.plan ?? "MVP" },
     { label: "已连接渠道", value: connectedAccounts.length, detail: "可用于排程" },
     { label: "团队成员", value: members.length, detail: "含所有者" },
     { label: "待处理邀请", value: pendingInvitations.length, detail: "等待加入" }
-  ];
-  const launchChecklist = [
-    {
-      title: "站点域名与 HTTPS",
-      detail: "app.bufferhelp.com 已用于线上访问和平台回调。",
-      done: true
-    },
-    {
-      title: "Facebook 开发者配置",
-      detail: configuredProviders.some((provider) => provider.platform === "facebook")
-        ? "Client ID 和 Secret 已写入服务器。"
-        : "还需要配置 Facebook Client ID / Secret。",
-      done: configuredProviders.some((provider) => provider.platform === "facebook")
-    },
-    {
-      title: "Facebook Page 授权",
-      detail: facebookPageAccount
-        ? `已绑定可发布 Page：${facebookPageAccount.displayName}`
-        : facebookBasicAccount
-          ? "已完成基础绑定，但还不能发布 Page。Meta 通过 Page 权限后需要重新授权。"
-          : "需要重新授权并选择要发布的 Page。",
-      done: Boolean(facebookPageAccount)
-    },
-    {
-      title: "真实发布测试",
-      detail: createdJob ? "已创建测试排程，请到日历查看执行结果。" : "建议先发一条短文案验证发布权限。",
-      done: Boolean(createdJob)
-    }
   ];
   const bindingProviderAccounts = bindingProvider
     ? connectedAccounts.filter((account) => account.platform === bindingProvider.platform)
@@ -318,41 +256,6 @@ export default function DashboardPage() {
     }
   }
 
-  async function createDemoSchedule(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!token || !selectedWorkspace) {
-      return;
-    }
-
-    setError(null);
-    setCreatedJob(null);
-    setIsSubmitting(true);
-
-    const formData = new FormData(event.currentTarget);
-    const scheduledAtLocal = String(formData.get("scheduledAt") ?? "");
-    const scheduledAt = chinaLocalInputToISOString(scheduledAtLocal);
-
-    try {
-      const response = await apiRequest<DemoScheduleResponse>("/schedules/demo", {
-        method: "POST",
-        token,
-        body: {
-          workspaceId: selectedWorkspace.id,
-          text: String(formData.get("text") ?? ""),
-          platform: String(formData.get("platform") ?? "x"),
-          scheduledAt
-        }
-      });
-
-      setCreatedJob(response);
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "请求失败");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
   return (
     <AppShell
       title="控制台"
@@ -471,72 +374,6 @@ export default function DashboardPage() {
             ) : null}
           </section>
 
-          <section className="panel checklist-panel">
-            <div className="row">
-              <h2>发布准备清单</h2>
-              <span className="muted">
-                {launchChecklist.filter((item) => item.done).length}/{launchChecklist.length}
-              </span>
-            </div>
-            <ul className="check-list">
-              {launchChecklist.map((item) => (
-                <li className={item.done ? "done" : ""} key={item.title}>
-                  <span>{item.done ? "✓" : "!"}</span>
-                  <div>
-                    <strong>{item.title}</strong>
-                    <small>{item.detail}</small>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <section className="panel quick-schedule">
-            <h2>快速排程内容</h2>
-            <p className="muted">用于快速验证队列和平台发布权限。正式内容建议到内容编辑器创建。</p>
-
-            <form className="form tight-form" onSubmit={createDemoSchedule}>
-              <label className="field">
-                <span>平台</span>
-                <select name="platform" defaultValue="facebook">
-                  {quickSchedulePlatforms.map((platform) => (
-                    <option key={platform} value={platform}>
-                      {platformLabel(platform)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="field">
-                <span>内容</span>
-                <textarea name="text" defaultValue="这是一条待发布的测试内容。" required />
-              </label>
-
-              <label className="field">
-                <span>北京时间</span>
-                <BeijingDateTimePicker
-                  min={toChinaDatetimeLocalValue(new Date())}
-                  name="scheduledAt"
-                  onChange={setDemoScheduledAt}
-                  required
-                  value={demoScheduledAt}
-                />
-              </label>
-              <p className="muted">按北京时间 UTC+8 保存，使用 24 小时制。</p>
-
-              <button className="button" disabled={isSubmitting || !selectedWorkspace} type="submit">
-                {isSubmitting ? "排程中" : "加入排程"}
-              </button>
-            </form>
-
-            {createdJob ? (
-              <div className="result-box">
-                <strong>已创建发布任务</strong>
-                <span>排程：{createdJob.scheduleId}</span>
-                <span>任务：{createdJob.publishJobId}</span>
-              </div>
-            ) : null}
-          </section>
         </div>
 
         <section className="panel channel-management" id="social-channels">
