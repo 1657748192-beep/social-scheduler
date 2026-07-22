@@ -1,4 +1,4 @@
-import type { WorkspaceRole } from "@prisma/client";
+import type { MediaAsset, WorkspaceRole } from "@prisma/client";
 import { z } from "zod";
 import { config } from "../config";
 import {
@@ -9,6 +9,12 @@ import {
 } from "../config/platformLimits";
 import { prisma } from "../prisma";
 import { HttpError } from "../utils/errors";
+import {
+  completeCosMediaUpload,
+  prepareCosMediaUpload,
+  validateMediaUploadInput,
+  withResolvedMediaUrl
+} from "./mediaStorageService";
 import { enqueuePublishJobs } from "./scheduleService";
 import { requireWorkspaceMembership } from "./workspaceService";
 
@@ -34,6 +40,16 @@ export const updateComposerPostSchema = createComposerPostSchema.partial().exten
   variants: z.array(variantSchema).min(1).max(maxPostTargets).optional()
 });
 
+export const prepareCosMediaUploadSchema = z.object({
+  originalName: z.string().min(1).max(255),
+  mimeType: z.string().min(1).max(255),
+  sizeBytes: z.number().int().positive()
+});
+
+export const completeCosMediaUploadSchema = z.object({
+  assetId: z.string().uuid()
+});
+
 export function getComposerPlatforms() {
   return Object.values(composerPlatformLimits);
 }
@@ -42,6 +58,27 @@ function ensureCanWrite(role: WorkspaceRole) {
   if (!writableRoles.includes(role)) {
     throw new HttpError(403, "Viewer role cannot create or edit content");
   }
+}
+
+async function resolveVariantMediaUrls<T extends { media: Array<{ mediaAsset: MediaAsset }> }>(
+  variant: T
+) {
+  return {
+    ...variant,
+    media: variant.media.map((item) => ({
+      ...item,
+      mediaAsset: withResolvedMediaUrl(item.mediaAsset)
+    }))
+  };
+}
+
+async function resolvePostMediaUrls<T extends { variants: Array<{ media: Array<{ mediaAsset: MediaAsset }> }> }>(
+  post: T
+) {
+  return {
+    ...post,
+    variants: await Promise.all(post.variants.map((variant) => resolveVariantMediaUrls(variant)))
+  };
 }
 
 function validateVariant(platform: ComposerPlatform, text: string, mediaCount: number) {
@@ -249,13 +286,13 @@ export async function createComposerPost(
 
   await enqueuePublishJobs(publishJobsToQueue);
 
-  return post;
+  return resolvePostMediaUrls(post);
 }
 
 export async function listComposerPosts(userId: string, workspaceId: string) {
   await requireWorkspaceMembership(userId, workspaceId);
 
-  return prisma.post.findMany({
+  const posts = await prisma.post.findMany({
     where: {
       workspaceId
     },
@@ -279,6 +316,8 @@ export async function listComposerPosts(userId: string, workspaceId: string) {
     },
     take: 50
   });
+
+  return Promise.all(posts.map((post) => resolvePostMediaUrls(post)));
 }
 
 export async function getComposerPost(userId: string, workspaceId: string, postId: string) {
@@ -310,7 +349,7 @@ export async function getComposerPost(userId: string, workspaceId: string, postI
     throw new HttpError(404, "Post not found");
   }
 
-  return post;
+  return resolvePostMediaUrls(post);
 }
 
 export async function uploadWorkspaceMedia(
@@ -321,9 +360,19 @@ export async function uploadWorkspaceMedia(
   const membership = await requireWorkspaceMembership(userId, workspaceId);
   ensureCanWrite(membership.role);
 
+  if (config.MEDIA_STORAGE === "cos") {
+    throw new HttpError(409, "This server uses COS direct upload. Upload through the COS upload endpoint instead.");
+  }
+
   if (!file) {
     throw new HttpError(400, "Media file is required");
   }
+
+  validateMediaUploadInput({
+    originalName: file.originalname,
+    mimeType: file.mimetype,
+    sizeBytes: file.size
+  });
 
   const asset = await prisma.mediaAsset.create({
     data: {
@@ -339,13 +388,13 @@ export async function uploadWorkspaceMedia(
     }
   });
 
-  return asset;
+  return withResolvedMediaUrl(asset);
 }
 
 export async function listWorkspaceMedia(userId: string, workspaceId: string) {
   await requireWorkspaceMembership(userId, workspaceId);
 
-  return prisma.mediaAsset.findMany({
+  const media = await prisma.mediaAsset.findMany({
     where: {
       workspaceId,
       status: "ready"
@@ -355,4 +404,26 @@ export async function listWorkspaceMedia(userId: string, workspaceId: string) {
     },
     take: 100
   });
+
+  return media.map((asset) => withResolvedMediaUrl(asset));
+}
+
+export async function createCosMediaUploadIntent(
+  userId: string,
+  workspaceId: string,
+  input: z.infer<typeof prepareCosMediaUploadSchema>
+) {
+  const membership = await requireWorkspaceMembership(userId, workspaceId);
+  ensureCanWrite(membership.role);
+  return prepareCosMediaUpload(workspaceId, userId, input);
+}
+
+export async function completeCosMediaUploadIntent(
+  userId: string,
+  workspaceId: string,
+  input: z.infer<typeof completeCosMediaUploadSchema>
+) {
+  const membership = await requireWorkspaceMembership(userId, workspaceId);
+  ensureCanWrite(membership.role);
+  return completeCosMediaUpload(workspaceId, userId, input.assetId);
 }

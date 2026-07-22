@@ -1,5 +1,7 @@
 import { Router } from "express";
 import {
+  completeCosMediaUploadController,
+  createCosMediaUploadIntentController,
   createComposerPostController,
   getComposerPlatformsController,
   getComposerPostController,
@@ -25,6 +27,16 @@ composerRoutes.post(
   requireAuth,
   mediaUpload.single("file"),
   asyncHandler(uploadWorkspaceMediaController)
+);
+composerRoutes.post(
+  "/workspaces/:workspaceId/media/cos/intent",
+  requireAuth,
+  asyncHandler(createCosMediaUploadIntentController)
+);
+composerRoutes.post(
+  "/workspaces/:workspaceId/media/cos/complete",
+  requireAuth,
+  asyncHandler(completeCosMediaUploadController)
 );
 
 composerRoutes.get(

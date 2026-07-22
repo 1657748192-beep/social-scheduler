@@ -9,6 +9,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "cos-js-sdk-v5": "1.8.3",
     "next": "^15.1.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

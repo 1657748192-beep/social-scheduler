@@ -3,6 +3,8 @@ import { getSocialPublisher } from "./integrations/social/registry";
 import { prisma } from "./prisma";
 import { redisConnection } from "./redis";
 import { publishQueueJobName, publishQueueName, type PublishQueuePayload } from "./queues/publishQueue";
+import { config } from "./config";
+import { cleanUpExpiredMedia, withResolvedMediaUrl } from "./services/mediaStorageService";
 import { recoverPendingPublishJobs } from "./services/scheduleService";
 
 const retryableJobStatuses = ["waiting", "retrying"] as const;
@@ -87,11 +89,15 @@ const worker = new Worker<PublishQueuePayload, unknown, typeof publishQueueJobNa
       socialAccountId,
       platform: publishJob.schedule.postVariant.platform,
       text: publishJob.schedule.postVariant.text,
-      media: publishJob.schedule.postVariant.media.map((item) => ({
-        id: item.mediaAsset.id,
-        fileUrl: item.mediaAsset.fileUrl,
-        mimeType: item.mediaAsset.mimeType
-      })),
+      media: publishJob.schedule.postVariant.media.map((item) => {
+        const asset = withResolvedMediaUrl(item.mediaAsset, "publish");
+        return {
+          id: asset.id,
+          fileUrl: asset.fileUrl,
+          mimeType: asset.mimeType,
+          sizeBytes: asset.sizeBytes
+        };
+      }),
       idempotencyKey: publishJob.idempotencyKey
     });
 
@@ -127,7 +133,7 @@ const worker = new Worker<PublishQueuePayload, unknown, typeof publishQueueJobNa
   },
   {
     connection: redisConnection,
-    concurrency: 5
+    concurrency: config.WORKER_CONCURRENCY
   }
 );
 
@@ -138,6 +144,23 @@ recoverPendingPublishJobs()
   .catch((error) => {
     console.error("Failed to recover pending publish jobs", error);
   });
+
+async function runMediaCleanup() {
+  try {
+    const result = await cleanUpExpiredMedia();
+    if (result.scanned) {
+      console.log(`Media cleanup: deleted ${result.deleted}/${result.scanned}, failed ${result.failed}`);
+    }
+  } catch (error) {
+    console.error("Media cleanup failed", error);
+  }
+}
+
+void runMediaCleanup();
+const cleanupTimer = setInterval(
+  () => void runMediaCleanup(),
+  config.MEDIA_CLEANUP_INTERVAL_HOURS * 60 * 60 * 1000
+);
 
 worker.on("completed", (job) => {
   console.log(`Publish job completed: ${job.id}`);
@@ -214,6 +237,7 @@ worker.on("failed", async (job, error) => {
 
 async function shutdown() {
   console.log("Shutting down worker");
+  clearInterval(cleanupTimer);
   await worker.close();
   await prisma.$disconnect();
   process.exit(0);

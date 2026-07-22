@@ -282,6 +282,20 @@ export type MediaAsset = {
   createdAt: string;
 };
 
+export type CosUploadIntent = {
+  assetId: string;
+  key: string;
+  bucket: string;
+  region: string;
+  credentials: {
+    tmpSecretId: string;
+    tmpSecretKey: string;
+    sessionToken: string;
+    startTime: number;
+    expiredTime: number;
+  };
+};
+
 export type ComposerPost = {
   id: string;
   title?: string;

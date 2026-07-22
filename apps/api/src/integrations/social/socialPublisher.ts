@@ -13,6 +13,7 @@ export type PublishMediaAsset = {
   id: string;
   fileUrl: string;
   mimeType: string;
+  sizeBytes: number;
 };
 
 export type PublishResult = {

@@ -1,4 +1,4 @@
-import type { JobStatus, WorkspaceRole } from "@prisma/client";
+import type { JobStatus, MediaAsset, WorkspaceRole } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../prisma";
 import {
@@ -8,6 +8,7 @@ import {
   publishQueueMaxAttempts
 } from "../queues/publishQueue";
 import { HttpError } from "../utils/errors";
+import { withResolvedMediaUrl } from "./mediaStorageService";
 import { requireWorkspaceMembership } from "./workspaceService";
 
 const writableRoles: WorkspaceRole[] = ["owner", "admin", "editor"];
@@ -64,6 +65,19 @@ function ensureCanSchedule(role: WorkspaceRole) {
   if (!writableRoles.includes(role)) {
     throw new HttpError(403, "Viewer role cannot schedule or publish content");
   }
+}
+
+function resolveScheduleMediaUrls<T extends { postVariant: { media: Array<{ mediaAsset: MediaAsset }> } }>(schedule: T) {
+  return {
+    ...schedule,
+    postVariant: {
+      ...schedule.postVariant,
+      media: schedule.postVariant.media.map((item) => ({
+        ...item,
+        mediaAsset: withResolvedMediaUrl(item.mediaAsset)
+      }))
+    }
+  };
 }
 
 function parseFutureDate(value: string) {
@@ -222,7 +236,7 @@ export async function listSchedules(
 ) {
   await requireWorkspaceMembership(userId, workspaceId);
 
-  return prisma.schedule.findMany({
+  const schedules = await prisma.schedule.findMany({
     where: {
       workspaceId,
       status: query.status ?? {
@@ -238,6 +252,8 @@ export async function listSchedules(
       scheduledAt: "asc"
     }
   });
+
+  return schedules.map((schedule) => resolveScheduleMediaUrls(schedule));
 }
 
 export async function getSchedule(userId: string, workspaceId: string, scheduleId: string) {
@@ -255,7 +271,7 @@ export async function getSchedule(userId: string, workspaceId: string, scheduleI
     throw new HttpError(404, "Schedule not found");
   }
 
-  return schedule;
+  return resolveScheduleMediaUrls(schedule);
 }
 
 export async function rescheduleSchedule(
@@ -336,7 +352,7 @@ export async function rescheduleSchedule(
 
   await enqueuePublishJob(publishJob.id, scheduledAt);
 
-  return updated;
+  return resolveScheduleMediaUrls(updated);
 }
 
 export async function cancelSchedule(userId: string, workspaceId: string, scheduleId: string) {

@@ -1,7 +1,8 @@
 "use client";
 
 import { ChangeEvent, useEffect, useRef, useState } from "react";
-import { apiUpload, type MediaAsset } from "../../lib/api";
+import COS from "cos-js-sdk-v5";
+import { apiRequest, apiUpload, type CosUploadIntent, type MediaAsset } from "../../lib/api";
 
 const maxMediaSizeBytes = 250 * 1024 * 1024;
 const uploadConcurrency = 2;
@@ -36,6 +37,31 @@ function formatFileSize(bytes: number) {
 
 function newUploadId(file: File) {
   return `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2)}`;
+}
+
+function uploadToCos(intent: CosUploadIntent, file: File, onProgress: (percent: number) => void) {
+  const cos = new COS({
+    getAuthorization: (_options, callback) => {
+      callback({
+        TmpSecretId: intent.credentials.tmpSecretId,
+        TmpSecretKey: intent.credentials.tmpSecretKey,
+        SecurityToken: intent.credentials.sessionToken,
+        StartTime: intent.credentials.startTime,
+        ExpiredTime: intent.credentials.expiredTime
+      });
+    }
+  });
+
+  return cos.uploadFile({
+    Bucket: intent.bucket,
+    Region: intent.region,
+    Key: intent.key,
+    Body: file,
+    ContentType: file.type,
+    SliceSize: 8 * 1024 * 1024,
+    ChunkSize: 4 * 1024 * 1024,
+    onProgress: ({ percent }) => onProgress(Math.min(100, Math.round(percent * 100)))
+  });
 }
 
 export function MediaUploader({
@@ -84,14 +110,42 @@ export function MediaUploader({
   }
 
   async function uploadOne(item: UploadItem) {
-    const formData = new FormData();
-    formData.append("file", item.file);
     updateUpload(item.id, { error: undefined, progress: 0, status: "uploading" });
 
     try {
-      const asset = await apiUpload<MediaAsset>(`/workspaces/${workspaceId}/media`, token, formData, {
-        onProgress: ({ percent }) => updateUpload(item.id, { progress: percent })
-      });
+      let asset: MediaAsset;
+
+      try {
+        const intent = await apiRequest<CosUploadIntent>(`/workspaces/${workspaceId}/media/cos/intent`, {
+          token,
+          method: "POST",
+          body: {
+            originalName: item.file.name,
+            mimeType: item.file.type,
+            sizeBytes: item.file.size
+          }
+        });
+        await uploadToCos(intent, item.file, (percent) => updateUpload(item.id, { progress: percent }));
+        asset = await apiRequest<MediaAsset>(`/workspaces/${workspaceId}/media/cos/complete`, {
+          token,
+          method: "POST",
+          body: { assetId: intent.assetId }
+        });
+      } catch (cosError) {
+        const isLocalStorage =
+          cosError instanceof Error && cosError.message === "COS direct upload is not enabled on this server";
+
+        if (!isLocalStorage) {
+          throw cosError;
+        }
+
+        const formData = new FormData();
+        formData.append("file", item.file);
+        asset = await apiUpload<MediaAsset>(`/workspaces/${workspaceId}/media`, token, formData, {
+          onProgress: ({ percent }) => updateUpload(item.id, { progress: percent })
+        });
+      }
+
       updateMedia([...mediaRef.current, asset]);
       setUploadItems((current) => current.filter((upload) => upload.id !== item.id));
     } catch (requestError) {

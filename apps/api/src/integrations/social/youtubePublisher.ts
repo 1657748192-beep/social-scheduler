@@ -54,10 +54,10 @@ export class YouTubePublisher implements SocialPublisher {
 
     const accessToken = await this.getAccessToken(account);
     const videoAsset = input.media.find((asset) => asset.mimeType.startsWith("video/"))!;
-    const videoBuffer = await this.fetchMediaBuffer(videoAsset);
+    const videoStream = await this.fetchMediaStream(videoAsset);
     const metadata = this.buildVideoMetadata(input);
-    const uploadUrl = await this.createUploadSession(accessToken, videoAsset, videoBuffer.length, metadata);
-    const payload = await this.uploadVideo(uploadUrl, videoAsset, videoBuffer);
+    const uploadUrl = await this.createUploadSession(accessToken, videoAsset, videoAsset.sizeBytes, metadata);
+    const payload = await this.uploadVideo(uploadUrl, videoAsset, videoStream);
 
     return {
       providerPostId: payload.id!,
@@ -175,14 +175,14 @@ export class YouTubePublisher implements SocialPublisher {
     return (title || "Untitled video").slice(0, 100);
   }
 
-  private async fetchMediaBuffer(media: PublishMediaAsset) {
+  private async fetchMediaStream(media: PublishMediaAsset) {
     const response = await fetch(media.fileUrl);
 
-    if (!response.ok) {
+    if (!response.ok || !response.body) {
       throw new Error(`Unable to download video for YouTube upload: ${response.statusText}`);
     }
 
-    return Buffer.from(await response.arrayBuffer());
+    return response.body;
   }
 
   private async createUploadSession(
@@ -216,20 +216,16 @@ export class YouTubePublisher implements SocialPublisher {
     return location;
   }
 
-  private async uploadVideo(uploadUrl: string, media: PublishMediaAsset, videoBuffer: Buffer) {
-    const uploadBody = videoBuffer.buffer.slice(
-      videoBuffer.byteOffset,
-      videoBuffer.byteOffset + videoBuffer.byteLength
-    ) as ArrayBuffer;
-
+  private async uploadVideo(uploadUrl: string, media: PublishMediaAsset, videoStream: ReadableStream<Uint8Array>) {
     const response = await fetch(uploadUrl, {
       method: "PUT",
       headers: {
         "Content-Type": media.mimeType,
-        "Content-Length": String(videoBuffer.length)
+        "Content-Length": String(media.sizeBytes)
       },
-      body: uploadBody
-    });
+      body: videoStream,
+      duplex: "half"
+    } as RequestInit & { duplex: "half" });
     const payload = (await response.json().catch(() => null)) as YouTubeVideoResponse | null;
 
     if (!response.ok || !payload?.id) {

@@ -1,11 +1,15 @@
 import type { Request, Response } from "express";
 import {
+  completeCosMediaUploadIntent,
+  completeCosMediaUploadSchema,
+  createCosMediaUploadIntent,
   createComposerPost,
   createComposerPostSchema,
   getComposerPlatforms,
   getComposerPost,
   listComposerPosts,
   listWorkspaceMedia,
+  prepareCosMediaUploadSchema,
   uploadWorkspaceMedia
 } from "../services/composerService";
 
@@ -19,6 +23,18 @@ export async function uploadWorkspaceMediaController(req: Request, res: Response
     req.params.workspaceId,
     req.file as Express.Multer.File
   );
+  return res.status(201).json(asset);
+}
+
+export async function createCosMediaUploadIntentController(req: Request, res: Response) {
+  const body = prepareCosMediaUploadSchema.parse(req.body);
+  const intent = await createCosMediaUploadIntent(req.user!.id, req.params.workspaceId, body);
+  return res.status(201).json(intent);
+}
+
+export async function completeCosMediaUploadController(req: Request, res: Response) {
+  const body = completeCosMediaUploadSchema.parse(req.body);
+  const asset = await completeCosMediaUploadIntent(req.user!.id, req.params.workspaceId, body);
   return res.status(201).json(asset);
 }
 

@@ -133,7 +133,7 @@ D:\社媒
 - YouTube 对外用户发布：管理员/测试用户可用，开放给所有用户需要 Google OAuth 数据访问验证通过。
 - 排程日历编辑/删除：用户提出需求，需确认当前代码是否已完整实现。
 - 管理后台：基础入口存在，但权限、套餐、审计和用户有效期管理还需要完善。
-- 图片/视频发布：YouTube 视频发布应走真实 API；Facebook 图片/视频和 Instagram 媒体发布仍需继续验证。
+- 图片/视频存储：已实现腾讯云 COS 私有桶直传架构；启用 `MEDIA_STORAGE=cos` 后浏览器使用单对象、短期 STS 凭证上传，素材预览/发布使用短期签名 URL，Worker 自动清理过期无引用/已发布素材。生产 COS 参数和旧素材迁移见 `docs/COS_MEDIA_SETUP.md`。
 - UI 调整：已经做过多轮中文化和布局调整，但仍有细节需要统一。
 
 ## 7. 尚未开发或未完成的功能
@@ -142,7 +142,7 @@ D:\社媒
 - 团队级审批流、内容审核、品牌资产库。
 - 多租户数据隔离的系统化审计。
 - 平台连接失败诊断页。
-- 更完整的素材库：批量上传、标签、搜索、云存储/CDN。
+- 更完整的素材库：标签、搜索、批量删除、CDN/转码。
 - 发布结果回填：每个平台真实 post id、permalink、失败类型分类。
 - Instagram 完整发布链路。
 - LinkedIn、TikTok、Pinterest、X 的真实 API 发布。
@@ -214,16 +214,17 @@ D:\社媒
 
 ## 10. 当前正在开发到哪一步
 
-当前阶段优先处理 Instagram OAuth 一键授权绑定。代码和部署已统一使用 `INSTAGRAM_OAUTH_SCOPES`，并在部署后验证运行中容器的实际回调 URL 与 scope；下一步是上线后进行一次全新的真实授权。
+当前阶段优先完成腾讯云 COS 私有桶的控制台配置、线上部署和旧本地素材迁移；之后继续验证 Instagram/Facebook/YouTube 的真实发布链路。
 
 ## 11. 下一步最应该做什么
 
-新 Codex 第一优先级：不要继续盲目改 Meta 后台。先在代码里完整追踪 Instagram OAuth：
+新 Codex 第一优先级：先完成 COS 上线验证与旧素材迁移：
 
-1. 将最新代码推送到 GitHub，并在服务器执行部署脚本。
-2. 确认部署输出中的 Instagram callback URL 为 `https://app.bufferhelp.com/api/v1/integrations/instagram/oauth/callback`，scope 为 `instagram_business_basic,instagram_business_content_publish`，凭证状态为 `configured`。
-3. 再从软件“添加账号”按钮发起一次全新的授权，不能复用旧的授权链接或 callback URL。
-4. 如仍失败，保存新的 Meta 错误信息和时间点，再检查 Meta 后台的测试人员角色及回调 URL。
+1. 在腾讯云创建私有 COS 桶、CORS 规则和最小权限 CAM 子账号；不要把真实密钥提交 Git。
+2. 服务器 `.env` 设置 `MEDIA_STORAGE=cos` 和 COS 参数，部署后确认 API/worker 输出 `Media storage: cos`。
+3. 上传一张图片和一个小视频，确认 COS 控制台出现对象、编辑器有预览、Worker 日志正常。
+4. 运行 `node dist/scripts/migrateLocalMediaToCos.js` 迁移旧本地素材，确认素材预览后再清理空卷。
+5. 然后继续用新授权链接验证 Instagram OAuth，不复用旧链接。
 
 ## 12. 功能开发优先级
 
@@ -353,7 +354,7 @@ https://app.bufferhelp.com/api/v1/integrations/{platform}/oauth/callback
 
 待完善：
 
-- 云存储/CDN。
+- COS CDN/自定义域名、视频转码。
 - 文件大小和格式校验。
 - 视频转码。
 - Instagram/Facebook 媒体发布稳定性。
