@@ -11,6 +11,7 @@ type PostPreviewProps = {
   baseText: string;
   baseWebsite: string;
   mediaByPlatform: Record<ComposerPlatform, MediaAsset[]>;
+  mediaSources: Record<ComposerPlatform, "shared" | "custom">;
   loading: boolean;
 };
 
@@ -21,11 +22,13 @@ export function PostPreview({
   baseText,
   baseWebsite,
   mediaByPlatform,
+  mediaSources,
   loading
 }: PostPreviewProps) {
   const groups = new Map<ComposerPlatform, SocialAccount[]>();
-  const totalMediaCount = Object.values(mediaByPlatform).reduce(
-    (count, media) => count + media.length,
+  const selectedPlatforms = Array.from(new Set(accounts.map((account) => account.platform)));
+  const totalMediaCount = selectedPlatforms.reduce(
+    (count, platform) => count + mediaByPlatform[platform].length,
     0
   );
 
@@ -43,7 +46,7 @@ export function PostPreview({
         <span className="muted">{totalMediaCount} 个平台素材</span>
       </div>
 
-      <p className="muted">素材会按各个平台分别发布，不会互相混用。</p>
+      <p className="muted">共用素材会复用到每个平台；单独调整的平台使用自己的专属素材。</p>
 
       {loading ? <p className="muted">正在读取目标账号…</p> : null}
       {!loading && !accounts.length ? <p className="muted">请先在左侧选择至少一个已连接账号。</p> : null}
@@ -56,15 +59,22 @@ export function PostPreview({
             websites[platform] || baseWebsite
           );
           const platformMedia = mediaByPlatform[platform];
+          const mediaSource = mediaSources[platform];
 
           return (
             <article className="publish-summary-group" key={platform}>
               <div className="publish-summary-heading">
                 <strong>{limit.label}</strong>
-                <span>{platformAccounts.length} 个账号 · {platformMedia.length} 个素材</span>
+                <span>
+                  {platformAccounts.length} 个账号 · {platformMedia.length} 个素材 · {mediaSource === "shared" ? "共用" : "专属"}
+                </span>
               </div>
               <p>{text || "将使用基础文案"}</p>
-              <p className="muted">这些素材会发到该平台的全部已选账号。</p>
+              <p className="muted">
+                {mediaSource === "shared"
+                  ? "使用共用素材，会随基础素材的增删自动同步。"
+                  : "使用专属素材，只会发到该平台的全部已选账号。"}
+              </p>
               <div className="account-chip-list">
                 {platformAccounts.slice(0, 4).map((account) => (
                   <span className="account-chip" key={account.id}>{account.displayName}</span>

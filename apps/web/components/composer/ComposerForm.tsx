@@ -35,6 +35,8 @@ const allComposerPlatforms: ComposerPlatform[] = [
   "x"
 ];
 
+type MediaSource = "shared" | "custom";
+
 function createVariantTextMap(value = "") {
   return Object.fromEntries(
     allComposerPlatforms.map((platform) => [platform, value])
@@ -46,6 +48,13 @@ function createPlatformMediaMap(): Record<ComposerPlatform, MediaAsset[]> {
     media[platform] = [];
     return media;
   }, {} as Record<ComposerPlatform, MediaAsset[]>);
+}
+
+function createPlatformMediaSourceMap(): Record<ComposerPlatform, MediaSource> {
+  return allComposerPlatforms.reduce<Record<ComposerPlatform, MediaSource>>((sources, platform) => {
+    sources[platform] = "shared";
+    return sources;
+  }, {} as Record<ComposerPlatform, MediaSource>);
 }
 
 export function ComposerForm({ token, workspaces }: ComposerFormProps) {
@@ -64,8 +73,12 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [accountError, setAccountError] = useState<string | null>(null);
-  const [mediaByPlatform, setMediaByPlatform] = useState<Record<ComposerPlatform, MediaAsset[]>>(() =>
+  const [sharedMedia, setSharedMedia] = useState<MediaAsset[]>([]);
+  const [platformMediaByPlatform, setPlatformMediaByPlatform] = useState<Record<ComposerPlatform, MediaAsset[]>>(() =>
     createPlatformMediaMap()
+  );
+  const [mediaSourceByPlatform, setMediaSourceByPlatform] = useState<Record<ComposerPlatform, MediaSource>>(() =>
+    createPlatformMediaSourceMap()
   );
   const [scheduledAt, setScheduledAt] = useState("");
   const [publishMode, setPublishMode] = useState<"draft" | "scheduled" | "now">("draft");
@@ -98,7 +111,17 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
       }, {}),
     [selectedAccounts]
   );
-  const activeMedia = mediaByPlatform[activePlatform];
+  const resolvedMediaByPlatform = useMemo(
+    () =>
+      allComposerPlatforms.reduce<Record<ComposerPlatform, MediaAsset[]>>((media, platform) => {
+        media[platform] =
+          mediaSourceByPlatform[platform] === "shared" ? sharedMedia : platformMediaByPlatform[platform];
+        return media;
+      }, {} as Record<ComposerPlatform, MediaAsset[]>),
+    [mediaSourceByPlatform, platformMediaByPlatform, sharedMedia]
+  );
+  const activeMedia = resolvedMediaByPlatform[activePlatform];
+  const activeMediaUsesShared = mediaSourceByPlatform[activePlatform] === "shared";
   const activePlatformLabel = platformLimits[activePlatform].label;
   const imageCount = activeMedia.filter((asset) => asset.mimeType.startsWith("image/")).length;
   const videoCount = activeMedia.filter((asset) => asset.mimeType.startsWith("video/")).length;
@@ -118,7 +141,9 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
     setAccountError(null);
     setSocialAccounts([]);
     setSelectedAccountIds([]);
-    setMediaByPlatform(createPlatformMediaMap());
+    setSharedMedia([]);
+    setPlatformMediaByPlatform(createPlatformMediaMap());
+    setMediaSourceByPlatform(createPlatformMediaSourceMap());
 
     apiRequest<SocialAccount[]>(`/workspaces/${workspaceId}/social-accounts`, { token })
       .then((accounts) => {
@@ -211,6 +236,28 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
     });
   }
 
+  function customizePlatformMedia() {
+    setPlatformMediaByPlatform((current) => ({
+      ...current,
+      [activePlatform]: [...sharedMedia]
+    }));
+    setMediaSourceByPlatform((current) => ({
+      ...current,
+      [activePlatform]: "custom"
+    }));
+  }
+
+  function restoreSharedMedia() {
+    setPlatformMediaByPlatform((current) => ({
+      ...current,
+      [activePlatform]: []
+    }));
+    setMediaSourceByPlatform((current) => ({
+      ...current,
+      [activePlatform]: "shared"
+    }));
+  }
+
   async function savePost(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -258,7 +305,7 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
                 variantTexts[account.platform] || baseText,
                 variantWebsites[account.platform] || baseWebsite
               ),
-              mediaAssetIds: mediaByPlatform[account.platform].map((asset) => asset.id)
+              mediaAssetIds: resolvedMediaByPlatform[account.platform].map((asset) => asset.id)
             }))
           }
         }
@@ -289,7 +336,7 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
             <div>
               <p className="section-kicker">内容编辑</p>
               <h2>编辑帖子内容</h2>
-              <p className="muted">所有已选账号会使用此内容；可按平台单独调整文案。</p>
+              <p className="muted">所有已选账号会使用基础内容；文案、链接和素材都可按平台单独调整。</p>
             </div>
           </div>
 
@@ -365,18 +412,60 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
         </section>
 
         {selectedWorkspace ? (
-          <MediaUploader
-            media={activeMedia}
-            onMediaChange={(nextMedia) =>
-              setMediaByPlatform((current) => ({
-                ...current,
-                [activePlatform]: nextMedia
-              }))
-            }
-            platformLabel={platformLimits[activePlatform].label}
-            token={token}
-            workspaceId={selectedWorkspace.id}
-          />
+          <>
+            <MediaUploader
+              description="上传一次后，默认会用于全部已选平台；每个平台都可以从共用素材复制一份再单独调整。"
+              label="共用素材"
+              media={sharedMedia}
+              onMediaChange={setSharedMedia}
+              token={token}
+              workspaceId={selectedWorkspace.id}
+            />
+
+            {selectedPlatforms.length ? (
+              <section className="composer-panel platform-media-control">
+                <div className="row">
+                  <div>
+                    <p className="section-kicker">平台素材版本</p>
+                    <h2>{activePlatformLabel}</h2>
+                  </div>
+                  <span className={activeMediaUsesShared ? "media-source-badge shared" : "media-source-badge custom"}>
+                    {activeMediaUsesShared ? "使用共用素材" : "已单独调整"}
+                  </span>
+                </div>
+                <p className="muted">
+                  {activeMediaUsesShared
+                    ? `当前 ${activePlatformLabel} 会使用全部 ${sharedMedia.length} 个共用素材。`
+                    : `当前 ${activePlatformLabel} 使用独立素材，不会再随共用素材变化。`}
+                </p>
+                {activeMediaUsesShared ? (
+                  <button className="button secondary" onClick={customizePlatformMedia} type="button">
+                    从共用素材复制并单独调整
+                  </button>
+                ) : (
+                  <button className="button secondary" onClick={restoreSharedMedia} type="button">
+                    恢复使用共用素材
+                  </button>
+                )}
+              </section>
+            ) : null}
+
+            {selectedPlatforms.length && !activeMediaUsesShared ? (
+              <MediaUploader
+                description={`这里只影响已选的 ${activePlatformLabel} 账号；可移除复制来的素材，或追加该平台专属图片和视频。`}
+                label={`${activePlatformLabel} 专属素材`}
+                media={platformMediaByPlatform[activePlatform]}
+                onMediaChange={(nextMedia) =>
+                  setPlatformMediaByPlatform((current) => ({
+                    ...current,
+                    [activePlatform]: nextMedia
+                  }))
+                }
+                token={token}
+                workspaceId={selectedWorkspace.id}
+              />
+            ) : null}
+          </>
         ) : null}
       </main>
 
@@ -434,7 +523,8 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
           accounts={selectedAccounts}
           baseText={baseText}
           loading={accountsLoading}
-          mediaByPlatform={mediaByPlatform}
+          mediaByPlatform={resolvedMediaByPlatform}
+          mediaSources={mediaSourceByPlatform}
           baseWebsite={baseWebsite}
           texts={variantTexts}
           websites={variantWebsites}

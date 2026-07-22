@@ -7,7 +7,8 @@ type MediaUploaderProps = {
   workspaceId: string;
   token: string;
   media: MediaAsset[];
-  platformLabel: string;
+  label: string;
+  description: string;
   onMediaChange: (media: MediaAsset[]) => void;
 };
 
@@ -15,7 +16,8 @@ export function MediaUploader({
   workspaceId,
   token,
   media,
-  platformLabel,
+  label,
+  description,
   onMediaChange
 }: MediaUploaderProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -63,12 +65,12 @@ export function MediaUploader({
   return (
     <section className="composer-panel media-panel">
       <p className="upload-hint platform-media-hint">
-        {platformLabel} 专属素材：这里的图片和视频只会用于已选的 {platformLabel} 账号。
+        {description}
       </p>
       <div className="row">
         <div>
-          <p className="section-kicker">素材库 · {platformLabel}</p>
-          <h2>{platformLabel} 图片与视频</h2>
+          <p className="section-kicker">素材库 · {label}</p>
+          <h2>{label} 图片与视频</h2>
         </div>
         <span className="muted">
           {imageCount} 图 / {videoCount} 视频

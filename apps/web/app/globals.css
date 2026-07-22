@@ -2042,6 +2042,39 @@ textarea {
   color: var(--primary);
 }
 
+.platform-media-control {
+  display: grid;
+  gap: 12px;
+}
+
+.platform-media-control .muted {
+  margin: 0;
+}
+
+.platform-media-control .button {
+  justify-self: start;
+}
+
+.media-source-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.media-source-badge.shared {
+  background: #e8f3ff;
+  color: #1369a6;
+}
+
+.media-source-badge.custom {
+  background: #fff0e6;
+  color: #ae5b13;
+}
+
 .upload-drop:disabled {
   cursor: wait;
   opacity: 0.7;
