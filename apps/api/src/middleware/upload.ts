@@ -4,6 +4,8 @@ import multer from "multer";
 import { HttpError } from "../utils/errors";
 
 export const uploadRoot = path.resolve(process.cwd(), "uploads");
+export const maxMediaUploadBytes = 250 * 1024 * 1024;
+export const maxMediaUploadMegabytes = Math.round(maxMediaUploadBytes / (1024 * 1024));
 
 fs.mkdirSync(uploadRoot, { recursive: true });
 
@@ -21,7 +23,7 @@ const storage = multer.diskStorage({
 export const mediaUpload = multer({
   storage,
   limits: {
-    fileSize: 100 * 1024 * 1024
+    fileSize: maxMediaUploadBytes
   },
   fileFilter: (_req, file, callback) => {
     if (!file.mimetype.startsWith("image/") && !file.mimetype.startsWith("video/")) {

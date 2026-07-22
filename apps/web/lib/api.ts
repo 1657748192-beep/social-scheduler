@@ -25,22 +25,56 @@ export async function apiRequest<T>(path: string, options: ApiOptions = {}): Pro
   return payload as T;
 }
 
-export async function apiUpload<T>(path: string, token: string, formData: FormData): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`
-    },
-    body: formData
+type UploadOptions = {
+  onProgress?: (progress: { loaded: number; total: number; percent: number }) => void;
+};
+
+export function apiUpload<T>(
+  path: string,
+  token: string,
+  formData: FormData,
+  options: UploadOptions = {}
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("POST", `${API_BASE_URL}${path}`);
+    request.setRequestHeader("Authorization", `Bearer ${token}`);
+    request.timeout = 30 * 60 * 1000;
+
+    request.upload.onprogress = (event) => {
+      if (!event.lengthComputable) {
+        return;
+      }
+
+      options.onProgress?.({
+        loaded: event.loaded,
+        total: event.total,
+        percent: Math.min(100, Math.round((event.loaded / event.total) * 100))
+      });
+    };
+
+    request.onload = () => {
+      let payload: { message?: string } | null = null;
+
+      try {
+        payload = JSON.parse(request.responseText || "null") as { message?: string } | null;
+      } catch {
+        payload = null;
+      }
+
+      if (request.status >= 200 && request.status < 300) {
+        resolve(payload as T);
+        return;
+      }
+
+      reject(new Error(payload?.message ?? `上传失败（HTTP ${request.status}）`));
+    };
+
+    request.onerror = () => reject(new Error("网络连接中断，请检查网络后重试"));
+    request.onabort = () => reject(new Error("上传已取消"));
+    request.ontimeout = () => reject(new Error("上传超时，请压缩文件或稍后重试"));
+    request.send(formData);
   });
-
-  const payload = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    throw new Error(payload?.message ?? "上传失败");
-  }
-
-  return payload as T;
 }
 
 export type AuthResponse = {
