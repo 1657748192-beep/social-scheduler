@@ -62,6 +62,33 @@ export async function requireWorkspaceMembership(userId: string, workspaceId: st
   return membership;
 }
 
+export async function requireWorkspacePublishingAccess(userId: string, workspaceId: string) {
+  const membership = await requireWorkspaceMembership(userId, workspaceId);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      publishingAccessDisabled: true,
+      publishingAccessExpiresAt: true
+    }
+  });
+
+  if (!user) {
+    throw new HttpError(404, "User not found");
+  }
+
+  if (
+    user.publishingAccessDisabled ||
+    (user.publishingAccessExpiresAt && user.publishingAccessExpiresAt.getTime() <= Date.now())
+  ) {
+    throw new HttpError(
+      403,
+      "测试人员发布权限已停用或到期。仍可登录查看后台，但无法上传素材、发布或创建排程。"
+    );
+  }
+
+  return membership;
+}
+
 export async function requireWorkspaceManager(userId: string, workspaceId: string) {
   const membership = await requireWorkspaceMembership(userId, workspaceId);
   assertRoleCanManageMembers(membership.role);
@@ -89,18 +116,38 @@ export async function createWorkspace(userId: string, input: z.infer<typeof crea
 }
 
 export async function listWorkspaces(userId: string) {
-  const memberships = await prisma.workspaceMember.findMany({
-    where: {
-      userId,
-      status: "active"
-    },
-    include: {
-      workspace: true
-    },
-    orderBy: {
-      createdAt: "asc"
-    }
-  });
+  const [user, memberships] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        publishingAccessDisabled: true,
+        publishingAccessExpiresAt: true
+      }
+    }),
+    prisma.workspaceMember.findMany({
+      where: {
+        userId,
+        status: "active"
+      },
+      include: {
+        workspace: true
+      },
+      orderBy: {
+        createdAt: "asc"
+      }
+    })
+  ]);
+
+  if (!user) {
+    throw new HttpError(404, "User not found");
+  }
+
+  const now = new Date();
+  const publishingAccessStatus = user.publishingAccessDisabled
+    ? "disabled"
+    : user.publishingAccessExpiresAt && user.publishingAccessExpiresAt.getTime() <= now.getTime()
+      ? "expired"
+      : "active";
 
   return memberships.map((membership) => ({
     id: membership.workspace.id,
@@ -108,7 +155,9 @@ export async function listWorkspaces(userId: string) {
     slug: membership.workspace.slug,
     timezone: membership.workspace.timezone,
     plan: membership.workspace.plan,
-    role: membership.role
+    role: membership.role,
+    publishingAccessExpiresAt: user.publishingAccessExpiresAt,
+    publishingAccessStatus
   }));
 }
 

@@ -51,6 +51,40 @@ const worker = new Worker<PublishQueuePayload, unknown, typeof publishQueueJobNa
       return { skipped: true, reason: `schedule_status_${publishJob.schedule.status}` };
     }
 
+    const creator = await prisma.user.findUnique({
+      where: { id: publishJob.schedule.createdBy },
+      select: {
+        publishingAccessDisabled: true,
+        publishingAccessExpiresAt: true
+      }
+    });
+
+    if (
+      !creator ||
+      creator.publishingAccessDisabled ||
+      (creator.publishingAccessExpiresAt && creator.publishingAccessExpiresAt.getTime() <= Date.now())
+    ) {
+      await prisma.$transaction([
+        prisma.publishJob.update({
+          where: { id: publishJob.id },
+          data: {
+            status: "failed",
+            lastError: "创建人的测试发布权限已停用或到期，此排程未发布。"
+          }
+        }),
+        prisma.schedule.update({
+          where: { id: publishJob.scheduleId },
+          data: { status: "failed" }
+        }),
+        prisma.postVariant.update({
+          where: { id: publishJob.postVariantId },
+          data: { publishStatus: "failed" }
+        })
+      ]);
+
+      return { skipped: true, reason: "test_access_expired" };
+    }
+
     await prisma.$transaction([
       prisma.publishJob.update({
         where: { id: publishJob.id },

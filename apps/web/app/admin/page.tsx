@@ -36,12 +36,42 @@ function sessionStatus(user: AdminUser) {
   return "还没有登录会话";
 }
 
+function dateTimeLocalValue(value?: string | null) {
+  if (!value) {
+    return "";
+  }
+
+  const parts = dateFormatter.formatToParts(new Date(value));
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
+
+  return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`;
+}
+
+function accessStatusLabel(accessStatus: "active" | "disabled" | "expired") {
+  if (accessStatus === "expired") {
+    return "测试已到期";
+  }
+
+  if (accessStatus === "disabled") {
+    return "已停用";
+  }
+
+  return "使用中";
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
   const [data, setData] = useState<AdminUsersResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
+
+  async function loadAdminUsers(authToken: string) {
+    const result = await apiRequest<AdminUsersResponse>("/admin/users", { token: authToken });
+    setData(result);
+  }
 
   useEffect(() => {
     const storedToken = localStorage.getItem("social_scheduler_token");
@@ -52,8 +82,7 @@ export default function AdminPage() {
     }
 
     setToken(storedToken);
-    apiRequest<AdminUsersResponse>("/admin/users", { token: storedToken })
-      .then(setData)
+    loadAdminUsers(storedToken)
       .catch((requestError) => {
         setError(
           requestError instanceof Error
@@ -62,6 +91,45 @@ export default function AdminPage() {
         );
       });
   }, [router]);
+
+  async function updatePublishingAccess(
+    userId: string,
+    body: { publishingAccessDisabled?: boolean; publishingAccessExpiresAt?: string | null },
+    successMessage: string
+  ) {
+    if (!token) {
+      return;
+    }
+
+    setActionMessage(null);
+    setUpdatingUserId(userId);
+
+    try {
+      await apiRequest(`/admin/users/${userId}/publishing-access`, {
+        token,
+        method: "PATCH",
+        body
+      });
+      await loadAdminUsers(token);
+      setActionMessage(successMessage);
+    } catch (requestError) {
+      setActionMessage(requestError instanceof Error ? requestError.message : "保存失败，请重试。");
+    } finally {
+      setUpdatingUserId(null);
+    }
+  }
+
+  async function saveExpiry(event: React.FormEvent<HTMLFormElement>, userId: string) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const value = String(form.get("expiresAt") ?? "").trim();
+
+    await updatePublishingAccess(
+      userId,
+      { publishingAccessExpiresAt: value ? new Date(value).toISOString() : null },
+      value ? "测试截止时间已保存。" : "已取消测试截止时间。"
+    );
+  }
 
   const filteredUsers = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -148,6 +216,8 @@ export default function AdminPage() {
             />
           </section>
 
+          {actionMessage ? <p className="admin-action-message">{actionMessage}</p> : null}
+
           <section className="admin-user-list">
             {filteredUsers.map((user) => (
               <article className="admin-user-card" key={user.id}>
@@ -156,7 +226,13 @@ export default function AdminPage() {
                     <h3>{user.name}</h3>
                     <p>{user.email}</p>
                   </div>
-                  <span className="status-pill ready">账号正常</span>
+                  <span
+                    className={`status-pill ${
+                      user.publishingAccessStatus === "active" ? "ready" : "warning"
+                    }`}
+                  >
+                    发布权限：{accessStatusLabel(user.publishingAccessStatus)}
+                  </span>
                 </header>
 
                 <dl className="admin-user-facts">
@@ -179,6 +255,86 @@ export default function AdminPage() {
                     </dd>
                   </div>
                 </dl>
+
+                <section className="admin-tester-access">
+                  <div>
+                    <strong>测试人员发布权限</strong>
+                    <p className="muted">
+                      {user.publishingAccessExpiresAt
+                        ? `当前截止：${formatDate(user.publishingAccessExpiresAt)}（北京时间）`
+                        : "未设置截止时间，可长期发布。"}
+                    </p>
+                  </div>
+
+                  <form className="admin-expiry-form" onSubmit={(event) => saveExpiry(event, user.id)}>
+                    <label>
+                      <span>测试截止时间（北京时间）</span>
+                      <input
+                        defaultValue={dateTimeLocalValue(user.publishingAccessExpiresAt)}
+                        name="expiresAt"
+                        type="datetime-local"
+                      />
+                    </label>
+                    <button
+                      className="button secondary"
+                      disabled={updatingUserId === user.id}
+                      type="submit"
+                    >
+                      保存时间
+                    </button>
+                  </form>
+
+                  <div className="admin-access-actions">
+                    {user.publishingAccessStatus === "active" ? (
+                      <button
+                        className="button danger"
+                        disabled={updatingUserId === user.id}
+                        onClick={() => {
+                          if (window.confirm(`确定停用 ${user.email} 的发帖和排程权限吗？`)) {
+                            void updatePublishingAccess(
+                              user.id,
+                              { publishingAccessDisabled: true },
+                              "该测试人员已停用发布权限，仍可登录查看后台。"
+                            );
+                          }
+                        }}
+                        type="button"
+                      >
+                        立即停用发布
+                      </button>
+                    ) : user.publishingAccessStatus === "expired" ? (
+                      <button
+                        className="button"
+                        disabled={updatingUserId === user.id}
+                        onClick={() =>
+                          void updatePublishingAccess(
+                            user.id,
+                            { publishingAccessDisabled: false, publishingAccessExpiresAt: null },
+                            "该测试人员已恢复发布权限，截止时间已取消。"
+                          )
+                        }
+                        type="button"
+                      >
+                        恢复并取消到期
+                      </button>
+                    ) : (
+                      <button
+                        className="button"
+                        disabled={updatingUserId === user.id}
+                        onClick={() =>
+                          void updatePublishingAccess(
+                            user.id,
+                            { publishingAccessDisabled: false },
+                            "该测试人员已恢复发布权限。"
+                          )
+                        }
+                        type="button"
+                      >
+                        恢复发布
+                      </button>
+                    )}
+                  </div>
+                </section>
 
                 <div className="admin-workspace-list">
                   {user.workspaces.map((workspace) => (
@@ -205,6 +361,7 @@ export default function AdminPage() {
                           <em>暂无绑定渠道</em>
                         )}
                       </div>
+
                     </section>
                   ))}
                 </div>

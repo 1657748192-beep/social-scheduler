@@ -147,6 +147,15 @@ export function ComposerForm({ token, workspaces, copyPostId, initialWorkspaceId
   const unsupportedPublishingLabels = unsupportedPublishingPlatforms
     .map((platform) => platformLimits[platform].label)
     .join("、");
+  const publishingLocked =
+    selectedWorkspace?.publishingAccessStatus === "expired" ||
+    selectedWorkspace?.publishingAccessStatus === "disabled";
+
+  useEffect(() => {
+    if (publishingLocked && publishMode !== "draft") {
+      setPublishMode("draft");
+    }
+  }, [publishingLocked, publishMode]);
 
   useEffect(() => {
     if (!workspaceId) {
@@ -499,6 +508,7 @@ export function ComposerForm({ token, workspaces, copyPostId, initialWorkspaceId
           <>
             <MediaUploader
               description="上传一次后，默认会用于全部已选平台；每个平台都可以从共用素材复制一份再单独调整。"
+              disabled={publishingLocked}
               label="共用素材"
               media={sharedMedia}
               onMediaChange={setSharedMedia}
@@ -537,6 +547,7 @@ export function ComposerForm({ token, workspaces, copyPostId, initialWorkspaceId
             {selectedPlatforms.length && !activeMediaUsesShared ? (
               <MediaUploader
                 description={`这里只影响已选的 ${activePlatformLabel} 账号；可移除复制来的素材，或追加该平台专属图片和视频。`}
+                disabled={publishingLocked}
                 label={`${activePlatformLabel} 专属素材`}
                 media={platformMediaByPlatform[activePlatform]}
                 onMediaChange={(nextMedia) =>
@@ -578,6 +589,7 @@ export function ComposerForm({ token, workspaces, copyPostId, initialWorkspaceId
           <div className="publish-mode-toggle" role="group" aria-label="选择发布方式">
             <button
               className={publishMode === "now" ? "active" : ""}
+              disabled={publishingLocked}
               onClick={() => setPublishMode("now")}
               type="button"
             >
@@ -585,6 +597,7 @@ export function ComposerForm({ token, workspaces, copyPostId, initialWorkspaceId
             </button>
             <button
               className={publishMode === "scheduled" ? "active" : ""}
+              disabled={publishingLocked}
               onClick={() => setPublishMode("scheduled")}
               type="button"
             >
@@ -601,6 +614,11 @@ export function ComposerForm({ token, workspaces, copyPostId, initialWorkspaceId
           {publishMode === "scheduled" ? <SchedulePicker onChange={setScheduledAt} value={scheduledAt} /> : null}
           {publishMode === "now" ? <p className="muted">确认后会为每个已选账号分别入队并立即发布。</p> : null}
           {publishMode === "draft" ? <p className="muted">稍后可从内容日历继续安排发布时间。</p> : null}
+          {publishingLocked ? (
+            <p className="error">
+              测试权限已到期：可以登录、查看和保存草稿，但不能上传素材、立即发布或定时发布。
+            </p>
+          ) : null}
           {requiresDraftOnly ? (
             <p className="error">
               {unsupportedPublishingLabels} 暂不支持真实发布。请改为“保存草稿”，不要把它标记为已发布。

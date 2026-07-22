@@ -303,7 +303,14 @@ export async function getCurrentUser(userId: string) {
       slug: membership.workspace.slug,
       timezone: membership.workspace.timezone,
       plan: membership.workspace.plan,
-      role: membership.role
+      role: membership.role,
+      publishingAccessExpiresAt: user.publishingAccessExpiresAt,
+      publishingAccessStatus:
+        user.publishingAccessDisabled
+          ? "disabled"
+          : user.publishingAccessExpiresAt && user.publishingAccessExpiresAt.getTime() <= Date.now()
+            ? "expired"
+            : "active"
     }))
   };
 }

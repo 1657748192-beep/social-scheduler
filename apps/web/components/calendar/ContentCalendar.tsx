@@ -31,6 +31,10 @@ export function ContentCalendar({ token, workspaces }: ContentCalendarProps) {
   const [schedules, setSchedules] = useState<CalendarSchedule[]>([]);
   const [selectedSchedule, setSelectedSchedule] = useState<CalendarSchedule | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const selectedWorkspace = workspaces.find((workspace) => workspace.id === workspaceId);
+  const publishingLocked =
+    selectedWorkspace?.publishingAccessStatus === "expired" ||
+    selectedWorkspace?.publishingAccessStatus === "disabled";
 
   const range = useMemo(() => {
     if (view === "month") {
@@ -76,6 +80,11 @@ export function ContentCalendar({ token, workspaces }: ContentCalendarProps) {
   }, [workspaceId, rangeKey]);
 
   async function reschedule(scheduleId: string, targetDate: Date, mode: "day" | "hour") {
+    if (publishingLocked) {
+      setError("测试权限已到期，不能修改排程或发布内容。");
+      return;
+    }
+
     const schedule = schedules.find((item) => item.id === scheduleId);
 
     if (!schedule || schedule.status !== "scheduled") {
@@ -172,6 +181,7 @@ export function ContentCalendar({ token, workspaces }: ContentCalendarProps) {
         onUpdated={handleScheduleUpdated}
         schedule={selectedSchedule}
         token={token}
+        publishingLocked={publishingLocked}
         workspaceId={workspaceId}
       />
     </div>

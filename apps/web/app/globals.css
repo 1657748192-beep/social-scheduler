@@ -2868,6 +2868,71 @@ textarea {
   padding: 6px 9px;
 }
 
+.admin-action-message {
+  margin: 0;
+  border: 1px solid #9fd7b7;
+  border-radius: 8px;
+  background: #effaf3;
+  color: #167246;
+  font-weight: 700;
+  padding: 12px 14px;
+}
+
+.admin-tester-access {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(280px, 1.3fr) auto;
+  align-items: end;
+  gap: 12px;
+  border-top: 1px solid #e3eaf1;
+  margin-top: 4px;
+  padding-top: 12px;
+}
+
+.admin-tester-access strong {
+  font-size: 13px;
+}
+
+.admin-tester-access p {
+  margin-top: 4px;
+}
+
+.admin-expiry-form {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+}
+
+.admin-expiry-form label {
+  display: grid;
+  gap: 5px;
+  flex: 1;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-expiry-form input {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 0 10px;
+  color: var(--text);
+  font: inherit;
+}
+
+.admin-access-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.admin-access-actions .button,
+.admin-expiry-form .button {
+  min-height: 38px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+
 .admin-denied {
   max-width: 720px;
 }

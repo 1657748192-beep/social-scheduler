@@ -24,6 +24,7 @@ type MediaUploaderProps = {
   media: MediaAsset[];
   label: string;
   description: string;
+  disabled?: boolean;
   onMediaChange: (media: MediaAsset[]) => void;
 };
 
@@ -70,6 +71,7 @@ export function MediaUploader({
   media,
   label,
   description,
+  disabled = false,
   onMediaChange
 }: MediaUploaderProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -176,6 +178,10 @@ export function MediaUploader({
   }
 
   async function uploadMedia(event: ChangeEvent<HTMLInputElement>, type: UploadType) {
+    if (disabled) {
+      return;
+    }
+
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
 
@@ -231,7 +237,7 @@ export function MediaUploader({
       <div className="upload-actions">
         <input
           accept="image/*"
-          disabled={isUploading}
+          disabled={isUploading || disabled}
           multiple
           onChange={(event) => uploadMedia(event, "image")}
           ref={imageInputRef}
@@ -239,7 +245,7 @@ export function MediaUploader({
         />
         <input
           accept="video/*"
-          disabled={isUploading}
+          disabled={isUploading || disabled}
           multiple
           onChange={(event) => uploadMedia(event, "video")}
           ref={videoInputRef}
@@ -247,7 +253,7 @@ export function MediaUploader({
         />
         <button
           className="upload-drop"
-          disabled={isUploading}
+          disabled={isUploading || disabled}
           onClick={() => imageInputRef.current?.click()}
           type="button"
         >
@@ -256,7 +262,7 @@ export function MediaUploader({
         </button>
         <button
           className="upload-drop video"
-          disabled={isUploading}
+          disabled={isUploading || disabled}
           onClick={() => videoInputRef.current?.click()}
           type="button"
         >

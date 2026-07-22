@@ -119,6 +119,8 @@ export type AdminUser = {
   name: string;
   createdAt: string;
   updatedAt: string;
+  publishingAccessExpiresAt?: string | null;
+  publishingAccessStatus: "active" | "disabled" | "expired";
   password: {
     storedAs: "bcrypt_hash";
     viewable: false;
@@ -165,6 +167,8 @@ export type Workspace = {
   timezone: string;
   plan: string;
   role: "owner" | "admin" | "editor" | "viewer";
+  publishingAccessExpiresAt?: string | null;
+  publishingAccessStatus?: "active" | "disabled" | "expired";
 };
 
 export type WorkspaceMember = {

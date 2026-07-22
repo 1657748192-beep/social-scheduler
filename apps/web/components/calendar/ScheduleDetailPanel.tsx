@@ -17,6 +17,7 @@ type ScheduleDetailPanelProps = {
   onDeleted: (scheduleId: string) => void;
   onUpdated: (schedule: CalendarSchedule) => void;
   token: string;
+  publishingLocked?: boolean;
   workspaceId: string;
 };
 
@@ -26,6 +27,7 @@ export function ScheduleDetailPanel({
   onDeleted,
   onUpdated,
   token,
+  publishingLocked = false,
   workspaceId
 }: ScheduleDetailPanelProps) {
   const [text, setText] = useState("");
@@ -53,13 +55,14 @@ export function ScheduleDetailPanel({
   const scheduledAt = new Date(schedule.scheduledAt);
   const latestJob = schedule.publishJobs[0];
   const canEditSchedule = schedule.status === "scheduled";
+  const canModifySchedule = canEditSchedule && !publishingLocked;
   const canDeleteSchedule = schedule.status === "scheduled" || schedule.status === "failed";
   const minDateTime = toChinaDatetimeLocalValue(new Date(Date.now() + 60 * 1000));
 
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!schedule || !canEditSchedule) {
+    if (!schedule || !canModifySchedule) {
       return;
     }
 
@@ -172,7 +175,7 @@ export function ScheduleDetailPanel({
         </dd>
       </dl>
 
-      {canEditSchedule ? (
+      {canModifySchedule ? (
         <form className="schedule-edit-form" onSubmit={handleSave}>
           <label className="field">
             <span>任务内容</span>
@@ -213,7 +216,7 @@ export function ScheduleDetailPanel({
       ) : (
         <>
           <div className="detail-copy">{schedule.postVariant.text}</div>
-          {schedule.status === "failed" ? (
+          {canDeleteSchedule ? (
             <div className="schedule-edit-actions">
               <button
                 className="button danger-button"
@@ -221,8 +224,15 @@ export function ScheduleDetailPanel({
                 onClick={handleDelete}
                 type="button"
               >
-                {isDeleting ? "正在删除…" : "删除失败任务"}
+                {isDeleting
+                  ? "正在删除…"
+                  : schedule.status === "failed"
+                    ? "删除失败任务"
+                    : "删除任务"}
               </button>
+              {publishingLocked && schedule.status === "scheduled" ? (
+                <p className="muted">测试权限已到期，不能修改排程或发布内容。</p>
+              ) : null}
             </div>
           ) : (
             <p className="muted">此任务已完成，不能再修改或删除。</p>

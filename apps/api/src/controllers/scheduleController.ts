@@ -15,7 +15,7 @@ import {
   rescheduleSchema,
   retryPublishJob
 } from "../services/scheduleService";
-import { requireWorkspaceMembership } from "../services/workspaceService";
+import { requireWorkspacePublishingAccess } from "../services/workspaceService";
 
 const createDemoScheduleSchema = z.object({
   workspaceId: z.string().uuid(),
@@ -74,7 +74,7 @@ export async function retryPublishJobController(req: Request, res: Response) {
 
 export async function createDemoScheduleController(req: Request, res: Response) {
   const body = createDemoScheduleSchema.parse(req.body);
-  await requireWorkspaceMembership(req.user!.id, body.workspaceId);
+  await requireWorkspacePublishingAccess(req.user!.id, body.workspaceId);
 
   const post = await prisma.post.create({
     data: {

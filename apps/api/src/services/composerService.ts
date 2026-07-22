@@ -17,7 +17,7 @@ import {
   withResolvedMediaUrl
 } from "./mediaStorageService";
 import { enqueuePublishJobs } from "./scheduleService";
-import { requireWorkspaceMembership } from "./workspaceService";
+import { requireWorkspaceMembership, requireWorkspacePublishingAccess } from "./workspaceService";
 
 const writableRoles: WorkspaceRole[] = ["owner", "admin", "editor"];
 const maxPostTargets = 50;
@@ -183,7 +183,10 @@ export async function createComposerPost(
   workspaceId: string,
   input: z.infer<typeof createComposerPostSchema>
 ) {
-  const membership = await requireWorkspaceMembership(userId, workspaceId);
+  const membership =
+    input.scheduledAt || input.publishNow
+      ? await requireWorkspacePublishingAccess(userId, workspaceId)
+      : await requireWorkspaceMembership(userId, workspaceId);
   ensureCanWrite(membership.role);
 
   const allMediaIds = input.variants.flatMap((variant) => variant.mediaAssetIds);
@@ -375,7 +378,7 @@ export async function uploadWorkspaceMedia(
   workspaceId: string,
   file: Express.Multer.File
 ) {
-  const membership = await requireWorkspaceMembership(userId, workspaceId);
+  const membership = await requireWorkspacePublishingAccess(userId, workspaceId);
   ensureCanWrite(membership.role);
 
   if (config.MEDIA_STORAGE === "cos") {
@@ -431,7 +434,7 @@ export async function createCosMediaUploadIntent(
   workspaceId: string,
   input: z.infer<typeof prepareCosMediaUploadSchema>
 ) {
-  const membership = await requireWorkspaceMembership(userId, workspaceId);
+  const membership = await requireWorkspacePublishingAccess(userId, workspaceId);
   ensureCanWrite(membership.role);
   return prepareCosMediaUpload(workspaceId, userId, input);
 }
@@ -441,7 +444,7 @@ export async function completeCosMediaUploadIntent(
   workspaceId: string,
   input: z.infer<typeof completeCosMediaUploadSchema>
 ) {
-  const membership = await requireWorkspaceMembership(userId, workspaceId);
+  const membership = await requireWorkspacePublishingAccess(userId, workspaceId);
   ensureCanWrite(membership.role);
   return completeCosMediaUpload(workspaceId, userId, input.assetId);
 }

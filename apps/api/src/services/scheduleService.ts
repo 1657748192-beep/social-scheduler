@@ -10,7 +10,7 @@ import {
 import { isRealPublishingSupported } from "../integrations/social/registry";
 import { HttpError } from "../utils/errors";
 import { withResolvedMediaUrl } from "./mediaStorageService";
-import { requireWorkspaceMembership } from "./workspaceService";
+import { requireWorkspaceMembership, requireWorkspacePublishingAccess } from "./workspaceService";
 
 const writableRoles: WorkspaceRole[] = ["owner", "admin", "editor"];
 const activeScheduleStatuses = ["scheduled", "locked"] as const;
@@ -215,7 +215,7 @@ export async function createSchedule(
   workspaceId: string,
   input: z.infer<typeof createScheduleSchema>
 ) {
-  const membership = await requireWorkspaceMembership(userId, workspaceId);
+  const membership = await requireWorkspacePublishingAccess(userId, workspaceId);
   ensureCanSchedule(membership.role);
 
   const scheduledAt = parseFutureDate(input.scheduledAt);
@@ -364,7 +364,7 @@ export async function rescheduleSchedule(
   scheduleId: string,
   input: z.infer<typeof rescheduleSchema>
 ) {
-  const membership = await requireWorkspaceMembership(userId, workspaceId);
+  const membership = await requireWorkspacePublishingAccess(userId, workspaceId);
   ensureCanSchedule(membership.role);
 
   const scheduledAt = parseFutureDate(input.scheduledAt);
@@ -502,7 +502,7 @@ export async function cancelSchedule(userId: string, workspaceId: string, schedu
 }
 
 export async function publishNow(userId: string, workspaceId: string, scheduleId: string) {
-  const membership = await requireWorkspaceMembership(userId, workspaceId);
+  const membership = await requireWorkspacePublishingAccess(userId, workspaceId);
   ensureCanSchedule(membership.role);
 
   const schedule = await prisma.schedule.findFirst({
@@ -540,7 +540,7 @@ export async function publishNow(userId: string, workspaceId: string, scheduleId
 }
 
 export async function retryPublishJob(userId: string, workspaceId: string, publishJobId: string) {
-  const membership = await requireWorkspaceMembership(userId, workspaceId);
+  const membership = await requireWorkspacePublishingAccess(userId, workspaceId);
   ensureCanSchedule(membership.role);
 
   const publishJob = await prisma.publishJob.findFirst({

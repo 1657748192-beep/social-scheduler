@@ -102,6 +102,8 @@ model User {
   name         String
   createdAt    DateTime          @default(now()) @map("created_at")
   updatedAt    DateTime          @updatedAt @map("updated_at")
+  publishingAccessDisabled Boolean @default(false) @map("publishing_access_disabled")
+  publishingAccessExpiresAt DateTime? @map("publishing_access_expires_at")
   ownedSpaces  Workspace[]       @relation("WorkspaceOwner")
   memberships  WorkspaceMember[]
   posts        Post[]            @relation("PostAuthor")

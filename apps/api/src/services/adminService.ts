@@ -1,6 +1,25 @@
 import { config } from "../config";
 import { prisma } from "../prisma";
 import { HttpError } from "../utils/errors";
+import { z } from "zod";
+
+export const updateAdminPublishingAccessSchema = z
+  .object({
+    publishingAccessDisabled: z.boolean().optional(),
+    publishingAccessExpiresAt: z.string().datetime({ offset: true }).nullable().optional()
+  })
+  .refine(
+    (value) =>
+      value.publishingAccessDisabled !== undefined || value.publishingAccessExpiresAt !== undefined,
+    {
+      message: "Provide a status or expiry time"
+    }
+  )
+  .refine(
+    (value) =>
+      !value.publishingAccessExpiresAt || new Date(value.publishingAccessExpiresAt).getTime() > Date.now(),
+    "The expiry time must be in the future"
+  );
 
 function configuredAdminEmails() {
   return new Set(
@@ -105,6 +124,12 @@ export async function listAdminUsers(requesterEmail: string) {
         name: user.name,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
+        publishingAccessExpiresAt: user.publishingAccessExpiresAt,
+        publishingAccessStatus: user.publishingAccessDisabled
+          ? "disabled"
+          : user.publishingAccessExpiresAt && user.publishingAccessExpiresAt.getTime() <= now.getTime()
+            ? "expired"
+            : "active",
         password: {
           storedAs: "bcrypt_hash",
           viewable: false,
@@ -145,4 +170,49 @@ export async function listAdminUsers(requesterEmail: string) {
       };
     })
   };
+}
+
+export async function updateAdminPublishingAccess(
+  requesterEmail: string,
+  userId: string,
+  input: z.infer<typeof updateAdminPublishingAccessSchema>
+) {
+  assertAdmin(requesterEmail);
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true
+    }
+  });
+
+  if (!user) {
+    throw new HttpError(404, "User not found");
+  }
+
+  if (configuredAdminEmails().has(user.email.toLowerCase())) {
+    throw new HttpError(400, "System administrators cannot be limited here");
+  }
+
+  return prisma.user.update({
+    where: { id: user.id },
+    data: {
+      ...(input.publishingAccessDisabled !== undefined
+        ? { publishingAccessDisabled: input.publishingAccessDisabled }
+        : {}),
+      ...(input.publishingAccessExpiresAt !== undefined
+        ? {
+            publishingAccessExpiresAt: input.publishingAccessExpiresAt
+              ? new Date(input.publishingAccessExpiresAt)
+              : null
+          }
+        : {})
+    },
+    select: {
+      id: true,
+      publishingAccessDisabled: true,
+      publishingAccessExpiresAt: true
+    }
+  });
 }
