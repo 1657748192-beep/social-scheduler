@@ -3247,6 +3247,19 @@ textarea {
   white-space: nowrap;
 }
 
+.published-post-footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.published-post-link-unavailable {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
 .published-post-empty {
   display: grid;
   justify-items: start;

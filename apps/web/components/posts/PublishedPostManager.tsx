@@ -192,16 +192,21 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
                   </div>
                 </dl>
                 <div className="published-post-footer">
-                  {post.providerPermalink ? (
-                    <a href={post.providerPermalink} rel="noreferrer" target="_blank">
-                      查看平台原帖 ↗
-                    </a>
-                  ) : (
-                    <span>平台未返回原帖链接</span>
-                  )}
-                  <Link className="button" href={composerUrl}>
-                    复制到发布页
-                  </Link>
+                  <span>发布记录与原始素材可复制后再次编辑。</span>
+                  <div className="published-post-footer-actions">
+                    {post.providerPermalink ? (
+                      <a className="button secondary" href={post.providerPermalink} rel="noreferrer" target="_blank">
+                        打开已发布内容 ↗
+                      </a>
+                    ) : (
+                      <span aria-disabled="true" className="button secondary published-post-link-unavailable">
+                        发布链接不可用
+                      </span>
+                    )}
+                    <Link className="button" href={composerUrl}>
+                      复制到发布页
+                    </Link>
+                  </div>
                 </div>
               </div>
             </article>
