@@ -4,10 +4,10 @@
 
 ### P0-1 修复 Instagram OAuth redirect_uri / scope 环境变量不一致
 
-- 任务内容：确认 Instagram 授权 URL 和 token exchange 使用完全相同的 `redirect_uri`，并修复 `INSTAGRAM_SCOPES` 为空但 `INSTAGRAM_OAUTH_SCOPES` 有值的问题。
+- 任务内容：确认 Instagram 授权 URL 和 token exchange 使用完全相同的 `redirect_uri`，并统一使用唯一的 `INSTAGRAM_OAUTH_SCOPES` 配置。
 - 涉及文件：`apps/api/src/integrations/oauth/`、`docker-compose.yml`、`docker-compose.server.yml`、`scripts/deploy-server.sh`、`.env.example`。
-- 当前状态：阻塞中，线上仍可能报 `OAuth token exchange failed` 和 `redirect_uri is identical`。
-- 完成标准：容器内两个 scope 变量均有值；Instagram 授权可完成并在 `social_accounts` 写入真实账号。
+- 当前状态：代码已使用唯一的 `INSTAGRAM_OAUTH_SCOPES`，授权 URL 与 token exchange 复用 OAuth state 中同一个 `redirect_uri`。部署脚本会检查 API/worker 容器中的实际回调 URL、scope 和凭证状态；仍需完成一次线上真实授权验证。
+- 完成标准：API/worker 容器中 `INSTAGRAM_OAUTH_SCOPES` 有值；Instagram 授权可完成并在 `social_accounts` 写入真实账号。
 - 依赖条件：Meta Instagram API 后台回调 URL 正确，测试账号/管理员权限正确。
 
 ### P0-2 确认敏感信息没有提交到 Git

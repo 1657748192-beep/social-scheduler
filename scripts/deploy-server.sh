@@ -130,9 +130,14 @@ prepare_env() {
   ensure_env_value TOKEN_ENCRYPTION_KEY "$(random_hex 32)"
   ensure_env_value FACEBOOK_CLIENT_ID "${FACEBOOK_CLIENT_ID:-1743484710132300}"
   force_env_value FACEBOOK_OAUTH_SCOPES "public_profile,pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_metadata"
+  ensure_env_value INSTAGRAM_OAUTH_SCOPES "${INSTAGRAM_OAUTH_SCOPES:-instagram_business_basic,instagram_business_content_publish}"
 
   if is_missing_or_placeholder "$(env_value FACEBOOK_CLIENT_SECRET)"; then
     log "WARNING: FACEBOOK_CLIENT_SECRET is empty or still a placeholder. Facebook OAuth will not work until it is set in $WORK_DIR/.env"
+  fi
+
+  if is_missing_or_placeholder "$(env_value INSTAGRAM_CLIENT_ID)" || is_missing_or_placeholder "$(env_value INSTAGRAM_CLIENT_SECRET)"; then
+    log "WARNING: INSTAGRAM_CLIENT_ID or INSTAGRAM_CLIENT_SECRET is empty or still a placeholder. Instagram OAuth will not work until both are set in $WORK_DIR/.env"
   fi
 }
 
@@ -169,6 +174,28 @@ PY
   docker exec -i social_scheduler_postgres psql -U "$db_user" -d postgres -v ON_ERROR_STOP=1 -c "$sql"
 }
 
+verify_instagram_oauth_environment() {
+  for container in social_scheduler_api social_scheduler_worker; do
+    log "Checking Instagram OAuth configuration in $container"
+    docker exec "$container" node -e '
+      const baseUrl = (process.env.API_PUBLIC_URL || "").replace(/\/+$/, "");
+      const scopes = (process.env.INSTAGRAM_OAUTH_SCOPES || "")
+        .split(/[,\s]+/)
+        .map((scope) => scope.trim())
+        .filter(Boolean);
+
+      if (!baseUrl || !scopes.length) {
+        console.error("Instagram OAuth configuration is incomplete: API_PUBLIC_URL and INSTAGRAM_OAUTH_SCOPES are required.");
+        process.exit(1);
+      }
+
+      console.log(`Instagram OAuth redirect URI: ${baseUrl}/api/v1/integrations/instagram/oauth/callback`);
+      console.log(`Instagram OAuth scopes: ${scopes.join(",")}`);
+      console.log(`Instagram OAuth client credentials: ${process.env.INSTAGRAM_CLIENT_ID && process.env.INSTAGRAM_CLIENT_SECRET ? "configured" : "missing"}`);
+    '
+  done
+}
+
 deploy() {
   cd "$WORK_DIR"
 
@@ -183,20 +210,25 @@ deploy() {
   log "Starting services"
   compose up -d postgres redis api worker web reverse-proxy
 
+  verify_instagram_oauth_environment
+
   log "Container status"
   compose ps
 
   log "Waiting for API health"
+  local health_base_url health_url health_response
+  health_base_url="$(env_value PUBLIC_API_URL)"
+  health_url="${health_base_url%/}/api/v1/health"
   for _ in $(seq 1 60); do
-    if curl -fsS "https://app.bufferhelp.com/api/v1/health"; then
-      echo
+    if health_response="$(curl --connect-timeout 5 --max-time 15 -fsS "$health_url" 2>/dev/null)"; then
+      printf '%s\n' "$health_response"
       log "DEPLOY_OK"
       return
     fi
     sleep 3
   done
 
-  log "API did not become healthy. Recent logs:"
+  log "API did not become healthy at $health_url. Recent logs:"
   docker logs --tail=160 social_scheduler_api || true
   exit 1
 }

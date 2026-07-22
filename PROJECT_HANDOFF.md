@@ -162,9 +162,8 @@ D:\社媒
 历史排查发现：
 
 - Meta 后台已填写 `https://app.bufferhelp.com/api/v1/integrations/instagram/oauth/callback`。
-- 服务器容器内曾出现 `INSTAGRAM_SCOPES=` 为空，但 `INSTAGRAM_OAUTH_SCOPES=instagram_business_basic,instagram_business_content_publish` 有值。
-- 需要优先检查代码到底读取 `INSTAGRAM_SCOPES` 还是 `INSTAGRAM_OAUTH_SCOPES`，以及 Docker Compose 是否把变量注入 API/worker 容器。
-- 需要检查授权 URL 中的 `redirect_uri` 和 token exchange 使用的 `redirect_uri` 是否字节级一致，包括协议、域名、路径、斜杠、URL 编码。
+- 当前代码只读取 `INSTAGRAM_OAUTH_SCOPES`；`INSTAGRAM_SCOPES` 是旧变量，不应再配置。部署脚本会输出 API/worker 容器的实际 scope、回调 URL 和凭证是否已配置（不会输出 Secret）。
+- 授权 URL 生成时将 `redirect_uri` 写入 OAuth state，token exchange 复用 state 中保存的同一字符串，因此同一次授权的回调 URL 保持字节级一致。
 
 ### Facebook
 
@@ -214,19 +213,16 @@ D:\社媒
 
 ## 10. 当前正在开发到哪一步
 
-当前阶段不是新功能开发，而是交接整理。上一轮主要卡点是 Instagram OAuth 一键授权绑定。已经尝试过 Meta 后台配置、环境变量修正、部署重启，但容器内 `INSTAGRAM_SCOPES` 仍为空，授权回调仍报 redirect_uri/token exchange 错误。
+当前阶段优先处理 Instagram OAuth 一键授权绑定。代码和部署已统一使用 `INSTAGRAM_OAUTH_SCOPES`，并在部署后验证运行中容器的实际回调 URL 与 scope；下一步是上线后进行一次全新的真实授权。
 
 ## 11. 下一步最应该做什么
 
 新 Codex 第一优先级：不要继续盲目改 Meta 后台。先在代码里完整追踪 Instagram OAuth：
 
-1. 找到 Instagram provider 配置读取哪些环境变量。
-2. 打印或测试生成的授权 URL 中 `redirect_uri` 和 `scope`。
-3. 打印或测试 token exchange 请求中的 `redirect_uri`。
-4. 确认两者完全一致。
-5. 修复 `INSTAGRAM_SCOPES` / `INSTAGRAM_OAUTH_SCOPES` 命名不一致。
-6. 部署后用容器内命令确认变量已经进入 API 进程。
-7. 再重新从软件“添加账号”按钮开始授权，不能复用旧的 Meta 回调 URL。
+1. 将最新代码推送到 GitHub，并在服务器执行部署脚本。
+2. 确认部署输出中的 Instagram callback URL 为 `https://app.bufferhelp.com/api/v1/integrations/instagram/oauth/callback`，scope 为 `instagram_business_basic,instagram_business_content_publish`，凭证状态为 `configured`。
+3. 再从软件“添加账号”按钮发起一次全新的授权，不能复用旧的授权链接或 callback URL。
+4. 如仍失败，保存新的 Meta 错误信息和时间点，再检查 Meta 后台的测试人员角色及回调 URL。
 
 ## 12. 功能开发优先级
 
@@ -308,7 +304,7 @@ https://app.bufferhelp.com/api/v1/integrations/{platform}/oauth/callback
 - `PUBLIC_API_URL` / `API_PUBLIC_URL`
 - `PUBLIC_WEB_URL` / `WEB_APP_URL`
 - `FACEBOOK_CLIENT_ID` / `FACEBOOK_CLIENT_SECRET` / `FACEBOOK_LOGIN_CONFIG_ID` / `FACEBOOK_OAUTH_SCOPES`
-- `INSTAGRAM_CLIENT_ID` / `INSTAGRAM_CLIENT_SECRET` / `INSTAGRAM_SCOPES` / `INSTAGRAM_OAUTH_SCOPES`
+- `INSTAGRAM_CLIENT_ID` / `INSTAGRAM_CLIENT_SECRET` / `INSTAGRAM_OAUTH_SCOPES`
 - `YOUTUBE_CLIENT_ID` / `YOUTUBE_CLIENT_SECRET` / `YOUTUBE_OAUTH_SCOPES`
 - 其他平台 client id/secret 预留
 
@@ -435,16 +431,14 @@ npm run dev
 
 ## 24. 需要新的 Codex 优先检查的内容
 
-1. `apps/api/src/integrations/oauth/` 中 Instagram provider 读取的 scope env 名称。
-2. `docker-compose.yml` 和 `docker-compose.server.yml` 是否把 `INSTAGRAM_SCOPES` 注入 API/worker。
-3. `scripts/deploy-server.sh` 是否覆盖或丢失 `.env` 中的 Instagram 变量。
-4. Instagram 授权 URL 和 token exchange 中 `redirect_uri` 是否完全一致。
-5. `.env` 是否重复定义变量，后定义是否覆盖前定义。
-6. Facebook/YouTube 是否仍有模拟发布分支残留。
-7. 排程日历编辑/删除是否已实现并可用。
-8. 管理后台是否只允许 `ADMIN_EMAILS`，并且不会泄露密码。
-9. `.env.example` 是否跟代码实际读取的环境变量保持一致。
-10. Git 是否误提交过 `.env` 或真实 secret，如有需要立即 rotate。
+1. 部署输出是否确认 API/worker 的 `INSTAGRAM_OAUTH_SCOPES`、callback URL、凭证状态均正确。
+2. Instagram 授权 URL 和 token exchange 是否均复用 OAuth state 中保存的 `redirect_uri`。
+3. `.env` 是否重复定义变量，后定义是否覆盖前定义。
+4. Facebook/YouTube 是否仍有模拟发布分支残留。
+5. 排程日历编辑/删除是否已实现并可用。
+6. 管理后台是否只允许 `ADMIN_EMAILS`，并且不会泄露密码。
+7. `.env.example` 是否跟代码实际读取的环境变量保持一致。
+8. Git 是否误提交过 `.env` 或真实 secret，如有需要立即 rotate。
 
 ## 25. 交接备注
 
