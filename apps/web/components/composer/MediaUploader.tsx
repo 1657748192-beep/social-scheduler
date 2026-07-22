@@ -77,6 +77,7 @@ export function MediaUploader({
   const mediaRef = useRef(media);
   const [uploadingType, setUploadingType] = useState<UploadType | null>(null);
   const [uploadItems, setUploadItems] = useState<UploadItem[]>([]);
+  const [previewAsset, setPreviewAsset] = useState<MediaAsset | null>(null);
 
   useEffect(() => {
     mediaRef.current = media;
@@ -293,28 +294,72 @@ export function MediaUploader({
 
       {media.length ? (
         <div className="media-grid">
-          {media.map((asset) => (
-            <button
-              className="media-thumb"
-              key={asset.id}
-              onClick={() => removeMedia(asset.id)}
-              title="点击移除素材"
-              type="button"
-            >
-              {asset.mimeType.startsWith("video/") ? (
-                <>
-                  <video muted preload="metadata" src={asset.fileUrl} />
-                  <span className="media-badge">视频</span>
-                </>
-              ) : (
-                <img alt="" src={asset.fileUrl} />
-              )}
-            </button>
-          ))}
+          {media.map((asset) => {
+            const isVideo = asset.mimeType.startsWith("video/");
+
+            return (
+              <article className="media-thumb" key={asset.id}>
+                <div className="media-thumb-visual">
+                  {isVideo ? (
+                    <>
+                      <video muted preload="metadata" src={asset.fileUrl} />
+                      <span className="media-badge">视频</span>
+                    </>
+                  ) : (
+                    <img alt="图片素材缩略图" src={asset.fileUrl} />
+                  )}
+                </div>
+                <div className="media-thumb-footer">
+                  <span>{isVideo ? "视频素材" : "图片素材"}</span>
+                  <div className="media-thumb-actions">
+                    <button onClick={() => setPreviewAsset(asset)} type="button">
+                      {isVideo ? "观看视频" : "预览图片"}
+                    </button>
+                    <button className="media-remove" onClick={() => removeMedia(asset.id)} type="button">
+                      移除
+                    </button>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
         </div>
       ) : (
-        <p className="upload-hint">上传后会显示缩略图；点击缩略图可移除素材。</p>
+        <p className="upload-hint">上传后会显示缩略图；可预览素材或将其移除。</p>
       )}
+
+      {previewAsset ? (
+        <div
+          className="media-preview-backdrop"
+          onClick={() => setPreviewAsset(null)}
+          role="presentation"
+        >
+          <section
+            aria-label={previewAsset.mimeType.startsWith("video/") ? "视频预览" : "图片预览"}
+            aria-modal="true"
+            className="media-preview-dialog"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <header className="media-preview-header">
+              <div>
+                <p className="section-kicker">素材预览</p>
+                <h2>{previewAsset.mimeType.startsWith("video/") ? "观看视频" : "预览图片"}</h2>
+              </div>
+              <button aria-label="关闭预览" onClick={() => setPreviewAsset(null)} type="button">
+                ×
+              </button>
+            </header>
+            <div className="media-preview-content">
+              {previewAsset.mimeType.startsWith("video/") ? (
+                <video autoPlay controls playsInline preload="metadata" src={previewAsset.fileUrl} />
+              ) : (
+                <img alt="图片素材预览" src={previewAsset.fileUrl} />
+              )}
+            </div>
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 }
