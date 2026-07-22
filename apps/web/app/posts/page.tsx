@@ -3,22 +3,16 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "../../components/AppShell";
+import { PublishedPostManager } from "../../components/posts/PublishedPostManager";
 import { apiRequest, type Workspace } from "../../lib/api";
-import { ComposerForm } from "../../components/composer/ComposerForm";
 
-export default function ComposerPage() {
+export default function PostsPage() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [copyPostId, setCopyPostId] = useState<string | null>(null);
-  const [initialWorkspaceId, setInitialWorkspaceId] = useState<string | null>(null);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    setCopyPostId(params.get("copyPostId"));
-    setInitialWorkspaceId(params.get("workspaceId"));
-
     const storedToken = localStorage.getItem("social_scheduler_token");
 
     if (!storedToken) {
@@ -35,20 +29,13 @@ export default function ComposerPage() {
   }, [router]);
 
   return (
-    <AppShell title="内容编辑" subtitle="草稿、多平台版本、图片/视频素材与定时发布" wide>
+    <AppShell title="帖子管理" subtitle="查看已发布内容，一键复制后微调并再次发布" wide>
       {error ? <p className="error">{error}</p> : null}
-      {token && workspaces.length ? (
-        <ComposerForm
-          copyPostId={copyPostId}
-          initialWorkspaceId={initialWorkspaceId}
-          token={token}
-          workspaces={workspaces}
-        />
-      ) : null}
+      {token && workspaces.length ? <PublishedPostManager token={token} workspaces={workspaces} /> : null}
       {token && !workspaces.length ? (
         <section className="panel">
           <h1>暂无工作区</h1>
-          <p className="muted">请先在控制台创建工作区，再开始编辑内容。</p>
+          <p className="muted">请先创建工作区，再查看帖子管理。</p>
         </section>
       ) : null}
     </AppShell>

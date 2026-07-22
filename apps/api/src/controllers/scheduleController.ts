@@ -7,6 +7,7 @@ import {
   createSchedule,
   createScheduleSchema,
   getSchedule,
+  listPublishedPosts,
   listSchedules,
   listSchedulesSchema,
   publishNow,
@@ -33,6 +34,11 @@ export async function listSchedulesController(req: Request, res: Response) {
   const query = listSchedulesSchema.parse(req.query);
   const schedules = await listSchedules(req.user!.id, req.params.workspaceId, query);
   return res.json(schedules);
+}
+
+export async function listPublishedPostsController(req: Request, res: Response) {
+  const posts = await listPublishedPosts(req.user!.id, req.params.workspaceId);
+  return res.json(posts);
 }
 
 export async function getScheduleController(req: Request, res: Response) {

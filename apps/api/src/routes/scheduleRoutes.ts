@@ -4,6 +4,7 @@ import {
   createDemoScheduleController,
   createScheduleController,
   getScheduleController,
+  listPublishedPostsController,
   listSchedulesController,
   publishNowController,
   rescheduleScheduleController,
@@ -15,6 +16,11 @@ import { asyncHandler } from "../utils/asyncHandler";
 export const scheduleRoutes = Router();
 
 scheduleRoutes.post("/schedules/demo", requireAuth, asyncHandler(createDemoScheduleController));
+scheduleRoutes.get(
+  "/workspaces/:workspaceId/published-posts",
+  requireAuth,
+  asyncHandler(listPublishedPostsController)
+);
 scheduleRoutes.get(
   "/workspaces/:workspaceId/schedules",
   requireAuth,

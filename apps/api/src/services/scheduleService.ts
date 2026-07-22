@@ -61,6 +61,45 @@ const scheduleInclude = {
   }
 };
 
+const publishedPostInclude = {
+  postVariant: {
+    include: {
+      post: {
+        select: {
+          id: true,
+          title: true,
+          baseText: true
+        }
+      },
+      socialAccount: {
+        select: {
+          id: true,
+          displayName: true,
+          platform: true,
+          avatarUrl: true
+        }
+      },
+      media: {
+        include: {
+          mediaAsset: true
+        },
+        orderBy: {
+          sortOrder: "asc" as const
+        }
+      }
+    }
+  },
+  publishJobs: {
+    where: {
+      status: "succeeded" as const
+    },
+    orderBy: {
+      updatedAt: "desc" as const
+    },
+    take: 1
+  }
+};
+
 function ensureCanSchedule(role: WorkspaceRole) {
   if (!writableRoles.includes(role)) {
     throw new HttpError(403, "Viewer role cannot schedule or publish content");
@@ -254,6 +293,43 @@ export async function listSchedules(
   });
 
   return schedules.map((schedule) => resolveScheduleMediaUrls(schedule));
+}
+
+export async function listPublishedPosts(userId: string, workspaceId: string) {
+  await requireWorkspaceMembership(userId, workspaceId);
+
+  const schedules = await prisma.schedule.findMany({
+    where: {
+      workspaceId,
+      status: "published"
+    },
+    include: publishedPostInclude,
+    orderBy: {
+      updatedAt: "desc"
+    },
+    take: 100
+  });
+
+  return schedules.map((schedule) => {
+    const publishJob = schedule.publishJobs[0];
+
+    return {
+      id: schedule.id,
+      postId: schedule.postVariant.post.id,
+      title: schedule.postVariant.post.title,
+      baseText: schedule.postVariant.post.baseText,
+      scheduledAt: schedule.scheduledAt,
+      publishedAt: publishJob?.updatedAt ?? schedule.updatedAt,
+      platform: schedule.postVariant.platform,
+      text: schedule.postVariant.text,
+      socialAccount: schedule.postVariant.socialAccount,
+      media: schedule.postVariant.media.map((item) => ({
+        ...item,
+        mediaAsset: withResolvedMediaUrl(item.mediaAsset)
+      })),
+      providerPermalink: publishJob?.providerPermalink ?? null
+    };
+  });
 }
 
 export async function getSchedule(userId: string, workspaceId: string, scheduleId: string) {

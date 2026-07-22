@@ -22,7 +22,8 @@ type AppShellProps = {
 const navItems = [
   { href: "/dashboard", label: "控制台", helper: "工作区与渠道" },
   { href: "/composer", label: "内容编辑", helper: "文案与素材" },
-  { href: "/calendar", label: "排程日历", helper: "周/月计划" }
+  { href: "/calendar", label: "排程日历", helper: "周/月计划" },
+  { href: "/posts", label: "帖子管理", helper: "已发布与复用" }
 ];
 
 type SidebarProvider = Pick<

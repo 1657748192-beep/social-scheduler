@@ -282,6 +282,50 @@ export type MediaAsset = {
   createdAt: string;
 };
 
+export type ComposerPostVariant = {
+  id: string;
+  socialAccountId?: string | null;
+  platform: ComposerPlatform;
+  text: string;
+  publishStatus: string;
+  media: Array<{
+    id: string;
+    sortOrder: number;
+    mediaAsset: MediaAsset;
+  }>;
+};
+
+export type ComposerPostDetail = ComposerPost & {
+  workspaceId: string;
+  title?: string | null;
+  baseText: string;
+  workflowStatus: string;
+  variants: ComposerPostVariant[];
+};
+
+export type PublishedPost = {
+  id: string;
+  postId: string;
+  title?: string | null;
+  baseText: string;
+  scheduledAt: string;
+  publishedAt: string;
+  platform: ComposerPlatform;
+  text: string;
+  socialAccount?: {
+    id: string;
+    displayName: string;
+    platform: ComposerPlatform;
+    avatarUrl?: string | null;
+  } | null;
+  media: Array<{
+    id: string;
+    sortOrder: number;
+    mediaAsset: MediaAsset;
+  }>;
+  providerPermalink?: string | null;
+};
+
 export type CosUploadIntent = {
   assetId: string;
   key: string;
@@ -298,7 +342,7 @@ export type CosUploadIntent = {
 
 export type ComposerPost = {
   id: string;
-  title?: string;
+  title?: string | null;
   baseText: string;
   workflowStatus: string;
   createdAt: string;

@@ -5,6 +5,7 @@ import {
   apiRequest,
   type ComposerPlatform,
   type ComposerPost,
+  type ComposerPostDetail,
   type MediaAsset,
   type SocialAccount,
   type Workspace
@@ -23,6 +24,8 @@ import { TextInsertToolbar } from "./TextInsertToolbar";
 type ComposerFormProps = {
   token: string;
   workspaces: Workspace[];
+  copyPostId?: string | null;
+  initialWorkspaceId?: string | null;
 };
 
 const allComposerPlatforms: ComposerPlatform[] = [
@@ -57,8 +60,8 @@ function createPlatformMediaSourceMap(): Record<ComposerPlatform, MediaSource> {
   }, {} as Record<ComposerPlatform, MediaSource>);
 }
 
-export function ComposerForm({ token, workspaces }: ComposerFormProps) {
-  const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? "");
+export function ComposerForm({ token, workspaces, copyPostId, initialWorkspaceId }: ComposerFormProps) {
+  const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId || workspaces[0]?.id || "");
   const [title, setTitle] = useState("");
   const [baseText, setBaseText] = useState("");
   const [baseWebsite, setBaseWebsite] = useState("");
@@ -85,7 +88,15 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
   const [result, setResult] = useState<ComposerPost | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [copyNotice, setCopyNotice] = useState<string | null>(null);
   const baseTextAreaRef = useRef<HTMLTextAreaElement>(null);
+  const copiedPostRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (initialWorkspaceId && workspaces.some((workspace) => workspace.id === initialWorkspaceId)) {
+      setWorkspaceId(initialWorkspaceId);
+    }
+  }, [initialWorkspaceId, workspaces]);
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === workspaceId),
@@ -145,8 +156,15 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
     setPlatformMediaByPlatform(createPlatformMediaMap());
     setMediaSourceByPlatform(createPlatformMediaSourceMap());
 
-    apiRequest<SocialAccount[]>(`/workspaces/${workspaceId}/social-accounts`, { token })
-      .then((accounts) => {
+    async function loadAccountsAndCopiedPost() {
+      try {
+        const [accounts, copiedPost] = await Promise.all([
+          apiRequest<SocialAccount[]>(`/workspaces/${workspaceId}/social-accounts`, { token }),
+          copyPostId
+            ? apiRequest<ComposerPostDetail>(`/workspaces/${workspaceId}/composer/posts/${copyPostId}`, { token })
+            : Promise.resolve(null)
+        ]);
+
         if (cancelled) {
           return;
         }
@@ -157,10 +175,65 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
         );
 
         setSocialAccounts(accounts);
-        setSelectedAccountIds(active.map((account) => account.id));
-        setActivePlatform(activePlatforms[0] ?? "facebook");
-      })
-      .catch((requestError) => {
+
+        const copiedPostKey = copyPostId ? `${workspaceId}:${copyPostId}` : null;
+
+        if (copiedPost && copiedPostKey && copiedPostRef.current !== copiedPostKey) {
+          const reusableVariants = copiedPost.variants.filter(
+            (variant) =>
+              Boolean(variant.socialAccountId) &&
+              active.some((account) => account.id === variant.socialAccountId)
+          );
+          const sharedVariant = reusableVariants[0] ?? copiedPost.variants[0];
+          const sharedAssets = sharedVariant?.media.map((item) => item.mediaAsset) ?? [];
+          const nextPlatformMedia = createPlatformMediaMap();
+          const nextMediaSources = createPlatformMediaSourceMap();
+          const nextTexts = createVariantTextMap(copiedPost.baseText);
+          const sharedAssetIds = sharedAssets.map((asset) => asset.id).join(":");
+
+          for (const platform of allComposerPlatforms) {
+            const variant = copiedPost.variants.find((item) => item.platform === platform);
+
+            if (!variant) {
+              continue;
+            }
+
+            const assets = variant.media.map((item) => item.mediaAsset);
+            nextTexts[platform] = variant.text;
+
+            if (assets.map((asset) => asset.id).join(":") !== sharedAssetIds) {
+              nextPlatformMedia[platform] = assets;
+              nextMediaSources[platform] = "custom";
+            }
+          }
+
+          setTitle(copiedPost.title ?? "");
+          setBaseText(copiedPost.baseText);
+          setBaseWebsite("");
+          setVariantTexts(nextTexts);
+          setVariantWebsites(createVariantTextMap());
+          setSharedMedia(sharedAssets);
+          setPlatformMediaByPlatform(nextPlatformMedia);
+          setMediaSourceByPlatform(nextMediaSources);
+          setSelectedAccountIds(
+            reusableVariants.flatMap((variant) => (variant.socialAccountId ? [variant.socialAccountId] : []))
+          );
+          setActivePlatform(reusableVariants[0]?.platform ?? activePlatforms[0] ?? "facebook");
+          setScheduledAt("");
+          setPublishMode("draft");
+          setResult(null);
+          setCopyNotice(
+            reusableVariants.length
+              ? "已复制原帖内容、素材和可用账号。现在可微调后重新发布。"
+              : "已复制原帖内容和素材；原发布账号目前不可用，请重新选择账号后发布。"
+          );
+          copiedPostRef.current = copiedPostKey;
+        } else {
+          setSelectedAccountIds(active.map((account) => account.id));
+          setActivePlatform(activePlatforms[0] ?? "facebook");
+          setCopyNotice(null);
+        }
+      } catch (requestError) {
         if (cancelled) {
           return;
         }
@@ -168,17 +241,19 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
         setSocialAccounts([]);
         setSelectedAccountIds([]);
         setAccountError(requestError instanceof Error ? requestError.message : "无法读取已连接账号");
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) {
           setAccountsLoading(false);
         }
-      });
+      }
+    }
+
+    void loadAccountsAndCopiedPost();
 
     return () => {
       cancelled = true;
     };
-  }, [token, workspaceId]);
+  }, [copyPostId, token, workspaceId]);
 
   useEffect(() => {
     if (selectedPlatforms.length && !selectedPlatforms.includes(activePlatform)) {
@@ -322,6 +397,7 @@ export function ComposerForm({ token, workspaces }: ComposerFormProps) {
   return (
     <form className="composer-layout multi-account-composer" onSubmit={savePost}>
       <main className="composer-main">
+        {copyNotice ? <p className="success-message composer-copy-notice">{copyNotice}</p> : null}
         <AccountTargetSelector
           accounts={activeAccounts}
           loading={accountsLoading}
