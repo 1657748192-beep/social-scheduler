@@ -5,6 +5,7 @@ export type PublishInput = {
   socialAccountId: string;
   platform: Platform;
   text: string;
+  platformPayload: Prisma.JsonValue;
   media: PublishMediaAsset[];
   idempotencyKey: string;
 };

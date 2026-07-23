@@ -3,6 +3,7 @@ import {
   createAuthorizationLinkController,
   disconnectSocialAccountController,
   getAuthorizationLinkController,
+  getTikTokCreatorPublishInfoController,
   listSocialAccountsController,
   oauthCallbackController,
   oauthProviderStatusController,
@@ -41,6 +42,11 @@ socialAccountRoutes.get(
   "/workspaces/:workspaceId/social-accounts",
   requireAuth,
   asyncHandler(listSocialAccountsController)
+);
+socialAccountRoutes.get(
+  "/workspaces/:workspaceId/social-accounts/:socialAccountId/tiktok-publish-options",
+  requireAuth,
+  asyncHandler(getTikTokCreatorPublishInfoController)
 );
 socialAccountRoutes.post(
   "/workspaces/:workspaceId/social-accounts/authorization-links",

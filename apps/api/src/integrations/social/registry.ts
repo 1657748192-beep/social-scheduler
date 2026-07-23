@@ -2,10 +2,11 @@ import type { Platform } from "@prisma/client";
 import { FacebookPagePublisher } from "./facebookPagePublisher";
 import { InstagramPublisher } from "./instagramPublisher";
 import type { SocialPublisher } from "./socialPublisher";
+import { TikTokPublisher } from "./tiktokPublisher";
 import { YouTubePublisher } from "./youtubePublisher";
 
 const publishers = new Map<Platform, SocialPublisher>();
-const realPublishingPlatforms: Platform[] = ["instagram", "facebook", "youtube"];
+const realPublishingPlatforms: Platform[] = ["instagram", "facebook", "youtube", "tiktok"];
 
 export function isRealPublishingSupported(platform: Platform) {
   return realPublishingPlatforms.includes(platform);
@@ -23,6 +24,8 @@ export function getSocialPublisher(platform: Platform) {
       publishers.set(platform, new FacebookPagePublisher());
     } else if (platform === "youtube") {
       publishers.set(platform, new YouTubePublisher());
+    } else if (platform === "tiktok") {
+      publishers.set(platform, new TikTokPublisher());
     }
   }
 

@@ -298,6 +298,7 @@ export type ComposerPostVariant = {
   socialAccountId?: string | null;
   platform: ComposerPlatform;
   text: string;
+  platformPayload?: Record<string, unknown>;
   publishStatus: string;
   socialAccount?: {
     id: string;
@@ -310,6 +311,20 @@ export type ComposerPostVariant = {
     sortOrder: number;
     mediaAsset: MediaAsset;
   }>;
+};
+
+export type TikTokCreatorPublishInfo = {
+  creatorUsername: string;
+  creatorNickname: string;
+  creatorAvatarUrl?: string;
+  privacyLevelOptions: Array<
+    "PUBLIC_TO_EVERYONE" | "MUTUAL_FOLLOW_FRIENDS" | "FOLLOWER_OF_CREATOR" | "SELF_ONLY"
+  >;
+  commentDisabled: boolean;
+  duetDisabled: boolean;
+  stitchDisabled: boolean;
+  maxVideoPostDurationSec?: number;
+  directPostAudited: boolean;
 };
 
 export type ComposerPostDetail = ComposerPost & {

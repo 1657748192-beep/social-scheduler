@@ -124,6 +124,7 @@ const worker = new Worker<PublishQueuePayload, unknown, typeof publishQueueJobNa
       socialAccountId,
       platform: publishJob.schedule.postVariant.platform,
       text: publishJob.schedule.postVariant.text,
+      platformPayload: publishJob.schedule.postVariant.platformPayload,
       media: publishJob.schedule.postVariant.media.map((item) => {
         const asset = withResolvedMediaUrl(item.mediaAsset, "publish");
         return {

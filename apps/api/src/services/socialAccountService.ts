@@ -8,6 +8,7 @@ import {
   redirectUriFor,
   type OAuthProviderConfig
 } from "../integrations/oauth/oauthProviders";
+import { TikTokPublisher } from "../integrations/social/tiktokPublisher";
 import { prisma } from "../prisma";
 import { encryptToken } from "../utils/tokenCrypto";
 import { HttpError } from "../utils/errors";
@@ -692,6 +693,15 @@ export async function listSocialAccounts(userId: string, workspaceId: string) {
       createdAt: "desc"
     }
   });
+}
+
+export async function getTikTokCreatorPublishInfo(
+  userId: string,
+  workspaceId: string,
+  socialAccountId: string
+) {
+  await requireWorkspaceMembership(userId, workspaceId);
+  return new TikTokPublisher().getCreatorPublishInfo(workspaceId, socialAccountId);
 }
 
 export async function disconnectSocialAccount(

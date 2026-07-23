@@ -1,4 +1,4 @@
-import type { MediaAsset, WorkspaceRole } from "@prisma/client";
+import type { MediaAsset, Prisma, WorkspaceRole } from "@prisma/client";
 import { z } from "zod";
 import { config } from "../config";
 import {
@@ -8,6 +8,7 @@ import {
   type ComposerPlatform
 } from "../config/platformLimits";
 import { isRealPublishingSupported } from "../integrations/social/registry";
+import { readTikTokPublishSettings } from "../integrations/social/tiktokPublisher";
 import { prisma } from "../prisma";
 import { HttpError } from "../utils/errors";
 import {
@@ -26,7 +27,8 @@ const variantSchema = z.object({
   socialAccountId: z.string().uuid(),
   platform: z.enum(composerPlatformOrder),
   text: z.string().default(""),
-  mediaAssetIds: z.array(z.string().uuid()).default([])
+  mediaAssetIds: z.array(z.string().uuid()).default([]),
+  platformPayload: z.record(z.unknown()).default({})
 });
 
 export const createComposerPostSchema = z.object({
@@ -178,6 +180,23 @@ function assertVariantsSupportRealPublishing(variants: z.infer<typeof variantSch
   }
 }
 
+function assertTikTokPublishSettings(variants: z.infer<typeof variantSchema>[]) {
+  const invalidVariant = variants.find((variant) => {
+    if (variant.platform !== "tiktok") {
+      return false;
+    }
+
+    return !readTikTokPublishSettings(variant.platformPayload as Prisma.JsonValue)?.consentConfirmed;
+  });
+
+  if (invalidVariant) {
+    throw new HttpError(
+      400,
+      "Complete the TikTok privacy, interaction, and music usage confirmation settings before publishing."
+    );
+  }
+}
+
 export async function createComposerPost(
   userId: string,
   workspaceId: string,
@@ -208,6 +227,7 @@ export async function createComposerPost(
 
   if (input.scheduledAt || input.publishNow) {
     assertVariantsSupportRealPublishing(input.variants);
+    assertTikTokPublishSettings(input.variants);
   }
 
   if (input.publishNow && input.scheduledAt) {
@@ -241,6 +261,7 @@ export async function createComposerPost(
           socialAccountId: variant.socialAccountId,
           platform: variant.platform,
           text: variant.text,
+          platformPayload: variant.platformPayload as Prisma.InputJsonValue,
           validationErrors: errors,
           publishStatus: scheduledAt ? "queued" : "draft"
         }

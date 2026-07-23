@@ -8,6 +8,7 @@ import {
   createAuthorizationLink,
   createAuthorizationLinkSchema,
   disconnectSocialAccount,
+  getTikTokCreatorPublishInfo,
   getAuthorizationLink,
   listSocialAccounts,
   startSharedOAuth,
@@ -50,6 +51,15 @@ export async function oauthCallbackController(req: Request, res: Response) {
 export async function listSocialAccountsController(req: Request, res: Response) {
   const accounts = await listSocialAccounts(req.user!.id, req.params.workspaceId);
   return res.json(accounts);
+}
+
+export async function getTikTokCreatorPublishInfoController(req: Request, res: Response) {
+  const creatorInfo = await getTikTokCreatorPublishInfo(
+    req.user!.id,
+    req.params.workspaceId,
+    req.params.socialAccountId
+  );
+  return res.json(creatorInfo);
 }
 
 export async function createAuthorizationLinkController(req: Request, res: Response) {

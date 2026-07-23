@@ -144,6 +144,7 @@ prepare_env() {
   force_env_value FACEBOOK_OAUTH_SCOPES "public_profile,pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_metadata"
   ensure_env_value INSTAGRAM_OAUTH_SCOPES "${INSTAGRAM_OAUTH_SCOPES:-instagram_business_basic,instagram_business_content_publish}"
   ensure_env_value TIKTOK_OAUTH_SCOPES "${TIKTOK_OAUTH_SCOPES:-user.info.basic}"
+  ensure_env_value TIKTOK_DIRECT_POST_AUDITED "${TIKTOK_DIRECT_POST_AUDITED:-false}"
 
   if is_missing_or_placeholder "$(env_value FACEBOOK_CLIENT_SECRET)"; then
     log "WARNING: FACEBOOK_CLIENT_SECRET is empty or still a placeholder. Facebook OAuth will not work until it is set in $WORK_DIR/.env"

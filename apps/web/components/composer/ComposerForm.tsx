@@ -8,6 +8,7 @@ import {
   type ComposerPostDetail,
   type MediaAsset,
   type SocialAccount,
+  type TikTokCreatorPublishInfo,
   type Workspace
 } from "../../lib/api";
 import { chinaLocalInputToISOString } from "../../lib/chinaTime";
@@ -20,6 +21,7 @@ import { PlatformTabs } from "./PlatformTabs";
 import { PostPreview } from "./PostPreview";
 import { SchedulePicker } from "./SchedulePicker";
 import { TextInsertToolbar } from "./TextInsertToolbar";
+import { TikTokPublishSettings, type TikTokPublishSettingsValue } from "./TikTokPublishSettings";
 
 type ComposerFormProps = {
   token: string;
@@ -38,7 +40,7 @@ const allComposerPlatforms: ComposerPlatform[] = [
   "pinterest",
   "x"
 ];
-const realPublishingPlatforms = new Set<ComposerPlatform>(["instagram", "facebook", "youtube"]);
+const realPublishingPlatforms = new Set<ComposerPlatform>(["instagram", "facebook", "youtube", "tiktok"]);
 
 type MediaSource = "shared" | "custom";
 
@@ -60,6 +62,36 @@ function createPlatformMediaSourceMap(): Record<ComposerPlatform, MediaSource> {
     sources[platform] = "shared";
     return sources;
   }, {} as Record<ComposerPlatform, MediaSource>);
+}
+
+function createTikTokPublishSettings(): TikTokPublishSettingsValue {
+  return {
+    privacyLevel: "",
+    allowComment: false,
+    allowDuet: false,
+    allowStitch: false,
+    consentConfirmed: false,
+    brandOrganic: false,
+    isAigc: false
+  };
+}
+
+function readTikTokPublishSettings(value: Record<string, unknown> | undefined): TikTokPublishSettingsValue {
+  const fallback = createTikTokPublishSettings();
+
+  if (!value) {
+    return fallback;
+  }
+
+  return {
+    privacyLevel: typeof value.privacyLevel === "string" ? value.privacyLevel : "",
+    allowComment: value.allowComment === true,
+    allowDuet: value.allowDuet === true,
+    allowStitch: value.allowStitch === true,
+    consentConfirmed: value.consentConfirmed === true,
+    brandOrganic: value.brandOrganic === true,
+    isAigc: value.isAigc === true
+  };
 }
 
 function isReusableMediaAsset(asset: MediaAsset) {
@@ -95,6 +127,16 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [copyNotice, setCopyNotice] = useState<string | null>(null);
+  const [tiktokCreatorInfoByAccount, setTikTokCreatorInfoByAccount] = useState<
+    Record<string, TikTokCreatorPublishInfo | undefined>
+  >({});
+  const [tiktokSettingsByAccount, setTikTokSettingsByAccount] = useState<
+    Record<string, TikTokPublishSettingsValue | undefined>
+  >({});
+  const [tiktokSettingsErrorByAccount, setTikTokSettingsErrorByAccount] = useState<
+    Record<string, string | undefined>
+  >({});
+  const [tiktokSettingsLoadingAccountIds, setTikTokSettingsLoadingAccountIds] = useState<string[]>([]);
   const baseTextAreaRef = useRef<HTMLTextAreaElement>(null);
   const copiedPostRef = useRef<string | null>(null);
 
@@ -119,6 +161,14 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
   const selectedPlatforms = useMemo(
     () => allComposerPlatforms.filter((platform) => selectedAccounts.some((account) => account.platform === platform)),
     [selectedAccounts]
+  );
+  const selectedTikTokAccounts = useMemo(
+    () => selectedAccounts.filter((account) => account.platform === "tiktok"),
+    [selectedAccounts]
+  );
+  const selectedTikTokAccountIds = useMemo(
+    () => selectedTikTokAccounts.map((account) => account.id).join(","),
+    [selectedTikTokAccounts]
   );
   const accountCountByPlatform = useMemo(
     () =>
@@ -177,6 +227,10 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
     setSharedMedia([]);
     setPlatformMediaByPlatform(createPlatformMediaMap());
     setMediaSourceByPlatform(createPlatformMediaSourceMap());
+    setTikTokCreatorInfoByAccount({});
+    setTikTokSettingsByAccount({});
+    setTikTokSettingsErrorByAccount({});
+    setTikTokSettingsLoadingAccountIds([]);
 
     async function loadAccountsAndCopiedPost() {
       try {
@@ -213,6 +267,7 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
           const nextPlatformMedia = createPlatformMediaMap();
           const nextMediaSources = createPlatformMediaSourceMap();
           const nextTexts = createVariantTextMap(copiedPost.baseText);
+          const nextTikTokSettings: Record<string, TikTokPublishSettingsValue | undefined> = {};
           const sharedAssetIds = sharedAssets.map((asset) => asset.id).join(":");
 
           for (const platform of allComposerPlatforms) {
@@ -226,6 +281,10 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
               .map((item) => item.mediaAsset)
               .filter(isReusableMediaAsset);
             nextTexts[platform] = variant.text;
+
+            if (variant.platform === "tiktok" && variant.socialAccountId) {
+              nextTikTokSettings[variant.socialAccountId] = readTikTokPublishSettings(variant.platformPayload);
+            }
 
             if (assets.map((asset) => asset.id).join(":") !== sharedAssetIds) {
               nextPlatformMedia[platform] = assets;
@@ -241,6 +300,7 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
           setSharedMedia(sharedAssets);
           setPlatformMediaByPlatform(nextPlatformMedia);
           setMediaSourceByPlatform(nextMediaSources);
+          setTikTokSettingsByAccount(nextTikTokSettings);
           setSelectedAccountIds(
             reusableVariants.flatMap((variant) => (variant.socialAccountId ? [variant.socialAccountId] : []))
           );
@@ -297,6 +357,70 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
     }
   }, [activePlatform, selectedPlatforms]);
 
+  useEffect(() => {
+    const accountIds = selectedTikTokAccountIds ? selectedTikTokAccountIds.split(",") : [];
+    let cancelled = false;
+
+    if (!workspaceId || !accountIds.length) {
+      setTikTokSettingsLoadingAccountIds([]);
+      return;
+    }
+
+    setTikTokSettingsLoadingAccountIds(accountIds);
+
+    async function loadTikTokPublishSettings() {
+      const results = await Promise.all(
+        accountIds.map(async (socialAccountId) => {
+          try {
+            const creatorInfo = await apiRequest<TikTokCreatorPublishInfo>(
+              `/workspaces/${workspaceId}/social-accounts/${socialAccountId}/tiktok-publish-options`,
+              { token }
+            );
+            return { socialAccountId, creatorInfo };
+          } catch (requestError) {
+            return {
+              socialAccountId,
+              error: requestError instanceof Error ? requestError.message : "无法读取 TikTok 发布设置"
+            };
+          }
+        })
+      );
+
+      if (cancelled) {
+        return;
+      }
+
+      setTikTokCreatorInfoByAccount((current) => {
+        const next = { ...current };
+        for (const result of results) {
+          next[result.socialAccountId] = result.creatorInfo;
+        }
+        return next;
+      });
+      setTikTokSettingsByAccount((current) => {
+        const next = { ...current };
+        for (const result of results) {
+          next[result.socialAccountId] ??= createTikTokPublishSettings();
+        }
+        return next;
+      });
+      setTikTokSettingsErrorByAccount((current) => {
+        const next = { ...current };
+        for (const result of results) {
+          next[result.socialAccountId] = result.error;
+        }
+        return next;
+      });
+      setTikTokSettingsLoadingAccountIds([]);
+    }
+
+    void loadTikTokPublishSettings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTikTokAccountIds, token, workspaceId]);
+
   const publishChecks = [
     {
       label: "内容文案",
@@ -318,6 +442,22 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
             : "将保存为草稿"
     }
   ];
+
+  if (selectedTikTokAccounts.length && publishMode !== "draft") {
+    publishChecks.push({
+      label: "TikTok 发布确认",
+      done: selectedTikTokAccounts.every((account) => {
+        const settings = tiktokSettingsByAccount[account.id];
+        return Boolean(
+          tiktokCreatorInfoByAccount[account.id] &&
+            !tiktokSettingsErrorByAccount[account.id] &&
+            settings?.privacyLevel &&
+            settings.consentConfirmed
+        );
+      }),
+      detail: "为每个 TikTok 账号选择隐私、互动权限并确认音乐使用声明"
+    });
+  }
 
   function toggleAccount(accountId: string) {
     setSelectedAccountIds((current) =>
@@ -369,6 +509,16 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
     }));
   }
 
+  function updateTikTokPublishSettings(socialAccountId: string, value: Partial<TikTokPublishSettingsValue>) {
+    setTikTokSettingsByAccount((current) => ({
+      ...current,
+      [socialAccountId]: {
+        ...(current[socialAccountId] ?? createTikTokPublishSettings()),
+        ...value
+      }
+    }));
+  }
+
   async function savePost(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -380,6 +530,35 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
     if (!selectedAccounts.length) {
       setError("请先选择至少一个已连接账号");
       return;
+    }
+
+    if (publishMode !== "draft" && selectedTikTokAccounts.length) {
+      const tiktokMedia = resolvedMediaByPlatform.tiktok;
+      const hasSingleVideo =
+        tiktokMedia.length === 1 && tiktokMedia[0].mimeType.startsWith("video/");
+
+      if (!hasSingleVideo) {
+        setError("TikTok 真实发布需要为 TikTok 选择恰好一个 MP4、MOV 或 WebM 视频素材。");
+        return;
+      }
+    }
+
+    if (publishMode !== "draft") {
+      const incompleteTikTokAccount = selectedTikTokAccounts.find((account) => {
+        const settings = tiktokSettingsByAccount[account.id];
+        return Boolean(
+          tiktokSettingsLoadingAccountIds.includes(account.id) ||
+            tiktokSettingsErrorByAccount[account.id] ||
+            !tiktokCreatorInfoByAccount[account.id] ||
+            !settings?.privacyLevel ||
+            !settings.consentConfirmed
+        );
+      });
+
+      if (incompleteTikTokAccount) {
+        setError(`请先完成 TikTok 账号「${incompleteTikTokAccount.displayName}」的发布设置和确认。`);
+        return;
+      }
     }
 
     const hasInvalidWebsite = !isValidWebsite(baseWebsite) || selectedPlatforms.some(
@@ -416,7 +595,11 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
                 variantTexts[account.platform] || baseText,
                 variantWebsites[account.platform] || baseWebsite
               ),
-              mediaAssetIds: resolvedMediaByPlatform[account.platform].map((asset) => asset.id)
+              mediaAssetIds: resolvedMediaByPlatform[account.platform].map((asset) => asset.id),
+              platformPayload:
+                account.platform === "tiktok"
+                  ? tiktokSettingsByAccount[account.id] ?? createTikTokPublishSettings()
+                  : {}
             }))
           }
         }
@@ -540,6 +723,17 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
               platform={activePlatform}
               text={variantTexts[activePlatform] || baseText}
               website={variantWebsites[activePlatform] || baseWebsite}
+            />
+          ) : null}
+
+          {activePlatform === "tiktok" && selectedTikTokAccounts.length ? (
+            <TikTokPublishSettings
+              accounts={selectedTikTokAccounts}
+              creatorInfoByAccount={tiktokCreatorInfoByAccount}
+              errorByAccount={tiktokSettingsErrorByAccount}
+              loadingAccountIds={tiktokSettingsLoadingAccountIds}
+              onChange={updateTikTokPublishSettings}
+              settingsByAccount={tiktokSettingsByAccount}
             />
           ) : null}
         </section>
