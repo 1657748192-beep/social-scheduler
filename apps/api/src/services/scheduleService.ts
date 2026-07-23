@@ -7,6 +7,7 @@ import {
   publishQueueJobName,
   publishQueueMaxAttempts
 } from "../queues/publishQueue";
+import { config } from "../config";
 import { isRealPublishingSupported } from "../integrations/social/registry";
 import { HttpError } from "../utils/errors";
 import { withResolvedMediaUrl } from "./mediaStorageService";
@@ -320,6 +321,12 @@ export async function listPublishedPosts(userId: string, workspaceId: string) {
 
   return schedules.map((schedule) => {
     const publishJob = schedule.publishJobs[0];
+    const publishedAt = publishJob?.updatedAt ?? schedule.updatedAt;
+    const mediaReuseExpiresAt = schedule.postVariant.media.length
+      ? new Date(
+          publishedAt.getTime() + config.MEDIA_PUBLISHED_RETENTION_HOURS * 60 * 60 * 1000
+        )
+      : null;
 
     return {
       id: schedule.id,
@@ -327,7 +334,8 @@ export async function listPublishedPosts(userId: string, workspaceId: string) {
       title: schedule.postVariant.post.title,
       baseText: schedule.postVariant.post.baseText,
       scheduledAt: schedule.scheduledAt,
-      publishedAt: publishJob?.updatedAt ?? schedule.updatedAt,
+      publishedAt,
+      mediaReuseExpiresAt,
       platform: schedule.postVariant.platform,
       text: schedule.postVariant.text,
       socialAccount: schedule.postVariant.socialAccount,

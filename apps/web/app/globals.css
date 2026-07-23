@@ -3316,6 +3316,15 @@ textarea {
   white-space: nowrap;
 }
 
+.published-post-meta .published-media-reuse {
+  color: #a45400;
+  font-weight: 700;
+}
+
+.published-post-meta .published-media-reuse.active {
+  color: #16713d;
+}
+
 .published-post-footer {
   display: flex;
   align-items: center;

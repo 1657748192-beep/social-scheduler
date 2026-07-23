@@ -128,15 +128,16 @@ prepare_env() {
   ensure_env_value SMTP_PASS "${SMTP_PASS:-}"
   ensure_env_value SMTP_FROM "${SMTP_FROM:-}"
   ensure_env_value TOKEN_ENCRYPTION_KEY "$(random_hex 32)"
-  ensure_env_value MEDIA_STORAGE "${MEDIA_STORAGE:-local}"
+  force_env_value MEDIA_STORAGE "${MEDIA_STORAGE:-local}"
   ensure_env_value COS_PREFIX "${COS_PREFIX:-social-scheduler}"
   ensure_env_value COS_TEMP_CREDENTIAL_DURATION_SECONDS "${COS_TEMP_CREDENTIAL_DURATION_SECONDS:-1800}"
   ensure_env_value COS_PREVIEW_URL_EXPIRES_SECONDS "${COS_PREVIEW_URL_EXPIRES_SECONDS:-3600}"
   ensure_env_value COS_PUBLISH_URL_EXPIRES_SECONDS "${COS_PUBLISH_URL_EXPIRES_SECONDS:-86400}"
   ensure_env_value WORKER_CONCURRENCY "${WORKER_CONCURRENCY:-1}"
-  ensure_env_value MEDIA_UNUSED_RETENTION_HOURS "${MEDIA_UNUSED_RETENTION_HOURS:-24}"
-  ensure_env_value MEDIA_PUBLISHED_RETENTION_DAYS "${MEDIA_PUBLISHED_RETENTION_DAYS:-90}"
-  ensure_env_value MEDIA_CLEANUP_INTERVAL_HOURS "${MEDIA_CLEANUP_INTERVAL_HOURS:-24}"
+  force_env_value MEDIA_UNUSED_RETENTION_HOURS "${MEDIA_UNUSED_RETENTION_HOURS:-24}"
+  force_env_value MEDIA_PUBLISHED_RETENTION_HOURS "${MEDIA_PUBLISHED_RETENTION_HOURS:-24}"
+  force_env_value MEDIA_FAILED_RETENTION_HOURS "${MEDIA_FAILED_RETENTION_HOURS:-72}"
+  force_env_value MEDIA_CLEANUP_INTERVAL_HOURS "${MEDIA_CLEANUP_INTERVAL_HOURS:-1}"
   ensure_env_value FACEBOOK_CLIENT_ID "${FACEBOOK_CLIENT_ID:-1743484710132300}"
   force_env_value FACEBOOK_OAUTH_SCOPES "public_profile,pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_metadata"
   ensure_env_value INSTAGRAM_OAUTH_SCOPES "${INSTAGRAM_OAUTH_SCOPES:-instagram_business_basic,instagram_business_content_publish}"
@@ -215,7 +216,7 @@ verify_media_storage_environment() {
 
       console.log(`Media storage: ${mode}`);
       console.log(`Worker concurrency: ${process.env.WORKER_CONCURRENCY || "1"}`);
-      console.log(`Media cleanup: unused ${process.env.MEDIA_UNUSED_RETENTION_HOURS || "24"}h, published ${process.env.MEDIA_PUBLISHED_RETENTION_DAYS || "90"}d`);
+      console.log(`Media cleanup: unused ${process.env.MEDIA_UNUSED_RETENTION_HOURS || "24"}h, published ${process.env.MEDIA_PUBLISHED_RETENTION_HOURS || "24"}h, failed ${process.env.MEDIA_FAILED_RETENTION_HOURS || "72"}h, every ${process.env.MEDIA_CLEANUP_INTERVAL_HOURS || "1"}h`);
 
       if (mode === "cos" && missing.length) {
         console.error(`COS configuration is incomplete: ${missing.join(", ")}`);

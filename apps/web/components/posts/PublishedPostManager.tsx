@@ -35,12 +35,47 @@ function getPostExcerpt(post: PublishedPost) {
   return value.length > 180 ? `${value.slice(0, 180)}…` : value;
 }
 
+function getMediaReuseStatus(post: PublishedPost, now: number) {
+  if (!post.media.length || !post.mediaReuseExpiresAt) {
+    return {
+      active: false,
+      text: "暂无可复用素材"
+    };
+  }
+
+  const remainingMs = new Date(post.mediaReuseExpiresAt).getTime() - now;
+
+  if (!Number.isFinite(remainingMs) || remainingMs <= 0) {
+    return {
+      active: false,
+      text: "素材清理中"
+    };
+  }
+
+  const totalMinutes = Math.ceil(remainingMs / (60 * 1000));
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+  const minutes = totalMinutes % 60;
+  const remaining = days ? `${days} 天 ${hours} 小时` : `${hours} 小时 ${minutes} 分`;
+
+  return {
+    active: true,
+    text: `还可复用 ${remaining}`
+  };
+}
+
 export function PublishedPostManager({ token, workspaces }: PublishedPostManagerProps) {
   const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? "");
   const [platform, setPlatform] = useState<ComposerPlatform | "all">("all");
   const [posts, setPosts] = useState<PublishedPost[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const loadPosts = useCallback(async () => {
     if (!workspaceId) {
@@ -146,6 +181,7 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
         {filteredPosts.map((post) => {
           const thumbnail = post.media[0]?.mediaAsset;
           const composerUrl = `/composer?workspaceId=${encodeURIComponent(workspaceId)}&copyPostId=${encodeURIComponent(post.postId)}`;
+          const mediaReuse = getMediaReuseStatus(post, now);
 
           return (
             <article className="published-post-card" key={post.id}>
@@ -187,12 +223,18 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
                     <dd>{formatChinaDateTime(new Date(post.scheduledAt))}</dd>
                   </div>
                   <div>
-                    <dt>素材</dt>
-                    <dd>{post.media.length} 个</dd>
+                    <dt>素材复用</dt>
+                    <dd className={mediaReuse.active ? "published-media-reuse active" : "published-media-reuse"}>
+                      {post.media.length ? `${post.media.length} 个 · ${mediaReuse.text}` : mediaReuse.text}
+                    </dd>
                   </div>
                 </dl>
                 <div className="published-post-footer">
-                  <span>发布记录与原始素材可复制后再次编辑。</span>
+                  <span>
+                    {mediaReuse.active
+                      ? "请在倒计时结束前复制，可带入当前素材后再次编辑。"
+                      : "可复制原文案再次编辑；如需图片或视频，请重新上传素材。"}
+                  </span>
                   <div className="published-post-footer-actions">
                     {post.providerPermalink ? (
                       <a className="button secondary" href={post.providerPermalink} rel="noreferrer" target="_blank">
@@ -204,7 +246,7 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
                       </span>
                     )}
                     <Link className="button" href={composerUrl}>
-                      复制到发布页
+                      {mediaReuse.active ? "复制到发布页" : "复制文案到发布页"}
                     </Link>
                   </div>
                 </div>

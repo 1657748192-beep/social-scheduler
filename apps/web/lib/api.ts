@@ -315,6 +315,7 @@ export type PublishedPost = {
   baseText: string;
   scheduledAt: string;
   publishedAt: string;
+  mediaReuseExpiresAt?: string | null;
   platform: ComposerPlatform;
   text: string;
   socialAccount?: {

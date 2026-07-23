@@ -34,10 +34,11 @@ COS_PREFIX=social-scheduler
 # 内存较小的服务器建议保留 1；YouTube 视频通过流式转发，不再整段载入内存。
 WORKER_CONCURRENCY=1
 
-# 自动清理：上传未使用 24 小时后删除；所有关联发布任务均已成功的素材 90 天后删除。
+# 自动清理：上传后未使用 24 小时删除；发布成功后保留 24 小时；最终失败或取消后保留 72 小时。
 MEDIA_UNUSED_RETENTION_HOURS=24
-MEDIA_PUBLISHED_RETENTION_DAYS=90
-MEDIA_CLEANUP_INTERVAL_HOURS=24
+MEDIA_PUBLISHED_RETENTION_HOURS=24
+MEDIA_FAILED_RETENTION_HOURS=72
+MEDIA_CLEANUP_INTERVAL_HOURS=1
 ```
 
 部署：
@@ -72,8 +73,9 @@ Worker 启动时执行一次清理，此后每 `MEDIA_CLEANUP_INTERVAL_HOURS` �
 
 - 未完成的直传记录：超过 `MEDIA_UNUSED_RETENTION_HOURS` 删除 COS 对象和记录。
 - 未被任何帖子引用的已上传素材：超过该小时数删除。
-- 已被引用且所有关联发布变体都已发布成功的素材：超过 `MEDIA_PUBLISHED_RETENTION_DAYS` 删除。
-- 草稿、排期中、发布中、失败的素材不会自动删除，避免破坏用户内容。
+- 已被引用且所有关联发布变体均已成功的素材：从最后一次成功发布起超过 `MEDIA_PUBLISHED_RETENTION_HOURS` 删除。
+- 已被引用且所有关联发布变体均已最终失败或取消的素材：从最后一次失败/取消起超过 `MEDIA_FAILED_RETENTION_HOURS` 删除。
+- 草稿、排期中、发布中的素材不会自动删除，避免破坏用户内容。
 
 查看清理和迁移日志：
 

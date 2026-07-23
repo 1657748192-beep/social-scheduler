@@ -33,8 +33,15 @@ type CosUploadIntent = {
 };
 
 function getCosClient() {
-  if (config.MEDIA_STORAGE !== "cos") {
-    throw new HttpError(409, "COS media storage is not enabled");
+  const missingSettings = ["COS_SECRET_ID", "COS_SECRET_KEY", "COS_BUCKET", "COS_REGION"].filter(
+    (key) => !config[key as "COS_SECRET_ID" | "COS_SECRET_KEY" | "COS_BUCKET" | "COS_REGION"]
+  );
+
+  if (missingSettings.length) {
+    throw new HttpError(
+      409,
+      `COS credentials are required to access legacy COS media: ${missingSettings.join(", ")}`
+    );
   }
 
   return new COS({
@@ -272,9 +279,7 @@ export async function cleanUpExpiredMedia() {
   const now = Date.now();
   const uploadCutoff = new Date(now - config.MEDIA_UNUSED_RETENTION_HOURS * 60 * 60 * 1000);
   const unusedCutoff = uploadCutoff;
-  const publishedCutoff = new Date(now - config.MEDIA_PUBLISHED_RETENTION_DAYS * 24 * 60 * 60 * 1000);
-
-  const assets = await prisma.mediaAsset.findMany({
+  const basicCandidates = await prisma.mediaAsset.findMany({
     where: {
       OR: [
         {
@@ -286,22 +291,69 @@ export async function cleanUpExpiredMedia() {
           createdAt: { lt: unusedCutoff },
           variantLinks: { none: {} }
         },
-        {
-          status: "ready",
-          createdAt: { lt: publishedCutoff },
-          variantLinks: {
-            some: {},
-            every: {
-              postVariant: {
-                publishStatus: "published"
-              }
-            }
-          }
-        }
       ]
     },
     take: 100
   });
+
+  const linkedCandidates = await prisma.mediaAsset.findMany({
+    where: {
+      status: "ready",
+      variantLinks: {
+        some: {}
+      }
+    },
+    include: {
+      variantLinks: {
+        include: {
+          postVariant: {
+            select: {
+              publishStatus: true,
+              schedules: {
+                select: {
+                  status: true,
+                  updatedAt: true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    orderBy: {
+      createdAt: "asc"
+    },
+    take: 500
+  });
+
+  const finalScheduleStatuses = new Set(["published", "failed", "canceled"]);
+  const finalVariantStatuses = new Set(["published", "failed", "canceled"]);
+  const publishedRetentionMs = config.MEDIA_PUBLISHED_RETENTION_HOURS * 60 * 60 * 1000;
+  const failedRetentionMs = config.MEDIA_FAILED_RETENTION_HOURS * 60 * 60 * 1000;
+
+  const terminalCandidates = linkedCandidates.filter((asset) => {
+    const expiryTimes: number[] = [];
+
+    for (const link of asset.variantLinks) {
+      const variant = link.postVariant;
+
+      if (!finalVariantStatuses.has(variant.publishStatus)) {
+        return false;
+      }
+
+      if (!variant.schedules.length || variant.schedules.some((schedule) => !finalScheduleStatuses.has(schedule.status))) {
+        return false;
+      }
+
+      const finalTime = Math.max(...variant.schedules.map((schedule) => schedule.updatedAt.getTime()));
+      const retentionMs = variant.publishStatus === "published" ? publishedRetentionMs : failedRetentionMs;
+      expiryTimes.push(finalTime + retentionMs);
+    }
+
+    return expiryTimes.length > 0 && Math.max(...expiryTimes) <= now;
+  });
+
+  const assets = [...basicCandidates, ...terminalCandidates];
 
   let deleted = 0;
   let failed = 0;
