@@ -3353,6 +3353,10 @@ textarea {
   white-space: nowrap;
 }
 
+.draft-meta dd[title] {
+  cursor: help;
+}
+
 .draft-actions {
   align-items: center;
   justify-content: flex-end;

@@ -213,7 +213,9 @@ export function DraftManager({ token, workspaces }: DraftManagerProps) {
                   </div>
                   <div>
                     <dt>发布账号</dt>
-                    <dd>{accounts.join("、") || "未选择账号"}</dd>
+                    <dd title={accounts.join("、") || "未选择账号"}>
+                      {accounts.join("、") || "未选择账号"}
+                    </dd>
                   </div>
                   <div>
                     <dt>素材</dt>
