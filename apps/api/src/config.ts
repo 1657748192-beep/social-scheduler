@@ -65,6 +65,7 @@ const envSchema = z.object({
   YOUTUBE_CLIENT_SECRET: z.string().optional().default(""),
   TIKTOK_CLIENT_ID: z.string().optional().default(""),
   TIKTOK_CLIENT_SECRET: z.string().optional().default(""),
+  TIKTOK_OAUTH_SCOPES: z.string().optional().default("user.info.basic"),
   PINTEREST_CLIENT_ID: z.string().optional().default(""),
   PINTEREST_CLIENT_SECRET: z.string().optional().default("")
 });

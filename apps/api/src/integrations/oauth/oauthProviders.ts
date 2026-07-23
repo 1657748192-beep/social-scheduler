@@ -167,7 +167,7 @@ const providerConfigs: Record<Platform, OAuthProviderConfig> = {
     authorizationUrl: "https://www.tiktok.com/v2/auth/authorize/",
     tokenUrl: "https://open.tiktokapis.com/v2/oauth/token/",
     profileUrl: "https://open.tiktokapis.com/v2/user/info/?fields=open_id,union_id,avatar_url,display_name",
-    defaultScopes: ["user.info.basic", "video.publish"],
+    defaultScopes: configuredScopes(config.TIKTOK_OAUTH_SCOPES, ["user.info.basic"]),
     usesPkce: false,
     clientAuthentication: "tiktok",
     authorizationClientIdParam: "client_key",

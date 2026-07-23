@@ -67,6 +67,7 @@ services:
       YOUTUBE_CLIENT_SECRET: ""
       TIKTOK_CLIENT_ID: ""
       TIKTOK_CLIENT_SECRET: ""
+      TIKTOK_OAUTH_SCOPES: "user.info.basic"
       PINTEREST_CLIENT_ID: ""
       PINTEREST_CLIENT_SECRET: ""
     ports:
@@ -118,6 +119,7 @@ services:
       YOUTUBE_CLIENT_SECRET: ""
       TIKTOK_CLIENT_ID: ""
       TIKTOK_CLIENT_SECRET: ""
+      TIKTOK_OAUTH_SCOPES: "user.info.basic"
       PINTEREST_CLIENT_ID: ""
       PINTEREST_CLIENT_SECRET: ""
     depends_on:
