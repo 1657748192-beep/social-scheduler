@@ -299,6 +299,12 @@ export type ComposerPostVariant = {
   platform: ComposerPlatform;
   text: string;
   publishStatus: string;
+  socialAccount?: {
+    id: string;
+    displayName: string;
+    platform: ComposerPlatform;
+    avatarUrl?: string | null;
+  } | null;
   media: Array<{
     id: string;
     sortOrder: number;
@@ -312,6 +318,10 @@ export type ComposerPostDetail = ComposerPost & {
   baseText: string;
   workflowStatus: string;
   variants: ComposerPostVariant[];
+};
+
+export type DraftPost = ComposerPostDetail & {
+  expiresAt: string;
 };
 
 export type PublishedPost = {

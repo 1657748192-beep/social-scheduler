@@ -5,9 +5,11 @@ import {
   createCosMediaUploadIntent,
   createComposerPost,
   createComposerPostSchema,
+  deleteWorkspaceDraft,
   getComposerPlatforms,
   getComposerPost,
   listComposerPosts,
+  listWorkspaceDrafts,
   listWorkspaceMedia,
   prepareCosMediaUploadSchema,
   uploadWorkspaceMedia
@@ -54,6 +56,16 @@ export async function createComposerPostController(req: Request, res: Response) 
 export async function listComposerPostsController(req: Request, res: Response) {
   const posts = await listComposerPosts(req.user!.id, req.params.workspaceId);
   return res.json(posts);
+}
+
+export async function listWorkspaceDraftsController(req: Request, res: Response) {
+  const drafts = await listWorkspaceDrafts(req.user!.id, req.params.workspaceId);
+  return res.json(drafts);
+}
+
+export async function deleteWorkspaceDraftController(req: Request, res: Response) {
+  const result = await deleteWorkspaceDraft(req.user!.id, req.params.workspaceId, req.params.postId);
+  return res.json(result);
 }
 
 export async function getComposerPostController(req: Request, res: Response) {

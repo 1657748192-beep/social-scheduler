@@ -44,6 +44,7 @@ const envSchema = z.object({
   MEDIA_PUBLISHED_RETENTION_HOURS: z.coerce.number().int().min(1).max(720).default(24),
   MEDIA_FAILED_RETENTION_HOURS: z.coerce.number().int().min(1).max(720).default(72),
   MEDIA_THUMBNAIL_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(180),
+  DRAFT_RETENTION_HOURS: z.coerce.number().int().min(1).max(720).default(72),
   MEDIA_CLEANUP_INTERVAL_HOURS: z.coerce.number().int().min(1).max(168).default(1),
   TOKEN_ENCRYPTION_KEY: z.string().min(16).optional(),
   X_CLIENT_ID: z.string().optional().default(""),

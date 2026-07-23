@@ -22,6 +22,7 @@ type AppShellProps = {
 const navItems = [
   { href: "/dashboard", label: "控制台", helper: "工作区与渠道" },
   { href: "/composer", label: "内容编辑", helper: "文案与素材" },
+  { href: "/drafts", label: "草稿箱", helper: "72 小时自动清理" },
   { href: "/calendar", label: "排程日历", helper: "周/月计划" },
   { href: "/posts", label: "帖子管理", helper: "已发布与复用" }
 ];

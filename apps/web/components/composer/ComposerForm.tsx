@@ -25,6 +25,7 @@ type ComposerFormProps = {
   token: string;
   workspaces: Workspace[];
   copyPostId?: string | null;
+  draftPostId?: string | null;
   initialWorkspaceId?: string | null;
 };
 
@@ -65,7 +66,7 @@ function isReusableMediaAsset(asset: MediaAsset) {
   return asset.originalAvailable !== false;
 }
 
-export function ComposerForm({ token, workspaces, copyPostId, initialWorkspaceId }: ComposerFormProps) {
+export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initialWorkspaceId }: ComposerFormProps) {
   const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId || workspaces[0]?.id || "");
   const [title, setTitle] = useState("");
   const [baseText, setBaseText] = useState("");
@@ -252,6 +253,9 @@ export function ComposerForm({ token, workspaces, copyPostId, initialWorkspaceId
               ? "已复制原帖内容、素材和可用账号。现在可微调后重新发布。"
               : "已复制原帖内容和素材；原发布账号目前不可用，请重新选择账号后发布。"
           );
+          if (draftPostId) {
+            setCopyNotice("已打开草稿。保存后会更新草稿，或按你选择的方式发布。");
+          }
           if (
             copiedPost.variants.some((variant) =>
               variant.media.some(({ mediaAsset }) => mediaAsset.originalAvailable === false)
@@ -417,6 +421,27 @@ export function ComposerForm({ token, workspaces, copyPostId, initialWorkspaceId
           }
         }
       );
+
+      if (draftPostId && initialWorkspaceId === selectedWorkspace.id) {
+        try {
+          await apiRequest<{ ok: true }>(
+            `/workspaces/${selectedWorkspace.id}/composer/drafts/${draftPostId}`,
+            {
+              method: "DELETE",
+              token
+            }
+          );
+          setCopyNotice(
+            publishMode === "draft"
+              ? "草稿已更新，将从这次保存起保留 72 小时。"
+              : "草稿已转为新的发布内容，原草稿已删除。"
+          );
+        } catch (deleteError) {
+          setCopyNotice(
+            `内容已保存，但原草稿未自动删除：${deleteError instanceof Error ? deleteError.message : "请在草稿箱手动删除。"}`
+          );
+        }
+      }
 
       setResult(post);
     } catch (requestError) {

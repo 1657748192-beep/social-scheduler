@@ -3,9 +3,11 @@ import {
   completeCosMediaUploadController,
   createCosMediaUploadIntentController,
   createComposerPostController,
+  deleteWorkspaceDraftController,
   getComposerPlatformsController,
   getComposerPostController,
   listComposerPostsController,
+  listWorkspaceDraftsController,
   listWorkspaceMediaController,
   uploadWorkspaceMediaController
 } from "../controllers/composerController";
@@ -46,6 +48,16 @@ composerRoutes.get(
   "/workspaces/:workspaceId/composer/posts",
   requireAuth,
   asyncHandler(listComposerPostsController)
+);
+composerRoutes.get(
+  "/workspaces/:workspaceId/composer/drafts",
+  requireAuth,
+  asyncHandler(listWorkspaceDraftsController)
+);
+composerRoutes.delete(
+  "/workspaces/:workspaceId/composer/drafts/:postId",
+  requireAuth,
+  asyncHandler(deleteWorkspaceDraftController)
 );
 composerRoutes.post(
   "/workspaces/:workspaceId/composer/posts",

@@ -138,6 +138,7 @@ prepare_env() {
   force_env_value MEDIA_PUBLISHED_RETENTION_HOURS "${MEDIA_PUBLISHED_RETENTION_HOURS:-24}"
   force_env_value MEDIA_FAILED_RETENTION_HOURS "${MEDIA_FAILED_RETENTION_HOURS:-72}"
   force_env_value MEDIA_THUMBNAIL_RETENTION_DAYS "${MEDIA_THUMBNAIL_RETENTION_DAYS:-180}"
+  force_env_value DRAFT_RETENTION_HOURS "${DRAFT_RETENTION_HOURS:-72}"
   force_env_value MEDIA_CLEANUP_INTERVAL_HOURS "${MEDIA_CLEANUP_INTERVAL_HOURS:-1}"
   ensure_env_value FACEBOOK_CLIENT_ID "${FACEBOOK_CLIENT_ID:-1743484710132300}"
   force_env_value FACEBOOK_OAUTH_SCOPES "public_profile,pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_metadata"
@@ -217,7 +218,7 @@ verify_media_storage_environment() {
 
       console.log(`Media storage: ${mode}`);
       console.log(`Worker concurrency: ${process.env.WORKER_CONCURRENCY || "1"}`);
-      console.log(`Media cleanup: unused ${process.env.MEDIA_UNUSED_RETENTION_HOURS || "24"}h, published ${process.env.MEDIA_PUBLISHED_RETENTION_HOURS || "24"}h, failed ${process.env.MEDIA_FAILED_RETENTION_HOURS || "72"}h, thumbnails ${process.env.MEDIA_THUMBNAIL_RETENTION_DAYS || "180"}d, every ${process.env.MEDIA_CLEANUP_INTERVAL_HOURS || "1"}h`);
+      console.log(`Media cleanup: unused ${process.env.MEDIA_UNUSED_RETENTION_HOURS || "24"}h, published ${process.env.MEDIA_PUBLISHED_RETENTION_HOURS || "24"}h, failed ${process.env.MEDIA_FAILED_RETENTION_HOURS || "72"}h, thumbnails ${process.env.MEDIA_THUMBNAIL_RETENTION_DAYS || "180"}d, drafts ${process.env.DRAFT_RETENTION_HOURS || "72"}h, every ${process.env.MEDIA_CLEANUP_INTERVAL_HOURS || "1"}h`);
 
       if (mode === "cos" && missing.length) {
         console.error(`COS configuration is incomplete: ${missing.join(", ")}`);

@@ -5,6 +5,7 @@ import { redisConnection } from "./redis";
 import { publishQueueJobName, publishQueueName, type PublishQueuePayload } from "./queues/publishQueue";
 import { config } from "./config";
 import { cleanUpExpiredMedia, withResolvedMediaUrl } from "./services/mediaStorageService";
+import { cleanUpExpiredDrafts } from "./services/composerService";
 import { recoverPendingPublishJobs, repairSimulatedInstagramPublishJobs } from "./services/scheduleService";
 
 const retryableJobStatuses = ["waiting", "retrying"] as const;
@@ -187,10 +188,11 @@ initializeWorker().catch((error) => {
 
 async function runMediaCleanup() {
   try {
+    const draftResult = await cleanUpExpiredDrafts();
     const result = await cleanUpExpiredMedia();
-    if (result.scanned) {
+    if (draftResult.scanned || result.scanned) {
       console.log(
-        `Media cleanup: originals archived ${result.archived}, records deleted ${result.deleted}/${result.scanned}, failed ${result.failed}`
+        `Draft cleanup: deleted ${draftResult.deleted}/${draftResult.scanned}; media cleanup: originals archived ${result.archived}, records deleted ${result.deleted}/${result.scanned}, failed ${result.failed}`
       );
     }
   } catch (error) {

@@ -341,6 +341,105 @@ export async function listComposerPosts(userId: string, workspaceId: string) {
   return Promise.all(posts.map((post) => resolvePostMediaUrls(post)));
 }
 
+export async function listWorkspaceDrafts(userId: string, workspaceId: string) {
+  await requireWorkspaceMembership(userId, workspaceId);
+
+  const posts = await prisma.post.findMany({
+    where: {
+      workspaceId,
+      authorId: userId,
+      workflowStatus: "draft"
+    },
+    include: {
+      variants: {
+        include: {
+          socialAccount: {
+            select: {
+              id: true,
+              displayName: true,
+              platform: true,
+              avatarUrl: true
+            }
+          },
+          media: {
+            include: {
+              mediaAsset: true
+            },
+            orderBy: {
+              sortOrder: "asc"
+            }
+          }
+        }
+      }
+    },
+    orderBy: {
+      updatedAt: "desc"
+    },
+    take: 100
+  });
+
+  return Promise.all(
+    posts.map(async (post) => ({
+      ...(await resolvePostMediaUrls(post)),
+      expiresAt: new Date(
+        post.updatedAt.getTime() + config.DRAFT_RETENTION_HOURS * 60 * 60 * 1000
+      )
+    }))
+  );
+}
+
+export async function deleteWorkspaceDraft(userId: string, workspaceId: string, postId: string) {
+  const membership = await requireWorkspaceMembership(userId, workspaceId);
+  ensureCanWrite(membership.role);
+
+  const draft = await prisma.post.findFirst({
+    where: {
+      id: postId,
+      workspaceId,
+      authorId: userId,
+      workflowStatus: "draft"
+    },
+    select: {
+      id: true
+    }
+  });
+
+  if (!draft) {
+    throw new HttpError(404, "Draft was not found");
+  }
+
+  await prisma.post.delete({ where: { id: draft.id } });
+  return { ok: true };
+}
+
+export async function cleanUpExpiredDrafts() {
+  const cutoff = new Date(Date.now() - config.DRAFT_RETENTION_HOURS * 60 * 60 * 1000);
+  const drafts = await prisma.post.findMany({
+    where: {
+      workflowStatus: "draft",
+      updatedAt: { lt: cutoff }
+    },
+    select: {
+      id: true
+    },
+    take: 100
+  });
+
+  if (!drafts.length) {
+    return { scanned: 0, deleted: 0 };
+  }
+
+  const result = await prisma.post.deleteMany({
+    where: {
+      id: { in: drafts.map((draft) => draft.id) },
+      workflowStatus: "draft",
+      updatedAt: { lt: cutoff }
+    }
+  });
+
+  return { scanned: drafts.length, deleted: result.count };
+}
+
 export async function getComposerPost(userId: string, workspaceId: string, postId: string) {
   await requireWorkspaceMembership(userId, workspaceId);
 

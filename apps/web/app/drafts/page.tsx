@@ -3,25 +3,16 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "../../components/AppShell";
+import { DraftManager } from "../../components/drafts/DraftManager";
 import { apiRequest, type Workspace } from "../../lib/api";
-import { ComposerForm } from "../../components/composer/ComposerForm";
 
-export default function ComposerPage() {
+export default function DraftsPage() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [copyPostId, setCopyPostId] = useState<string | null>(null);
-  const [draftPostId, setDraftPostId] = useState<string | null>(null);
-  const [initialWorkspaceId, setInitialWorkspaceId] = useState<string | null>(null);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const nextDraftPostId = params.get("draftPostId");
-    setCopyPostId(params.get("copyPostId") ?? nextDraftPostId);
-    setDraftPostId(nextDraftPostId);
-    setInitialWorkspaceId(params.get("workspaceId"));
-
     const storedToken = localStorage.getItem("social_scheduler_token");
 
     if (!storedToken) {
@@ -38,17 +29,9 @@ export default function ComposerPage() {
   }, [router]);
 
   return (
-    <AppShell title="内容编辑" subtitle="草稿、多平台版本、图片/视频素材与定时发布" wide>
+    <AppShell title="草稿箱" subtitle="查看、继续编辑或删除 72 小时内保存的草稿" wide>
       {error ? <p className="error">{error}</p> : null}
-      {token && workspaces.length ? (
-        <ComposerForm
-          copyPostId={copyPostId}
-          draftPostId={draftPostId}
-          initialWorkspaceId={initialWorkspaceId}
-          token={token}
-          workspaces={workspaces}
-        />
-      ) : null}
+      {token && workspaces.length ? <DraftManager token={token} workspaces={workspaces} /> : null}
       {token && !workspaces.length ? (
         <section className="panel">
           <h1>暂无工作区</h1>
