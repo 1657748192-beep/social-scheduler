@@ -61,6 +61,10 @@ function createPlatformMediaSourceMap(): Record<ComposerPlatform, MediaSource> {
   }, {} as Record<ComposerPlatform, MediaSource>);
 }
 
+function isReusableMediaAsset(asset: MediaAsset) {
+  return asset.originalAvailable !== false;
+}
+
 export function ComposerForm({ token, workspaces, copyPostId, initialWorkspaceId }: ComposerFormProps) {
   const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId || workspaces[0]?.id || "");
   const [title, setTitle] = useState("");
@@ -202,7 +206,9 @@ export function ComposerForm({ token, workspaces, copyPostId, initialWorkspaceId
               active.some((account) => account.id === variant.socialAccountId)
           );
           const sharedVariant = reusableVariants[0] ?? copiedPost.variants[0];
-          const sharedAssets = sharedVariant?.media.map((item) => item.mediaAsset) ?? [];
+          const sharedAssets = sharedVariant?.media
+            .map((item) => item.mediaAsset)
+            .filter(isReusableMediaAsset) ?? [];
           const nextPlatformMedia = createPlatformMediaMap();
           const nextMediaSources = createPlatformMediaSourceMap();
           const nextTexts = createVariantTextMap(copiedPost.baseText);
@@ -215,7 +221,9 @@ export function ComposerForm({ token, workspaces, copyPostId, initialWorkspaceId
               continue;
             }
 
-            const assets = variant.media.map((item) => item.mediaAsset);
+            const assets = variant.media
+              .map((item) => item.mediaAsset)
+              .filter(isReusableMediaAsset);
             nextTexts[platform] = variant.text;
 
             if (assets.map((asset) => asset.id).join(":") !== sharedAssetIds) {
@@ -244,6 +252,13 @@ export function ComposerForm({ token, workspaces, copyPostId, initialWorkspaceId
               ? "已复制原帖内容、素材和可用账号。现在可微调后重新发布。"
               : "已复制原帖内容和素材；原发布账号目前不可用，请重新选择账号后发布。"
           );
+          if (
+            copiedPost.variants.some((variant) =>
+              variant.media.some(({ mediaAsset }) => mediaAsset.originalAvailable === false)
+            )
+          ) {
+            setCopyNotice("已复制原帖文案。原素材已清理，请重新上传图片或视频后再发布。");
+          }
           copiedPostRef.current = copiedPostKey;
         } else {
           setSelectedAccountIds(active.map((account) => account.id));

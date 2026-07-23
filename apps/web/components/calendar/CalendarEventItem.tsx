@@ -28,9 +28,9 @@ export function CalendarEventItem({ schedule, onClick }: CalendarEventItemProps)
     >
       {thumbnail ? (
         thumbnail.mimeType.startsWith("video/") ? (
-          <span className="calendar-video-thumb">视频</span>
+          thumbnail.thumbnailUrl ? <img alt="" src={thumbnail.thumbnailUrl} /> : <span className="calendar-video-thumb">视频</span>
         ) : (
-          <img alt="" src={thumbnail.fileUrl} />
+          <img alt="" src={thumbnail.thumbnailUrl ?? thumbnail.fileUrl} />
         )
       ) : null}
       <span>

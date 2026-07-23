@@ -280,6 +280,9 @@ model MediaAsset {
   uploadedBy  String   @map("uploaded_by") @db.Uuid
   fileUrl     String   @map("file_url")
   storageKey  String   @map("storage_key")
+  thumbnailUrl String? @map("thumbnail_url")
+  thumbnailStorageKey String? @map("thumbnail_storage_key")
+  thumbnailSizeBytes Int? @map("thumbnail_size_bytes")
   mimeType    String   @map("mime_type")
   sizeBytes   Int      @map("size_bytes")
   width       Int?
@@ -288,11 +291,14 @@ model MediaAsset {
   status      String   @default("ready")
   metadata    Json     @default("{}")
   createdAt   DateTime @default(now()) @map("created_at")
+  originalDeletedAt DateTime? @map("original_deleted_at")
+  thumbnailExpiresAt DateTime? @map("thumbnail_expires_at")
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   uploader    User      @relation("MediaUploader", fields: [uploadedBy], references: [id])
   variantLinks PostVariantMedia[]
 
   @@map("media_assets")
+  @@index([status, thumbnailExpiresAt])
 }
 
 model Post {

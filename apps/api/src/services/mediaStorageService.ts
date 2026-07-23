@@ -70,6 +70,10 @@ function isCosAsset(asset: Pick<MediaAsset, "fileUrl">) {
   return asset.fileUrl.startsWith(cosStorageUrlPrefix);
 }
 
+function isCosStorageUrl(value: string | null | undefined) {
+  return Boolean(value?.startsWith(cosStorageUrlPrefix));
+}
+
 function ensureSafeLocalStoragePath(storageKey: string) {
   const resolvedPath = path.resolve(uploadRoot, storageKey);
   const rootWithSeparator = `${uploadRoot}${path.sep}`;
@@ -251,10 +255,38 @@ export function getMediaAccessUrl(
   });
 }
 
+function getMediaThumbnailAccessUrl(
+  asset: Pick<MediaAsset, "thumbnailUrl" | "thumbnailStorageKey">,
+  purpose: "preview" | "publish" = "preview"
+) {
+  if (!asset.thumbnailUrl) {
+    return null;
+  }
+
+  if (!isCosStorageUrl(asset.thumbnailUrl) || !asset.thumbnailStorageKey) {
+    return asset.thumbnailUrl;
+  }
+
+  const expires = purpose === "publish"
+    ? config.COS_PUBLISH_URL_EXPIRES_SECONDS
+    : config.COS_PREVIEW_URL_EXPIRES_SECONDS;
+
+  return getCosClient().getObjectUrl({
+    Bucket: config.COS_BUCKET,
+    Region: config.COS_REGION,
+    Key: asset.thumbnailStorageKey,
+    Sign: true,
+    Expires: expires,
+    Protocol: "https:"
+  });
+}
+
 export function withResolvedMediaUrl<T extends MediaAsset>(asset: T, purpose: "preview" | "publish" = "preview") {
   return {
     ...asset,
-    fileUrl: getMediaAccessUrl(asset, purpose)
+    fileUrl: asset.status === "ready" ? getMediaAccessUrl(asset, purpose) : asset.fileUrl,
+    thumbnailUrl: getMediaThumbnailAccessUrl(asset, purpose),
+    originalAvailable: asset.status === "ready"
   };
 }
 
@@ -269,6 +301,29 @@ export async function deleteStoredMedia(asset: Pick<MediaAsset, "fileUrl" | "sto
   }
 
   await fs.unlink(ensureSafeLocalStoragePath(asset.storageKey)).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== "ENOENT") {
+      throw error;
+    }
+  });
+}
+
+export async function deleteStoredThumbnail(
+  asset: Pick<MediaAsset, "thumbnailUrl" | "thumbnailStorageKey">
+) {
+  if (!asset.thumbnailUrl || !asset.thumbnailStorageKey) {
+    return;
+  }
+
+  if (isCosStorageUrl(asset.thumbnailUrl)) {
+    await getCosClient().deleteObject({
+      Bucket: config.COS_BUCKET,
+      Region: config.COS_REGION,
+      Key: asset.thumbnailStorageKey
+    });
+    return;
+  }
+
+  await fs.unlink(ensureSafeLocalStoragePath(asset.thumbnailStorageKey)).catch((error: NodeJS.ErrnoException) => {
     if (error.code !== "ENOENT") {
       throw error;
     }
@@ -353,14 +408,24 @@ export async function cleanUpExpiredMedia() {
     return expiryTimes.length > 0 && Math.max(...expiryTimes) <= now;
   });
 
-  const assets = [...basicCandidates, ...terminalCandidates];
+  const expiredThumbnailCandidates = await prisma.mediaAsset.findMany({
+    where: {
+      status: "expired",
+      thumbnailExpiresAt: {
+        lte: new Date(now)
+      }
+    },
+    take: 100
+  });
 
   let deleted = 0;
+  let archived = 0;
   let failed = 0;
 
-  for (const asset of assets) {
+  for (const asset of basicCandidates) {
     try {
       await deleteStoredMedia(asset);
+      await deleteStoredThumbnail(asset);
       await prisma.mediaAsset.delete({ where: { id: asset.id } });
       deleted += 1;
     } catch (error) {
@@ -369,7 +434,45 @@ export async function cleanUpExpiredMedia() {
     }
   }
 
-  return { scanned: assets.length, deleted, failed };
+  const thumbnailExpiresAt = new Date(
+    now + config.MEDIA_THUMBNAIL_RETENTION_DAYS * 24 * 60 * 60 * 1000
+  );
+
+  for (const asset of terminalCandidates) {
+    try {
+      await deleteStoredMedia(asset);
+      await prisma.mediaAsset.update({
+        where: { id: asset.id },
+        data: {
+          status: "expired",
+          originalDeletedAt: new Date(now),
+          thumbnailExpiresAt
+        }
+      });
+      archived += 1;
+    } catch (error) {
+      failed += 1;
+      console.error(`Failed to archive media asset ${asset.id}`, error);
+    }
+  }
+
+  for (const asset of expiredThumbnailCandidates) {
+    try {
+      await deleteStoredThumbnail(asset);
+      await prisma.mediaAsset.delete({ where: { id: asset.id } });
+      deleted += 1;
+    } catch (error) {
+      failed += 1;
+      console.error(`Failed to remove expired media thumbnail ${asset.id}`, error);
+    }
+  }
+
+  return {
+    scanned: basicCandidates.length + terminalCandidates.length + expiredThumbnailCandidates.length,
+    archived,
+    deleted,
+    failed
+  };
 }
 
 export async function migrateLegacyLocalMediaToCos(limit = 100) {

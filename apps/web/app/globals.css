@@ -3210,6 +3210,13 @@ textarea {
   padding: 3px 7px;
 }
 
+.published-post-thumb > .published-post-thumb-cleaned {
+  right: auto;
+  bottom: 8px;
+  left: 8px;
+  background: rgba(101, 61, 18, 0.82);
+}
+
 .published-post-placeholder {
   display: grid;
   width: 100%;

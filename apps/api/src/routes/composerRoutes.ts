@@ -25,7 +25,10 @@ composerRoutes.get(
 composerRoutes.post(
   "/workspaces/:workspaceId/media",
   requireAuth,
-  mediaUpload.single("file"),
+  mediaUpload.fields([
+    { name: "file", maxCount: 1 },
+    { name: "thumbnail", maxCount: 1 }
+  ]),
   asyncHandler(uploadWorkspaceMediaController)
 );
 composerRoutes.post(

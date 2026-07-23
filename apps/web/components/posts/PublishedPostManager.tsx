@@ -36,10 +36,29 @@ function getPostExcerpt(post: PublishedPost) {
 }
 
 function getMediaReuseStatus(post: PublishedPost, now: number) {
-  if (!post.media.length || !post.mediaReuseExpiresAt) {
+  const availableCount = post.media.filter(({ mediaAsset }) => mediaAsset.originalAvailable !== false).length;
+
+  if (!post.media.length) {
     return {
       active: false,
+      availableCount,
       text: "暂无可复用素材"
+    };
+  }
+
+  if (!availableCount) {
+    return {
+      active: false,
+      availableCount,
+      text: "原素材已清理"
+    };
+  }
+
+  if (!post.mediaReuseExpiresAt) {
+    return {
+      active: false,
+      availableCount,
+      text: "素材清理中"
     };
   }
 
@@ -48,6 +67,7 @@ function getMediaReuseStatus(post: PublishedPost, now: number) {
   if (!Number.isFinite(remainingMs) || remainingMs <= 0) {
     return {
       active: false,
+      availableCount,
       text: "素材清理中"
     };
   }
@@ -60,6 +80,7 @@ function getMediaReuseStatus(post: PublishedPost, now: number) {
 
   return {
     active: true,
+    availableCount,
     text: `还可复用 ${remaining}`
   };
 }
@@ -180,21 +201,25 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
       <div className="published-post-list">
         {filteredPosts.map((post) => {
           const thumbnail = post.media[0]?.mediaAsset;
+          const thumbnailUrl = thumbnail?.thumbnailUrl ?? (
+            thumbnail?.originalAvailable !== false ? thumbnail?.fileUrl : null
+          );
           const composerUrl = `/composer?workspaceId=${encodeURIComponent(workspaceId)}&copyPostId=${encodeURIComponent(post.postId)}`;
           const mediaReuse = getMediaReuseStatus(post, now);
 
           return (
             <article className="published-post-card" key={post.id}>
               <div className="published-post-thumb" aria-hidden="true">
-                {thumbnail ? (
-                  thumbnail.mimeType.startsWith("video/") ? (
-                    <>
-                      <video muted preload="metadata" src={thumbnail.fileUrl} />
-                      <span>视频</span>
-                    </>
-                  ) : (
-                    <img alt="" src={thumbnail.fileUrl} />
-                  )
+                {thumbnail && thumbnailUrl ? (
+                  <>
+                    <img alt="" src={thumbnailUrl} />
+                    {thumbnail.mimeType.startsWith("video/") ? <span>视频</span> : null}
+                    {thumbnail.originalAvailable === false ? (
+                      <span className="published-post-thumb-cleaned">原素材已清理</span>
+                    ) : null}
+                  </>
+                ) : thumbnail ? (
+                  <span className="published-post-placeholder">原素材已清理</span>
                 ) : (
                   <span className="published-post-placeholder">无素材</span>
                 )}
@@ -225,7 +250,9 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
                   <div>
                     <dt>素材复用</dt>
                     <dd className={mediaReuse.active ? "published-media-reuse active" : "published-media-reuse"}>
-                      {post.media.length ? `${post.media.length} 个 · ${mediaReuse.text}` : mediaReuse.text}
+                      {post.media.length
+                        ? `${mediaReuse.availableCount}/${post.media.length} 个 · ${mediaReuse.text}`
+                        : mediaReuse.text}
                     </dd>
                   </div>
                 </dl>

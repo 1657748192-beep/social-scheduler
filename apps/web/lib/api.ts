@@ -282,9 +282,15 @@ export type MediaAsset = {
   workspaceId: string;
   fileUrl: string;
   storageKey: string;
+  thumbnailUrl?: string | null;
+  thumbnailStorageKey?: string | null;
+  thumbnailSizeBytes?: number | null;
   mimeType: string;
   sizeBytes: number;
   createdAt: string;
+  originalDeletedAt?: string | null;
+  thumbnailExpiresAt?: string | null;
+  originalAvailable?: boolean;
 };
 
 export type ComposerPostVariant = {

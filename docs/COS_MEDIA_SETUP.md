@@ -38,6 +38,7 @@ WORKER_CONCURRENCY=1
 MEDIA_UNUSED_RETENTION_HOURS=24
 MEDIA_PUBLISHED_RETENTION_HOURS=24
 MEDIA_FAILED_RETENTION_HOURS=72
+MEDIA_THUMBNAIL_RETENTION_DAYS=180
 MEDIA_CLEANUP_INTERVAL_HOURS=1
 ```
 
@@ -76,6 +77,7 @@ Worker 启动时执行一次清理，此后每 `MEDIA_CLEANUP_INTERVAL_HOURS` �
 - 已被引用且所有关联发布变体均已成功的素材：从最后一次成功发布起超过 `MEDIA_PUBLISHED_RETENTION_HOURS` 删除。
 - 已被引用且所有关联发布变体均已最终失败或取消的素材：从最后一次失败/取消起超过 `MEDIA_FAILED_RETENTION_HOURS` 删除。
 - 草稿、排期中、发布中的素材不会自动删除，避免破坏用户内容。
+- 原文件删除时，会保留 320px 内的图片/视频首帧缩略图；缩略图在 `MEDIA_THUMBNAIL_RETENTION_DAYS` 后删除。
 
 查看清理和迁移日志：
 

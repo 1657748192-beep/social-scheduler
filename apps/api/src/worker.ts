@@ -189,7 +189,9 @@ async function runMediaCleanup() {
   try {
     const result = await cleanUpExpiredMedia();
     if (result.scanned) {
-      console.log(`Media cleanup: deleted ${result.deleted}/${result.scanned}, failed ${result.failed}`);
+      console.log(
+        `Media cleanup: originals archived ${result.archived}, records deleted ${result.deleted}/${result.scanned}, failed ${result.failed}`
+      );
     }
   } catch (error) {
     console.error("Media cleanup failed", error);

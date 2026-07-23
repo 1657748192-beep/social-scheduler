@@ -376,7 +376,8 @@ export async function getComposerPost(userId: string, workspaceId: string, postI
 export async function uploadWorkspaceMedia(
   userId: string,
   workspaceId: string,
-  file: Express.Multer.File
+  file: Express.Multer.File,
+  thumbnail?: Express.Multer.File
 ) {
   const membership = await requireWorkspacePublishingAccess(userId, workspaceId);
   ensureCanWrite(membership.role);
@@ -395,12 +396,19 @@ export async function uploadWorkspaceMedia(
     sizeBytes: file.size
   });
 
+  if (thumbnail && (!thumbnail.mimetype.startsWith("image/") || thumbnail.size > 100 * 1024)) {
+    throw new HttpError(400, "Media thumbnail must be an image smaller than 100 KB");
+  }
+
   const asset = await prisma.mediaAsset.create({
     data: {
       workspaceId,
       uploadedBy: userId,
       fileUrl: `${config.API_PUBLIC_URL}/uploads/${file.filename}`,
       storageKey: file.filename,
+      thumbnailUrl: thumbnail ? `${config.API_PUBLIC_URL}/uploads/${thumbnail.filename}` : null,
+      thumbnailStorageKey: thumbnail?.filename ?? null,
+      thumbnailSizeBytes: thumbnail?.size ?? null,
       mimeType: file.mimetype,
       sizeBytes: file.size,
       metadata: {

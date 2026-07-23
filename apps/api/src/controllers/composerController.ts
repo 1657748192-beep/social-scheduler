@@ -18,10 +18,12 @@ export async function getComposerPlatformsController(_req: Request, res: Respons
 }
 
 export async function uploadWorkspaceMediaController(req: Request, res: Response) {
+  const files = req.files as { file?: Express.Multer.File[]; thumbnail?: Express.Multer.File[] } | undefined;
   const asset = await uploadWorkspaceMedia(
     req.user!.id,
     req.params.workspaceId,
-    req.file as Express.Multer.File
+    files?.file?.[0] as Express.Multer.File,
+    files?.thumbnail?.[0]
   );
   return res.status(201).json(asset);
 }

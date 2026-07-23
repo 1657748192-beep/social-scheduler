@@ -40,6 +40,109 @@ function newUploadId(file: File) {
   return `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2)}`;
 }
 
+function createCanvasThumbnail(
+  source: CanvasImageSource,
+  sourceWidth: number,
+  sourceHeight: number,
+  maxDimension: number,
+  quality: number
+) {
+  const scale = Math.min(1, maxDimension / Math.max(sourceWidth, sourceHeight));
+  const width = Math.max(1, Math.round(sourceWidth * scale));
+  const height = Math.max(1, Math.round(sourceHeight * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    return Promise.resolve<Blob | null>(null);
+  }
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, width, height);
+  context.drawImage(source, 0, 0, width, height);
+
+  return new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, "image/jpeg", quality);
+  });
+}
+
+async function createMediaThumbnail(file: File, type: UploadType) {
+  const objectUrl = URL.createObjectURL(file);
+
+  try {
+    let source: CanvasImageSource;
+    let sourceWidth: number;
+    let sourceHeight: number;
+
+    if (type === "image") {
+      const image = new Image();
+      image.decoding = "async";
+      image.src = objectUrl;
+      await new Promise<void>((resolve, reject) => {
+        image.onload = () => resolve();
+        image.onerror = () => reject(new Error("无法生成图片缩略图"));
+      });
+      source = image;
+      sourceWidth = image.naturalWidth;
+      sourceHeight = image.naturalHeight;
+    } else {
+      const video = document.createElement("video");
+      video.muted = true;
+      video.playsInline = true;
+      video.preload = "metadata";
+      video.src = objectUrl;
+      await new Promise<void>((resolve, reject) => {
+        video.onloadeddata = () => resolve();
+        video.onerror = () => reject(new Error("无法读取视频首帧"));
+      });
+
+      if (Number.isFinite(video.duration) && video.duration > 0.1) {
+        video.currentTime = Math.min(0.1, video.duration / 2);
+        await new Promise<void>((resolve, reject) => {
+          video.onseeked = () => resolve();
+          video.onerror = () => reject(new Error("无法截取视频首帧"));
+        });
+      }
+
+      source = video;
+      sourceWidth = video.videoWidth;
+      sourceHeight = video.videoHeight;
+    }
+
+    if (!sourceWidth || !sourceHeight) {
+      return null;
+    }
+
+    const options = [
+      { maxDimension: 320, quality: 0.72 },
+      { maxDimension: 280, quality: 0.62 },
+      { maxDimension: 240, quality: 0.52 },
+      { maxDimension: 200, quality: 0.42 }
+    ];
+    let thumbnail: Blob | null = null;
+
+    for (const option of options) {
+      thumbnail = await createCanvasThumbnail(
+        source,
+        sourceWidth,
+        sourceHeight,
+        option.maxDimension,
+        option.quality
+      );
+
+      if (thumbnail && thumbnail.size <= 80 * 1024) {
+        break;
+      }
+    }
+
+    return thumbnail;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 function uploadToCos(intent: CosUploadIntent, file: File, onProgress: (percent: number) => void) {
   const cos = new COS({
     getAuthorization: (_options, callback) => {
@@ -144,6 +247,12 @@ export function MediaUploader({
 
         const formData = new FormData();
         formData.append("file", item.file);
+        const thumbnail = await createMediaThumbnail(item.file, item.type).catch(() => null);
+
+        if (thumbnail) {
+          formData.append("thumbnail", new File([thumbnail], "thumbnail.jpg", { type: "image/jpeg" }));
+        }
+
         asset = await apiUpload<MediaAsset>(`/workspaces/${workspaceId}/media`, token, formData, {
           onProgress: ({ percent }) => updateUpload(item.id, { progress: percent })
         });
@@ -302,17 +411,18 @@ export function MediaUploader({
         <div className="media-grid">
           {media.map((asset) => {
             const isVideo = asset.mimeType.startsWith("video/");
+            const thumbnailUrl = asset.thumbnailUrl ?? asset.fileUrl;
 
             return (
               <article className="media-thumb" key={asset.id}>
                 <div className="media-thumb-visual">
-                  {isVideo ? (
+                  {thumbnailUrl ? (
                     <>
-                      <video muted preload="metadata" src={asset.fileUrl} />
-                      <span className="media-badge">视频</span>
+                      <img alt={isVideo ? "视频首帧缩略图" : "图片素材缩略图"} src={thumbnailUrl} />
+                      {isVideo ? <span className="media-badge">视频</span> : null}
                     </>
                   ) : (
-                    <img alt="图片素材缩略图" src={asset.fileUrl} />
+                    <span className="media-badge">缩略图不可用</span>
                   )}
                 </div>
                 <div className="media-thumb-footer">
