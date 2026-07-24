@@ -926,6 +926,40 @@ textarea {
   color: #41516a;
 }
 
+.legal-card .legal-kicker {
+  margin: 0 0 8px;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.legal-card ul {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+  padding-left: 24px;
+  color: #41516a;
+  line-height: 1.75;
+}
+
+.legal-card li::marker {
+  color: var(--primary);
+}
+
+.legal-card a {
+  color: var(--primary-dark);
+  font-weight: 700;
+}
+
+.legal-card code {
+  border-radius: 4px;
+  background: #edf4f8;
+  color: #174f64;
+  padding: 1px 4px;
+}
+
 .topbar {
   display: flex;
   align-items: center;
