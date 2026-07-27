@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { ComposerPlatform, SocialAccount } from "../../lib/api";
 import { composerPlatforms } from "./platformConfig";
 
@@ -22,6 +23,7 @@ export function AccountTargetSelector({
   onToggleAccount,
   onToggleAll
 }: AccountTargetSelectorProps) {
+  const [expandedPlatforms, setExpandedPlatforms] = useState<Partial<Record<ComposerPlatform, boolean>>>({});
   const selectedIds = new Set(selectedAccountIds);
   const allSelected = accounts.length > 0 && selectedAccountIds.length === accounts.length;
   const groupedAccounts = composerPlatforms
@@ -60,38 +62,66 @@ export function AccountTargetSelector({
       ) : null}
 
       <div className="account-target-groups" aria-busy={loading}>
-        {groupedAccounts.map(({ platform, accounts: platformAccounts }) => (
-          <section className="account-target-group" key={platform.platform}>
-            <div className="account-group-heading">
-              <strong>{platform.label}</strong>
-              <span>{platformAccounts.length} 个已连接账号</span>
-            </div>
-            <div className="account-target-list">
-              {platformAccounts.map((account) => {
-                const checked = selectedIds.has(account.id);
+        {groupedAccounts.map(({ platform, accounts: platformAccounts }) => {
+          const selectedPlatformAccountCount = platformAccounts.filter((account) => selectedIds.has(account.id)).length;
+          const expanded = expandedPlatforms[platform.platform] ?? platformAccounts.length <= 3;
 
-                return (
-                  <label className={`account-target-row ${checked ? "selected" : ""}`} key={account.id}>
-                    <input
-                      aria-label={`选择 ${account.displayName}`}
-                      checked={checked}
-                      onChange={() => onToggleAccount(account.id)}
-                      type="checkbox"
-                    />
-                    <span className={`account-target-avatar ${platform.platform}`}>
-                      {account.avatarUrl ? <img alt="" src={account.avatarUrl} /> : initials(account.displayName)}
-                    </span>
-                    <span className="account-target-meta">
-                      <strong>{account.displayName}</strong>
-                      <small>{account.accountType === "page" ? "Facebook 主页" : account.accountType === "channel" ? "YouTube 频道" : platform.label}</small>
-                    </span>
-                    <span className="account-target-status">已连接</span>
-                  </label>
-                );
-              })}
-            </div>
-          </section>
-        ))}
+          return (
+            <section className="account-target-group" key={platform.platform}>
+              <button
+                aria-controls={`account-target-list-${platform.platform}`}
+                aria-expanded={expanded}
+                className="account-group-heading"
+                onClick={() =>
+                  setExpandedPlatforms((current) => ({
+                    ...current,
+                    [platform.platform]: !expanded
+                  }))
+                }
+                type="button"
+              >
+                <span className="account-group-label">
+                  <strong>{platform.label}</strong>
+                  <small>
+                    {platformAccounts.length} 个已连接账号{selectedPlatformAccountCount ? ` · 已选择 ${selectedPlatformAccountCount} 个账号` : ""}
+                  </small>
+                </span>
+                <span className="account-group-toggle-action">
+                  {expanded ? "收起账号" : "展开账号"}
+                  <span aria-hidden="true" className={`account-group-chevron ${expanded ? "expanded" : ""}`}>
+                    ▾
+                  </span>
+                </span>
+              </button>
+              {expanded ? (
+                <div className="account-target-list" id={`account-target-list-${platform.platform}`}>
+                  {platformAccounts.map((account) => {
+                    const checked = selectedIds.has(account.id);
+
+                    return (
+                      <label className={`account-target-row ${checked ? "selected" : ""}`} key={account.id}>
+                        <input
+                          aria-label={`选择 ${account.displayName}`}
+                          checked={checked}
+                          onChange={() => onToggleAccount(account.id)}
+                          type="checkbox"
+                        />
+                        <span className={`account-target-avatar ${platform.platform}`}>
+                          {account.avatarUrl ? <img alt="" src={account.avatarUrl} /> : initials(account.displayName)}
+                        </span>
+                        <span className="account-target-meta">
+                          <strong>{account.displayName}</strong>
+                          <small>{account.accountType === "page" ? "Facebook 主页" : account.accountType === "channel" ? "YouTube 频道" : platform.label}</small>
+                        </span>
+                        <span className="account-target-status">已连接</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </section>
+          );
+        })}
       </div>
     </section>
   );

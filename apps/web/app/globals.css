@@ -1848,17 +1848,70 @@ textarea {
 
 .account-group-heading {
   display: flex;
+  width: 100%;
   justify-content: space-between;
+  align-items: center;
   gap: 10px;
+  border: 0;
   padding: 11px 20px;
   background: #f8fafc;
   color: var(--muted);
+  cursor: pointer;
+  font: inherit;
   font-size: 12px;
+  text-align: left;
+}
+
+.account-group-heading:hover {
+  background: #f0f6fa;
+}
+
+.account-group-heading:focus-visible {
+  outline: 3px solid rgba(47, 156, 179, 0.32);
+  outline-offset: -3px;
+}
+
+.account-group-label {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
 }
 
 .account-group-heading strong {
   color: var(--text);
   font-size: 13px;
+}
+
+.account-group-label small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.account-group-toggle-action {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.account-group-chevron {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #e5f2f5;
+  color: var(--primary-dark);
+  font-size: 15px;
+  line-height: 1;
+  transition: transform 160ms ease;
+}
+
+.account-group-chevron.expanded {
+  transform: rotate(180deg);
 }
 
 .account-target-list {
