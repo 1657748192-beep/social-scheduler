@@ -94,7 +94,11 @@ export function AccountTargetSelector({
                 </span>
               </button>
               {expanded ? (
-                <div className="account-target-list" id={`account-target-list-${platform.platform}`}>
+                <div
+                  aria-label={platformAccounts.length > 5 ? `${platform.label} 账号列表，可滚动查看其余账号` : undefined}
+                  className={`account-target-list ${platformAccounts.length > 5 ? "scrollable" : ""}`}
+                  id={`account-target-list-${platform.platform}`}
+                >
                   {platformAccounts.map((account) => {
                     const checked = selectedIds.has(account.id);
 
