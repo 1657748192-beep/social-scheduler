@@ -15,7 +15,7 @@ import { chinaLocalInputToISOString } from "../../lib/chinaTime";
 import { AccountTargetSelector } from "./AccountTargetSelector";
 import { appendWebsiteToText, isValidWebsite } from "./contentUtils";
 import { MediaUploader } from "./MediaUploader";
-import { PlatformEditor } from "./PlatformEditor";
+import { PlatformEditor, type WebsiteMode } from "./PlatformEditor";
 import { platformLimits } from "./platformConfig";
 import { PlatformTabs } from "./PlatformTabs";
 import { PostPreview } from "./PostPreview";
@@ -48,6 +48,12 @@ function createVariantTextMap(value = "") {
   return Object.fromEntries(
     allComposerPlatforms.map((platform) => [platform, value])
   ) as Record<ComposerPlatform, string>;
+}
+
+function createPlatformWebsiteModeMap(value: WebsiteMode = "inherit") {
+  return Object.fromEntries(
+    allComposerPlatforms.map((platform) => [platform, value])
+  ) as Record<ComposerPlatform, WebsiteMode>;
 }
 
 function createPlatformMediaMap(): Record<ComposerPlatform, MediaAsset[]> {
@@ -109,6 +115,9 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
   );
   const [variantWebsites, setVariantWebsites] = useState<Record<ComposerPlatform, string>>(() =>
     createVariantTextMap()
+  );
+  const [variantWebsiteModes, setVariantWebsiteModes] = useState<Record<ComposerPlatform, WebsiteMode>>(() =>
+    createPlatformWebsiteModeMap()
   );
   const [socialAccounts, setSocialAccounts] = useState<SocialAccount[]>([]);
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
@@ -186,6 +195,15 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
         return media;
       }, {} as Record<ComposerPlatform, MediaAsset[]>),
     [mediaSourceByPlatform, platformMediaByPlatform, sharedMedia]
+  );
+  const resolvedWebsitesByPlatform = useMemo(
+    () =>
+      allComposerPlatforms.reduce<Record<ComposerPlatform, string>>((websites, platform) => {
+        const mode = variantWebsiteModes[platform];
+        websites[platform] = mode === "inherit" ? baseWebsite : mode === "custom" ? variantWebsites[platform] : "";
+        return websites;
+      }, {} as Record<ComposerPlatform, string>),
+    [baseWebsite, variantWebsiteModes, variantWebsites]
   );
   const activeMedia = resolvedMediaByPlatform[activePlatform];
   const activeMediaUsesShared = mediaSourceByPlatform[activePlatform] === "shared";
@@ -297,6 +315,7 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
           setBaseWebsite("");
           setVariantTexts(nextTexts);
           setVariantWebsites(createVariantTextMap());
+          setVariantWebsiteModes(createPlatformWebsiteModeMap());
           setSharedMedia(sharedAssets);
           setPlatformMediaByPlatform(nextPlatformMedia);
           setMediaSourceByPlatform(nextMediaSources);
@@ -471,7 +490,6 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
 
   function applyBaseContent() {
     setVariantTexts(createVariantTextMap(baseText));
-    setVariantWebsites(createVariantTextMap(baseWebsite));
   }
 
   function insertBaseText(value: string) {
@@ -561,8 +579,8 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
       }
     }
 
-    const hasInvalidWebsite = !isValidWebsite(baseWebsite) || selectedPlatforms.some(
-      (platform) => !isValidWebsite(variantWebsites[platform] || baseWebsite)
+    const hasInvalidWebsite = selectedPlatforms.some(
+      (platform) => !isValidWebsite(resolvedWebsitesByPlatform[platform])
     );
 
     if (hasInvalidWebsite) {
@@ -593,7 +611,7 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
               platform: account.platform,
               text: appendWebsiteToText(
                 variantTexts[account.platform] || baseText,
-                variantWebsites[account.platform] || baseWebsite
+                resolvedWebsitesByPlatform[account.platform]
               ),
               mediaAssetIds: resolvedMediaByPlatform[account.platform].map((asset) => asset.id),
               platformPayload:
@@ -720,9 +738,23 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
                   [activePlatform]: value
                 }))
               }
+              onWebsiteModeChange={(mode) => {
+                if (mode === "custom" && variantWebsiteModes[activePlatform] === "inherit") {
+                  setVariantWebsites((current) => ({
+                    ...current,
+                    [activePlatform]: current[activePlatform] || baseWebsite
+                  }));
+                }
+                setVariantWebsiteModes((current) => ({
+                  ...current,
+                  [activePlatform]: mode
+                }));
+              }}
               platform={activePlatform}
               text={variantTexts[activePlatform] || baseText}
-              website={variantWebsites[activePlatform] || baseWebsite}
+              baseWebsite={baseWebsite}
+              website={variantWebsites[activePlatform]}
+              websiteMode={variantWebsiteModes[activePlatform]}
             />
           ) : null}
 
@@ -866,9 +898,8 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
           loading={accountsLoading}
           mediaByPlatform={resolvedMediaByPlatform}
           mediaSources={mediaSourceByPlatform}
-          baseWebsite={baseWebsite}
           texts={variantTexts}
-          websites={variantWebsites}
+          websites={resolvedWebsitesByPlatform}
         />
 
         <section className="composer-panel checklist-panel publish-action-panel">

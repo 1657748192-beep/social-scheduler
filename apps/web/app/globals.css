@@ -1638,6 +1638,42 @@ textarea {
   font-size: 12px;
 }
 
+.website-mode-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 2px 0 10px;
+}
+
+.website-mode-switch button {
+  border: 1px solid #d7e0ea;
+  border-radius: 999px;
+  background: #f7f9fc;
+  color: #526274;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 11px;
+}
+
+.website-mode-switch button:hover {
+  border-color: #5e9ec9;
+  background: #eef7fc;
+}
+
+.website-mode-switch button.active {
+  border-color: #147b9b;
+  background: #e5f6fa;
+  color: #126d89;
+  font-weight: 700;
+}
+
+.website-field input:disabled {
+  background: #f4f7fa;
+  color: #6b7a8d;
+  cursor: not-allowed;
+}
+
 .tiktok-publish-settings {
   display: grid;
   gap: 14px;

@@ -10,7 +10,6 @@ type PostPreviewProps = {
   texts: Record<ComposerPlatform, string>;
   websites: Record<ComposerPlatform, string>;
   baseText: string;
-  baseWebsite: string;
   mediaByPlatform: Record<ComposerPlatform, MediaAsset[]>;
   mediaSources: Record<ComposerPlatform, "shared" | "custom">;
   loading: boolean;
@@ -21,7 +20,6 @@ export function PostPreview({
   texts,
   websites,
   baseText,
-  baseWebsite,
   mediaByPlatform,
   mediaSources,
   loading
@@ -40,7 +38,7 @@ export function PostPreview({
 
   const previewAccounts = previewPlatform ? groups.get(previewPlatform) ?? [] : [];
   const previewText = previewPlatform
-    ? appendWebsiteToText(texts[previewPlatform] || baseText, websites[previewPlatform] || baseWebsite)
+    ? appendWebsiteToText(texts[previewPlatform] || baseText, websites[previewPlatform])
     : "";
   const previewMedia = previewPlatform ? mediaByPlatform[previewPlatform] : [];
   const previewAsset = previewMedia[0];
@@ -72,7 +70,7 @@ export function PostPreview({
           const limit = platformLimits[platform];
           const text = appendWebsiteToText(
             texts[platform] || baseText,
-            websites[platform] || baseWebsite
+            websites[platform]
           );
           const platformMedia = mediaByPlatform[platform];
           const mediaSource = mediaSources[platform];
