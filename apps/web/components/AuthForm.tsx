@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiRequest, type AuthResponse } from "../lib/api";
+import { LanguageToggle, useLanguage } from "./LanguageProvider";
 
 type AuthFormProps = {
   mode: "login" | "register";
@@ -29,6 +30,7 @@ const copy = {
 
 export function AuthForm({ mode }: AuthFormProps) {
   const router = useRouter();
+  const { t } = useLanguage();
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isRegister = mode === "register";
@@ -59,7 +61,7 @@ export function AuthForm({ mode }: AuthFormProps) {
       localStorage.setItem("social_scheduler_token", response.token);
       router.push("/dashboard");
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : copy.requestFailed);
+      setError(requestError instanceof Error ? requestError.message : t(copy.requestFailed, "Request failed"));
     } finally {
       setIsSubmitting(false);
     }
@@ -67,36 +69,43 @@ export function AuthForm({ mode }: AuthFormProps) {
 
   return (
     <section className="auth-card">
+      <div className="auth-language-toggle">
+        <LanguageToggle compact />
+      </div>
       <div className="auth-brand">
         <span className="brand-mark">S</span>
         <div>
           <h1>Social Scheduler</h1>
-          <p>{copy.brandSubtitle}</p>
+          <p>{t(copy.brandSubtitle, "Social media content scheduling workspace")}</p>
         </div>
       </div>
 
       <div className="auth-intro">
-        <h2>{isRegister ? copy.registerTitle : copy.loginTitle}</h2>
-        <p className="muted">{isRegister ? copy.registerDescription : copy.loginDescription}</p>
+        <h2>{isRegister ? t(copy.registerTitle, "Create account") : t(copy.loginTitle, "Sign in")}</h2>
+        <p className="muted">
+          {isRegister
+            ? t(copy.registerDescription, "A default workspace will be created with your account.")
+            : t(copy.loginDescription, "Sign in to Social Scheduler to manage your content schedule.")}
+        </p>
       </div>
 
       <form className="form" onSubmit={onSubmit}>
         {isRegister ? (
           <label className="field">
-            <span>{copy.name}</span>
+            <span>{t(copy.name, "Name")}</span>
             <input name="name" autoComplete="name" required />
           </label>
         ) : null}
 
         <label className="field">
-          <span>{copy.email}</span>
+          <span>{t(copy.email, "Email")}</span>
           <input name="email" type="email" autoComplete="email" required />
         </label>
 
         <label className="field">
           <span className="field-heading">
-            <span>{copy.password}</span>
-            {!isRegister ? <Link href="/forgot-password">{copy.forgotPassword}</Link> : null}
+            <span>{t(copy.password, "Password")}</span>
+            {!isRegister ? <Link href="/forgot-password">{t(copy.forgotPassword, "Forgot password?")}</Link> : null}
           </span>
           <input
             name="password"
@@ -108,7 +117,11 @@ export function AuthForm({ mode }: AuthFormProps) {
         </label>
 
         <button className="button" disabled={isSubmitting} type="submit">
-          {isSubmitting ? copy.submitting : isRegister ? copy.registerTitle : copy.loginTitle}
+          {isSubmitting
+            ? t(copy.submitting, "Please wait...")
+            : isRegister
+              ? t(copy.registerTitle, "Create account")
+              : t(copy.loginTitle, "Sign in")}
         </button>
       </form>
 
@@ -117,13 +130,13 @@ export function AuthForm({ mode }: AuthFormProps) {
       <p className="muted auth-switch">
         {isRegister ? (
           <>
-            {copy.alreadyAccount}
-            <Link href="/login">{copy.goLogin}</Link>
+            {t(copy.alreadyAccount, "Already have an account?")}
+            <Link href="/login">{t(copy.goLogin, "Sign in")}</Link>
           </>
         ) : (
           <>
-            {copy.noAccount}
-            <Link href="/register">{copy.createOne}</Link>
+            {t(copy.noAccount, "New to Social Scheduler?")}
+            <Link href="/register">{t(copy.createOne, "Create an account")}</Link>
           </>
         )}
       </p>

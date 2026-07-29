@@ -3,6 +3,7 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 import COS from "cos-js-sdk-v5";
 import { apiRequest, apiUpload, type CosUploadIntent, type MediaAsset } from "../../lib/api";
+import { useLanguage } from "../LanguageProvider";
 
 const maxMediaSizeBytes = 250 * 1024 * 1024;
 const uploadConcurrency = 2;
@@ -177,6 +178,7 @@ export function MediaUploader({
   disabled = false,
   onMediaChange
 }: MediaUploaderProps) {
+  const { t } = useLanguage();
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const mediaRef = useRef(media);
@@ -335,11 +337,11 @@ export function MediaUploader({
       <p className="upload-hint platform-media-hint">{description}</p>
       <div className="row">
         <div>
-          <p className="section-kicker">素材库 · {label}</p>
-          <h2>{label} 图片与视频</h2>
+          <p className="section-kicker">{t(`素材库 · ${label}`, `Media library · ${label}`)}</p>
+          <h2>{t(`${label} 图片与视频`, `${label} images and videos`)}</h2>
         </div>
         <span className="muted">
-          {imageCount} 图 / {videoCount} 视频
+          {t(`${imageCount} 图 / ${videoCount} 视频`, `${imageCount} images / ${videoCount} videos`)}
         </span>
       </div>
 
@@ -366,8 +368,8 @@ export function MediaUploader({
           onClick={() => imageInputRef.current?.click()}
           type="button"
         >
-          <strong>{uploadingType === "image" ? "图片上传中…" : "添加图片"}</strong>
-          <span>支持多张图片，单个最大 250 MB</span>
+          <strong>{uploadingType === "image" ? t("图片上传中…", "Uploading images...") : t("添加图片", "Add images")}</strong>
+          <span>{t("支持多张图片，单个最大 250 MB", "Multiple images supported, up to 250 MB each")}</span>
         </button>
         <button
           className="upload-drop video"
@@ -375,8 +377,8 @@ export function MediaUploader({
           onClick={() => videoInputRef.current?.click()}
           type="button"
         >
-          <strong>{uploadingType === "video" ? "视频上传中…" : "添加视频"}</strong>
-          <span>支持并行上传，单个最大 250 MB</span>
+          <strong>{uploadingType === "video" ? t("视频上传中…", "Uploading videos...") : t("添加视频", "Add videos")}</strong>
+          <span>{t("支持并行上传，单个最大 250 MB", "Parallel upload supported, up to 250 MB each")}</span>
         </button>
       </div>
 
@@ -392,12 +394,12 @@ export function MediaUploader({
                 {item.status === "uploading" ? <em>{item.progress}%</em> : null}
                 {item.status === "failed" ? (
                   <button disabled={isUploading} onClick={() => retryUpload(item)} type="button">
-                    重试
+                    {t("重试", "Retry")}
                   </button>
                 ) : null}
               </div>
               {item.status === "uploading" ? (
-                <div className="upload-progress-track" aria-label={`${item.file.name} 上传进度`}>
+                <div className="upload-progress-track" aria-label={t(`${item.file.name} 上传进度`, `${item.file.name} upload progress`)}>
                   <span style={{ width: `${item.progress}%` }} />
                 </div>
               ) : null}
@@ -418,21 +420,21 @@ export function MediaUploader({
                 <div className="media-thumb-visual">
                   {thumbnailUrl ? (
                     <>
-                      <img alt={isVideo ? "视频首帧缩略图" : "图片素材缩略图"} src={thumbnailUrl} />
-                      {isVideo ? <span className="media-badge">视频</span> : null}
+                      <img alt={isVideo ? t("视频首帧缩略图", "Video cover thumbnail") : t("图片素材缩略图", "Image thumbnail")} src={thumbnailUrl} />
+                      {isVideo ? <span className="media-badge">{t("视频", "Video")}</span> : null}
                     </>
                   ) : (
-                    <span className="media-badge">缩略图不可用</span>
+                    <span className="media-badge">{t("缩略图不可用", "No thumbnail")}</span>
                   )}
                 </div>
                 <div className="media-thumb-footer">
-                  <span>{isVideo ? "视频素材" : "图片素材"}</span>
+                  <span>{isVideo ? t("视频素材", "Video") : t("图片素材", "Image")}</span>
                   <div className="media-thumb-actions">
                     <button onClick={() => setPreviewAsset(asset)} type="button">
-                      {isVideo ? "观看视频" : "预览图片"}
+                      {isVideo ? t("观看视频", "Watch video") : t("预览图片", "Preview image")}
                     </button>
                     <button className="media-remove" onClick={() => removeMedia(asset.id)} type="button">
-                      移除
+                      {t("移除", "Remove")}
                     </button>
                   </div>
                 </div>
@@ -441,7 +443,7 @@ export function MediaUploader({
           })}
         </div>
       ) : (
-        <p className="upload-hint">上传后会显示缩略图；可预览素材或将其移除。</p>
+        <p className="upload-hint">{t("上传后会显示缩略图；可预览素材或将其移除。", "A thumbnail appears after upload. Preview or remove media here.")}</p>
       )}
 
       {previewAsset ? (
@@ -451,7 +453,7 @@ export function MediaUploader({
           role="presentation"
         >
           <section
-            aria-label={previewAsset.mimeType.startsWith("video/") ? "视频预览" : "图片预览"}
+            aria-label={previewAsset.mimeType.startsWith("video/") ? t("视频预览", "Video preview") : t("图片预览", "Image preview")}
             aria-modal="true"
             className="media-preview-dialog"
             onClick={(event) => event.stopPropagation()}
@@ -459,10 +461,10 @@ export function MediaUploader({
           >
             <header className="media-preview-header">
               <div>
-                <p className="section-kicker">素材预览</p>
-                <h2>{previewAsset.mimeType.startsWith("video/") ? "观看视频" : "预览图片"}</h2>
+                <p className="section-kicker">{t("素材预览", "Media preview")}</p>
+                <h2>{previewAsset.mimeType.startsWith("video/") ? t("观看视频", "Watch video") : t("预览图片", "Preview image")}</h2>
               </div>
-              <button aria-label="关闭预览" onClick={() => setPreviewAsset(null)} type="button">
+              <button aria-label={t("关闭预览", "Close preview")} onClick={() => setPreviewAsset(null)} type="button">
                 ×
               </button>
             </header>
@@ -470,7 +472,7 @@ export function MediaUploader({
               {previewAsset.mimeType.startsWith("video/") ? (
                 <video autoPlay controls playsInline preload="metadata" src={previewAsset.fileUrl} />
               ) : (
-                <img alt="图片素材预览" src={previewAsset.fileUrl} />
+                <img alt={t("图片素材预览", "Image media preview")} src={previewAsset.fileUrl} />
               )}
             </div>
           </section>

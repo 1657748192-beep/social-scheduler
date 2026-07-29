@@ -2,6 +2,7 @@
 
 import type { Workspace } from "../../lib/api";
 import { addDays, addMonths, formatDate, formatMonthTitle, startOfWeek } from "./dateUtils";
+import { useLanguage } from "../LanguageProvider";
 
 type CalendarViewMode = "month" | "week";
 
@@ -24,6 +25,7 @@ export function CalendarToolbar({
   onViewChange,
   onWorkspaceChange
 }: CalendarToolbarProps) {
+  const { t } = useLanguage();
   const weekStart = startOfWeek(cursor);
   const weekEnd = addDays(weekStart, 6);
   const title =
@@ -38,9 +40,9 @@ export function CalendarToolbar({
   return (
     <section className="calendar-toolbar">
       <div>
-        <p className="section-kicker">内容排期</p>
+        <p className="section-kicker">{t("内容排期", "Content calendar")}</p>
         <h1>{title}</h1>
-        <p className="muted">拖动已排程内容，可以调整到新的日期或小时。</p>
+        <p className="muted">{t("拖动已排程内容，可以调整到新的日期或小时。", "Drag scheduled content to move it to a new date or hour.")}</p>
       </div>
 
       <div className="calendar-controls">
@@ -57,24 +59,24 @@ export function CalendarToolbar({
             onClick={() => onViewChange("month")}
             type="button"
           >
-            月视图
+            {t("月视图", "Month")}
           </button>
           <button
             className={view === "week" ? "active" : ""}
             onClick={() => onViewChange("week")}
             type="button"
           >
-            周视图
+            {t("周视图", "Week")}
           </button>
         </div>
         <button className="button secondary" onClick={() => move(-1)} type="button">
-          上一页
+          {t("上一页", "Previous")}
         </button>
         <button className="button secondary" onClick={() => onCursorChange(new Date())} type="button">
-          今天
+          {t("今天", "Today")}
         </button>
         <button className="button secondary" onClick={() => move(1)} type="button">
-          下一页
+          {t("下一页", "Next")}
         </button>
       </div>
     </section>

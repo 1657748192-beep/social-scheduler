@@ -10,6 +10,7 @@ import {
 } from "../../lib/chinaTime";
 import { platformLabel, publishJobStatusLabel, scheduleStatusLabel } from "../../lib/labels";
 import { formatDateTime } from "./dateUtils";
+import { useLanguage } from "../LanguageProvider";
 
 type ScheduleDetailPanelProps = {
   schedule: CalendarSchedule | null;
@@ -30,6 +31,7 @@ export function ScheduleDetailPanel({
   publishingLocked = false,
   workspaceId
 }: ScheduleDetailPanelProps) {
+  const { t } = useLanguage();
   const [text, setText] = useState("");
   const [scheduledAtValue, setScheduledAtValue] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -69,12 +71,12 @@ export function ScheduleDetailPanel({
     const trimmedText = text.trim();
 
     if (!trimmedText) {
-      setFormError("内容不能为空");
+      setFormError(t("内容不能为空", "Content cannot be empty"));
       return;
     }
 
     if (!scheduledAtValue) {
-      setFormError("请选择发布时间");
+      setFormError(t("请选择发布时间", "Choose a publishing time"));
       return;
     }
 
@@ -83,7 +85,7 @@ export function ScheduleDetailPanel({
     try {
       scheduledAtIso = chinaLocalInputToISOString(scheduledAtValue);
     } catch {
-      setFormError("发布时间格式不正确");
+      setFormError(t("发布时间格式不正确", "Invalid publishing time"));
       return;
     }
 
@@ -106,9 +108,9 @@ export function ScheduleDetailPanel({
       );
 
       onUpdated(updated);
-      setFeedback("修改已保存");
+      setFeedback(t("修改已保存", "Changes saved"));
     } catch (requestError) {
-      setFormError(requestError instanceof Error ? requestError.message : "保存失败");
+      setFormError(requestError instanceof Error ? requestError.message : t("保存失败", "Unable to save"));
     } finally {
       setIsSaving(false);
     }
@@ -121,8 +123,8 @@ export function ScheduleDetailPanel({
 
     const confirmed = window.confirm(
       schedule.status === "failed"
-        ? "确定从日历中删除这个发布失败的任务吗？素材和发布记录会保留，不会再自动重试。"
-        : "确定删除这个排程任务吗？删除后不会再自动发布。"
+        ? t("确定从日历中删除这个发布失败的任务吗？素材和发布记录会保留，不会再自动重试。", "Remove this failed task from the calendar? Media and publishing records are kept, and it will not retry automatically.")
+        : t("确定删除这个排程任务吗？删除后不会再自动发布。", "Delete this scheduled task? It will no longer publish automatically.")
     );
 
     if (!confirmed) {
@@ -143,7 +145,7 @@ export function ScheduleDetailPanel({
       );
       onDeleted(schedule.id);
     } catch (requestError) {
-      setFormError(requestError instanceof Error ? requestError.message : "删除失败");
+      setFormError(requestError instanceof Error ? requestError.message : t("删除失败", "Unable to delete"));
     } finally {
       setIsDeleting(false);
     }
@@ -152,33 +154,33 @@ export function ScheduleDetailPanel({
   return (
     <aside className="schedule-detail">
       <div className="row">
-        <h2>{schedule.postVariant.post.title || "已排程内容"}</h2>
+        <h2>{schedule.postVariant.post.title || t("已排程内容", "Scheduled content")}</h2>
         <button className="button secondary" onClick={onClose} type="button">
-          关闭
+          {t("关闭", "Close")}
         </button>
       </div>
 
       <dl className="detail-list">
-        <dt>平台</dt>
+        <dt>{t("平台", "Platform")}</dt>
         <dd>{platformLabel(schedule.postVariant.platform)}</dd>
-        <dt>发布账号</dt>
-        <dd>{schedule.postVariant.socialAccount?.displayName ?? "未指定（旧任务）"}</dd>
-        <dt>发布时间</dt>
+        <dt>{t("发布账号", "Publishing account")}</dt>
+        <dd>{schedule.postVariant.socialAccount?.displayName ?? t("未指定（旧任务）", "Unspecified (legacy task)")}</dd>
+        <dt>{t("发布时间", "Publishing time")}</dt>
         <dd>{formatDateTime(scheduledAt)}</dd>
-        <dt>状态</dt>
+        <dt>{t("状态", "Status")}</dt>
         <dd>{scheduleStatusLabel(schedule.status)}</dd>
-        <dt>发布任务</dt>
+        <dt>{t("发布任务", "Publishing task")}</dt>
         <dd>
           {latestJob
-            ? `${publishJobStatusLabel(latestJob.status)}，已尝试 ${latestJob.attempts} 次`
-            : "暂无"}
+            ? t(`${publishJobStatusLabel(latestJob.status)}，已尝试 ${latestJob.attempts} 次`, `${publishJobStatusLabel(latestJob.status)}, attempted ${latestJob.attempts} times`)
+            : t("暂无", "None")}
         </dd>
       </dl>
 
       {canModifySchedule ? (
         <form className="schedule-edit-form" onSubmit={handleSave}>
           <label className="field">
-            <span>任务内容</span>
+            <span>{t("任务内容", "Task content")}</span>
             <textarea
               onChange={(event) => setText(event.target.value)}
               value={text}
@@ -186,7 +188,7 @@ export function ScheduleDetailPanel({
           </label>
 
           <label className="field">
-            <span>发布时间</span>
+            <span>{t("发布时间", "Publishing time")}</span>
             <BeijingDateTimePicker
               min={minDateTime}
               onChange={setScheduledAtValue}
@@ -194,11 +196,11 @@ export function ScheduleDetailPanel({
               value={scheduledAtValue}
             />
           </label>
-          <p className="muted">按 {APP_TIME_ZONE_LABEL} 保存。</p>
+          <p className="muted">{t(`按 ${APP_TIME_ZONE_LABEL} 保存。`, `Saved in ${APP_TIME_ZONE_LABEL}.`)}</p>
 
           <div className="schedule-edit-actions">
             <button className="button" disabled={isSaving || isDeleting} type="submit">
-              {isSaving ? "保存中" : "保存修改"}
+              {isSaving ? t("保存中", "Saving...") : t("保存修改", "Save changes")}
             </button>
             <button
               className="button danger-button"
@@ -206,7 +208,7 @@ export function ScheduleDetailPanel({
               onClick={handleDelete}
               type="button"
             >
-              {isDeleting ? "删除中" : "删除任务"}
+              {isDeleting ? t("删除中", "Deleting...") : t("删除任务", "Delete task")}
             </button>
           </div>
 
@@ -225,17 +227,17 @@ export function ScheduleDetailPanel({
                 type="button"
               >
                 {isDeleting
-                  ? "正在删除…"
+                  ? t("正在删除…", "Deleting...")
                   : schedule.status === "failed"
-                    ? "删除失败任务"
-                    : "删除任务"}
+                    ? t("删除失败任务", "Delete failed task")
+                    : t("删除任务", "Delete task")}
               </button>
               {publishingLocked && schedule.status === "scheduled" ? (
-                <p className="muted">测试权限已到期，不能修改排程或发布内容。</p>
+                <p className="muted">{t("测试权限已到期，不能修改排程或发布内容。", "Test access has expired. Scheduling and publishing cannot be changed.")}</p>
               ) : null}
             </div>
           ) : (
-            <p className="muted">此任务已完成，不能再修改或删除。</p>
+            <p className="muted">{t("此任务已完成，不能再修改或删除。", "This task is complete and can no longer be changed or deleted.")}</p>
           )}
         </>
       )}
@@ -254,7 +256,7 @@ export function ScheduleDetailPanel({
 
       {latestJob?.providerPermalink ? (
         <a className="button" href={latestJob.providerPermalink} rel="noreferrer" target="_blank">
-          打开已发布内容
+          {t("打开已发布内容", "Open published post")}
         </a>
       ) : null}
 

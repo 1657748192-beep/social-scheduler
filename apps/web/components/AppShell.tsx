@@ -10,6 +10,7 @@ import {
   type SocialAccount,
   type Workspace
 } from "../lib/api";
+import { LanguageToggle, useLanguage, type AppLocale } from "./LanguageProvider";
 
 type AppShellProps = {
   title: string;
@@ -20,12 +21,12 @@ type AppShellProps = {
 };
 
 const navItems = [
-  { href: "/dashboard", label: "控制台", helper: "工作区与渠道" },
-  { href: "/composer", label: "内容编辑", helper: "文案与素材" },
-  { href: "/drafts", label: "草稿箱", helper: "72 小时自动清理" },
-  { href: "/calendar", label: "排程日历", helper: "周/月计划" },
-  { href: "/posts", label: "帖子管理", helper: "已发布与复用" }
-];
+  { href: "/dashboard", label: ["控制台", "Dashboard"], helper: ["工作区与渠道", "Workspaces and channels"] },
+  { href: "/composer", label: ["内容编辑", "Content editor"], helper: ["文案与素材", "Copy and media"] },
+  { href: "/drafts", label: ["草稿箱", "Drafts"], helper: ["72 小时自动清理", "Auto-cleared after 72 hours"] },
+  { href: "/calendar", label: ["排程日历", "Content calendar"], helper: ["周/月计划", "Weekly and monthly planning"] },
+  { href: "/posts", label: ["帖子管理", "Post manager"], helper: ["已发布与复用", "Published posts and reuse"] }
+] as const;
 
 type SidebarProvider = Pick<
   OAuthProviderStatus,
@@ -100,38 +101,42 @@ function channelInitial(platform: SidebarProvider["platform"]) {
   return initials[platform];
 }
 
-function channelDescription(platform: SidebarProvider["platform"]) {
-  const descriptions: Record<SidebarProvider["platform"], string> = {
-    instagram: "图片、短视频与 Reels",
-    linkedin: "个人主页或公司主页",
-    facebook: "公共主页发布",
-    youtube: "频道视频发布",
-    tiktok: "短视频账号",
-    pinterest: "图钉与看板",
-    x: "短文与动态"
+function channelDescription(platform: SidebarProvider["platform"], locale: AppLocale) {
+  const descriptions: Record<SidebarProvider["platform"], [string, string]> = {
+    instagram: ["图片、短视频与 Reels", "Images, short videos, and Reels"],
+    linkedin: ["个人主页或公司主页", "Personal or company Page"],
+    facebook: ["公共主页发布", "Publish to Facebook Pages"],
+    youtube: ["频道视频发布", "Publish videos to a channel"],
+    tiktok: ["短视频账号", "Short-video account"],
+    pinterest: ["图钉与看板", "Pins and boards"],
+    x: ["短文与动态", "Short posts and updates"]
   };
 
-  return descriptions[platform];
+  return descriptions[platform][locale === "en" ? 1 : 0];
 }
 
 function platformLabelFallback(platform: SidebarProvider["platform"]) {
   return defaultChannelProviders.find((provider) => provider.platform === platform)?.displayName ?? platform;
 }
 
-function channelStatusText(account: SocialAccount | undefined, provider: SidebarProvider) {
+function channelStatusText(
+  account: SocialAccount | undefined,
+  provider: SidebarProvider,
+  t: (chinese: string, english: string) => string
+) {
   if (account?.status === "active") {
-    return account.displayName || "已连接";
+    return account.displayName || t("已连接", "Connected");
   }
 
   if (account?.status === "token_expired") {
-    return "授权已过期";
+    return t("授权已过期", "Authorization expired");
   }
 
   if (account?.status === "disconnected") {
-    return "已断开";
+    return t("已断开", "Disconnected");
   }
 
-  return provider.configured ? "可一键授权" : "待配置";
+  return provider.configured ? t("可一键授权", "Ready to connect") : t("待配置", "Needs setup");
 }
 
 function mergeProviderStatuses(statuses: OAuthProviderStatus[]) {
@@ -151,6 +156,7 @@ function mergeProviderStatuses(statuses: OAuthProviderStatus[]) {
 export function AppShell({ title, subtitle, userLabel, wide = false, children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { locale, t } = useLanguage();
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [channels, setChannels] = useState<SocialAccount[]>([]);
   const [providerStatuses, setProviderStatuses] = useState<OAuthProviderStatus[]>([]);
@@ -352,7 +358,7 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
 
         <Link className="compose-entry" href="/composer">
           <span>+</span>
-          新建内容
+          {t("新建内容", "New content")}
         </Link>
 
         <nav className="software-nav" aria-label="主导航">
@@ -362,15 +368,15 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
               href={item.href}
               key={item.href}
             >
-              <strong>{item.label}</strong>
-              <small>{item.helper}</small>
+              <strong>{t(item.label[0], item.label[1])}</strong>
+              <small>{t(item.helper[0], item.helper[1])}</small>
             </Link>
           ))}
         </nav>
 
         <section className="software-channels" aria-label="连接通道">
           <div className="channels-heading">
-            <span>连接通道</span>
+            <span>{t("连接通道", "Connected channels")}</span>
             <button
               aria-label="打开更多通道"
               onClick={() => setIsChannelModalOpen(true)}
@@ -401,7 +407,7 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
                     </span>
                     <span className="channel-copy">
                       <strong>{provider.displayName}</strong>
-                      <small>{channelStatusText(account, provider)}</small>
+                      <small>{channelStatusText(account, provider, t)}</small>
                     </span>
                   </button>
 
@@ -413,14 +419,14 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
                       onClick={() => disconnectChannel(account)}
                       type="button"
                     >
-                      解绑
+                      {t("解绑", "Disconnect")}
                     </button>
                   ) : null}
                 </div>
               );
             })}
 
-            {channelsLoading ? <span className="channels-empty">正在读取通道</span> : null}
+            {channelsLoading ? <span className="channels-empty">{t("正在读取通道", "Loading channels")}</span> : null}
 
             <button
               className="channel-more"
@@ -428,14 +434,14 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
               type="button"
             >
               <span className="channel-icon more">+</span>
-              <span>更多通道</span>
+              <span>{t("更多通道", "More channels")}</span>
             </button>
           </div>
         </section>
 
         <div className="channel-progress">
           <div className="row">
-            <strong>已连接平台数量</strong>
+            <strong>{t("已连接平台数量", "Connected platforms")}</strong>
             <span>
               {connectedPlatformCount}/{totalChannelCount}
             </span>
@@ -450,13 +456,13 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
               }}
             />
           </div>
-          <small className="channel-progress-note">同一平台的账号数量不限</small>
+          <small className="channel-progress-note">{t("同一平台的账号数量不限", "No limit on accounts per platform")}</small>
         </div>
 
         <div className="software-sidebar-footer">
-          <span>{userLabel || "已登录"}</span>
+          <span>{userLabel || t("已登录", "Signed in")}</span>
           <button className="button secondary" onClick={signOut} type="button">
-            退出登录
+            {t("退出登录", "Sign out")}
           </button>
         </div>
       </aside>
@@ -468,14 +474,15 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
             {subtitle ? <p className="muted">{subtitle}</p> : null}
           </div>
           <div className="topbar-actions">
+            <LanguageToggle compact />
             <Link className="button secondary" href="/dashboard#social-channels">
-              连接渠道
+              {t("连接渠道", "Connect channels")}
             </Link>
             <Link className="button secondary" href="/calendar">
-              查看日历
+              {t("查看日历", "View calendar")}
             </Link>
             <Link className="button" href="/composer">
-              新建内容
+              {t("新建内容", "New content")}
             </Link>
           </div>
         </header>
@@ -495,8 +502,8 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
           <section className="channel-modal" aria-modal="true" role="dialog">
             <header className="channel-modal-header">
               <div>
-                <h2>连接新频道</h2>
-                <p>选择平台后会跳转到对应平台登录授权页面。</p>
+                <h2>{t("连接新频道", "Connect a new channel")}</h2>
+                <p>{t("选择平台后会跳转到对应平台登录授权页面。", "Choose a platform to continue to its official authorization page.")}</p>
               </div>
               <button
                 aria-label="关闭连接频道弹窗"
@@ -513,10 +520,10 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
               {channelItems.map(({ provider, account }) => {
                 const connected = account?.status === "active";
                 const actionText = connected
-                  ? "已连接，点击查看"
+                  ? t("已连接，点击查看", "Connected — click to view")
                   : provider.configured
-                    ? "点击授权"
-                    : "待配置密钥";
+                    ? t("点击授权", "Click to authorize")
+                    : t("待配置密钥", "Developer keys needed");
 
                 return (
                   <article
@@ -532,8 +539,8 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
                         {channelInitial(provider.platform)}
                       </span>
                       <strong>{provider.displayName}</strong>
-                      <small>{channelDescription(provider.platform)}</small>
-                      <em>{connected ? "重新授权" : actionText}</em>
+                      <small>{channelDescription(provider.platform, locale)}</small>
+                      <em>{connected ? t("重新授权", "Reconnect") : actionText}</em>
                     </button>
 
                     {connected && account ? (
@@ -543,7 +550,7 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
                         onClick={() => disconnectChannel(account)}
                         type="button"
                       >
-                        解除绑定
+                        {t("解除绑定", "Disconnect")}
                       </button>
                     ) : null}
                   </article>

@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import { AppShell } from "../../components/AppShell";
 import { DraftManager } from "../../components/drafts/DraftManager";
 import { apiRequest, type Workspace } from "../../lib/api";
+import { useLanguage } from "../../components/LanguageProvider";
 
 export default function DraftsPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [token, setToken] = useState<string | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +31,7 @@ export default function DraftsPage() {
   }, [router]);
 
   return (
-    <AppShell title="草稿箱" subtitle="查看、继续编辑或删除 72 小时内保存的草稿" wide>
+    <AppShell title={t("草稿箱", "Drafts")} subtitle={t("查看、继续编辑或删除 72 小时内保存的草稿", "View, continue editing, or delete drafts saved within 72 hours")} wide>
       {error ? <p className="error">{error}</p> : null}
       {token && workspaces.length ? <DraftManager token={token} workspaces={workspaces} /> : null}
       {token && !workspaces.length ? (

@@ -16,6 +16,7 @@ import { CalendarToolbar } from "./CalendarToolbar";
 import { MonthCalendar } from "./MonthCalendar";
 import { ScheduleDetailPanel } from "./ScheduleDetailPanel";
 import { WeekCalendar } from "./WeekCalendar";
+import { useLanguage } from "../LanguageProvider";
 
 type CalendarViewMode = "month" | "week";
 
@@ -25,6 +26,7 @@ type ContentCalendarProps = {
 };
 
 export function ContentCalendar({ token, workspaces }: ContentCalendarProps) {
+  const { t } = useLanguage();
   const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? "");
   const [view, setView] = useState<CalendarViewMode>("month");
   const [cursor, setCursor] = useState(new Date());
@@ -71,7 +73,7 @@ export function ContentCalendar({ token, workspaces }: ContentCalendarProps) {
       );
       setSchedules(response);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "无法加载日历");
+      setError(requestError instanceof Error ? requestError.message : t("无法加载日历", "Unable to load calendar"));
     }
   }
 
@@ -81,7 +83,7 @@ export function ContentCalendar({ token, workspaces }: ContentCalendarProps) {
 
   async function reschedule(scheduleId: string, targetDate: Date, mode: "day" | "hour") {
     if (publishingLocked) {
-      setError("测试权限已到期，不能修改排程或发布内容。");
+      setError(t("测试权限已到期，不能修改排程或发布内容。", "Test access has expired. Scheduling and publishing cannot be changed."));
       return;
     }
 
@@ -100,7 +102,7 @@ export function ContentCalendar({ token, workspaces }: ContentCalendarProps) {
     }
 
     if (next.getTime() <= Date.now()) {
-      setError("不能把内容移动到过去时间");
+      setError(t("不能把内容移动到过去时间", "Content cannot be moved to a time in the past"));
       return;
     }
 
@@ -126,7 +128,7 @@ export function ContentCalendar({ token, workspaces }: ContentCalendarProps) {
         setSelectedSchedule(updated);
       }
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "无法修改发布时间");
+      setError(requestError instanceof Error ? requestError.message : t("无法修改发布时间", "Unable to change publishing time"));
     }
   }
 

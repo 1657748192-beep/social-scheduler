@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useLanguage } from "../LanguageProvider";
 
 const emojiOptions = ["😀", "😍", "🔥", "✨", "🎉", "💡", "📌", "✅", "❤️", "👍", "🚀", "👇"];
 const symbolOptions = ["#", "@", "•", "✓", "→", "★", "☆", "♥", "©", "™", "…", "｜", "—", "【", "】"];
@@ -12,6 +13,7 @@ type TextInsertToolbarProps = {
 };
 
 export function TextInsertToolbar({ onInsert }: TextInsertToolbarProps) {
+  const { t } = useLanguage();
   const [picker, setPicker] = useState<Picker>(null);
   const options = picker === "emoji" ? emojiOptions : symbolOptions;
 
@@ -20,14 +22,14 @@ export function TextInsertToolbar({ onInsert }: TextInsertToolbarProps) {
   }
 
   return (
-    <div className="text-insert-toolbar" role="toolbar" aria-label="插入表情或特殊符号">
+    <div className="text-insert-toolbar" role="toolbar" aria-label={t("插入表情或特殊符号", "Insert emoji or special symbols")}>
       <button
         aria-expanded={picker === "emoji"}
         className={picker === "emoji" ? "text-insert-trigger active" : "text-insert-trigger"}
         onClick={() => toggle("emoji")}
         type="button"
       >
-        😊 表情
+        😊 {t("表情", "Emoji")}
       </button>
       <button
         aria-expanded={picker === "symbol"}
@@ -35,10 +37,10 @@ export function TextInsertToolbar({ onInsert }: TextInsertToolbarProps) {
         onClick={() => toggle("symbol")}
         type="button"
       >
-        # 特殊符号
+        # {t("特殊符号", "Symbols")}
       </button>
       {picker ? (
-        <div className="text-insert-options" aria-label={picker === "emoji" ? "表情列表" : "特殊符号列表"}>
+        <div className="text-insert-options" aria-label={picker === "emoji" ? t("表情列表", "Emoji list") : t("特殊符号列表", "Symbol list")}>
           {options.map((option) => (
             <button
               className="text-insert-option"
@@ -47,7 +49,7 @@ export function TextInsertToolbar({ onInsert }: TextInsertToolbarProps) {
                 onInsert(option);
                 setPicker(null);
               }}
-              title={`插入 ${option}`}
+              title={t(`插入 ${option}`, `Insert ${option}`)}
               type="button"
             >
               {option}

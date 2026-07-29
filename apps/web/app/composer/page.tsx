@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import { AppShell } from "../../components/AppShell";
 import { apiRequest, type Workspace } from "../../lib/api";
 import { ComposerForm } from "../../components/composer/ComposerForm";
+import { useLanguage } from "../../components/LanguageProvider";
 
 export default function ComposerPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [token, setToken] = useState<string | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +40,7 @@ export default function ComposerPage() {
   }, [router]);
 
   return (
-    <AppShell title="内容编辑" subtitle="草稿、多平台版本、图片/视频素材与定时发布" wide>
+    <AppShell title={t("内容编辑", "Content editor")} subtitle={t("草稿、多平台版本、图片/视频素材与定时发布", "Drafts, platform versions, media, and scheduling")} wide>
       {error ? <p className="error">{error}</p> : null}
       {token && workspaces.length ? (
         <ComposerForm

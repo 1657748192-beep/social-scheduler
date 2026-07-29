@@ -21,6 +21,7 @@ import {
   platformLabel,
   roleLabel
 } from "../../lib/labels";
+import { useLanguage } from "../../components/LanguageProvider";
 
 function publishingAccessLabel(status?: Workspace["publishingAccessStatus"]) {
   if (status === "disabled") {
@@ -62,6 +63,7 @@ function publishingAccessDescription(
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -142,10 +144,10 @@ export default function DashboardPage() {
   const connectedAccounts = socialAccounts.filter((account) => account.status === "active");
   const pendingInvitations = invitations.filter((invitation) => invitation.status === "pending");
   const dashboardStats = [
-    { label: "工作区", value: workspaces.length, detail: selectedWorkspace?.plan ?? "MVP" },
-    { label: "已连接渠道", value: connectedAccounts.length, detail: "可用于排程" },
-    { label: "团队成员", value: members.length, detail: "含所有者" },
-    { label: "待处理邀请", value: pendingInvitations.length, detail: "等待加入" }
+    { label: t("工作区", "Workspaces"), value: workspaces.length, detail: selectedWorkspace?.plan ?? "MVP" },
+    { label: t("已连接渠道", "Connected channels"), value: connectedAccounts.length, detail: t("可用于排程", "Ready for scheduling") },
+    { label: t("团队成员", "Team members"), value: members.length, detail: t("含所有者", "Including owner") },
+    { label: t("待处理邀请", "Pending invitations"), value: pendingInvitations.length, detail: t("等待加入", "Waiting to join") }
   ];
   const bindingProviderAccounts = bindingProvider
     ? connectedAccounts.filter((account) => account.platform === bindingProvider.platform)
@@ -296,8 +298,8 @@ export default function DashboardPage() {
 
   return (
     <AppShell
-      title="控制台"
-      subtitle="工作区、成员、账号绑定与发布准备"
+      title={t("控制台", "Dashboard")}
+      subtitle={t("工作区、成员、账号绑定与发布准备", "Workspaces, members, account connections, and publishing readiness")}
       userLabel={user ? `${user.name} - ${user.email}` : "正在加载账号"}
     >
       <div className="dashboard">
@@ -305,16 +307,16 @@ export default function DashboardPage() {
 
         <section className="dashboard-hero">
           <div>
-            <p className="section-kicker">运营总览</p>
-            <h2>{selectedWorkspace?.name ?? "选择一个工作区"}</h2>
-            <p className="muted">把账号授权、成员协作、内容排程放在同一个工作台里处理。</p>
+            <p className="section-kicker">{t("运营总览", "Overview")}</p>
+            <h2>{selectedWorkspace?.name ?? t("选择一个工作区", "Select a workspace")}</h2>
+            <p className="muted">{t("把账号授权、成员协作、内容排程放在同一个工作台里处理。", "Manage account authorization, team collaboration, and content scheduling in one workspace.")}</p>
           </div>
           <div className="hero-actions">
             <a className="button secondary" href="#social-channels">
-              管理渠道
+              {t("管理渠道", "Manage channels")}
             </a>
             <a className="button" href="/composer">
-              新建内容
+              {t("新建内容", "New content")}
             </a>
           </div>
         </section>
@@ -328,7 +330,7 @@ export default function DashboardPage() {
             }`}
           >
             <div>
-              <p className="section-kicker">测试人员发布权限</p>
+            <p className="section-kicker">{t("测试人员发布权限", "Tester publishing access")}</p>
               <h2>{publishingAccessLabel(selectedWorkspace?.publishingAccessStatus)}</h2>
               <p className="muted">
                 {publishingAccessDescription(
@@ -349,7 +351,7 @@ export default function DashboardPage() {
           </section>
         ) : null}
 
-        <section className="metric-grid" aria-label="运营指标">
+        <section className="metric-grid" aria-label={t("运营指标", "Overview metrics")}>
           {dashboardStats.map((item) => (
             <article className="metric-card" key={item.label}>
               <span>{item.label}</span>
@@ -362,12 +364,12 @@ export default function DashboardPage() {
         <div className="dashboard-layout">
           <section className="panel workspace-panel">
             <div className="row">
-              <h2>工作区</h2>
-              <span className="muted">{workspaces.length} 个</span>
+              <h2>{t("工作区", "Workspaces")}</h2>
+              <span className="muted">{t(`${workspaces.length} 个`, `${workspaces.length}`)}</span>
             </div>
 
             <label className="field">
-              <span>当前工作区</span>
+              <span>{t("当前工作区", "Current workspace")}</span>
               <select
                 value={selectedWorkspaceId}
                 onChange={(event) => setSelectedWorkspaceId(event.target.value)}
@@ -381,9 +383,9 @@ export default function DashboardPage() {
             </label>
 
             <form className="inline-form" onSubmit={createWorkspace}>
-              <input name="name" placeholder="新工作区名称" required />
+              <input name="name" placeholder={t("新工作区名称", "New workspace name")} required />
               <button className="button" type="submit">
-                创建
+                {t("创建", "Create")}
               </button>
               <input name="timezone" type="hidden" value="Asia/Shanghai" />
             </form>
@@ -402,8 +404,8 @@ export default function DashboardPage() {
 
           <section className="panel">
             <div className="row">
-              <h2>成员</h2>
-              <span className="muted">{members.length} 人</span>
+              <h2>{t("成员", "Members")}</h2>
+              <span className="muted">{t(`${members.length} 人`, `${members.length}`)}</span>
             </div>
 
             <ul className="list compact-list">
@@ -419,22 +421,22 @@ export default function DashboardPage() {
 
             {canManageMembers ? (
               <div className="invite-box">
-                <h3>邀请成员</h3>
+                <h3>{t("邀请成员", "Invite member")}</h3>
                 <form className="form tight-form" onSubmit={inviteMember}>
                   <label className="field">
-                    <span>电子邮箱</span>
+                    <span>{t("电子邮箱", "Email")}</span>
                     <input name="email" type="email" required />
                   </label>
                   <label className="field">
-                    <span>权限</span>
+                    <span>{t("权限", "Role")}</span>
                     <select name="role" defaultValue="viewer">
-                      <option value="admin">管理员</option>
-                      <option value="editor">编辑者</option>
-                      <option value="viewer">查看者</option>
+                      <option value="admin">{t("管理员", "Admin")}</option>
+                      <option value="editor">{t("编辑者", "Editor")}</option>
+                      <option value="viewer">{t("查看者", "Viewer")}</option>
                     </select>
                   </label>
                   <button className="button" type="submit">
-                    创建邀请
+                    {t("创建邀请", "Create invitation")}
                   </button>
                 </form>
                 {latestInviteUrl ? <code className="code">{latestInviteUrl}</code> : null}
@@ -447,10 +449,10 @@ export default function DashboardPage() {
         <section className="panel channel-management" id="social-channels">
           <div className="row">
             <div>
-              <p className="section-kicker">渠道管理</p>
-              <h2>连接与授权状态</h2>
+              <p className="section-kicker">{t("渠道管理", "Channel management")}</p>
+              <h2>{t("连接与授权状态", "Connection and authorization")}</h2>
             </div>
-            <span className="muted">{socialAccounts.length} 个账号</span>
+            <span className="muted">{t(`${socialAccounts.length} 个账号`, `${socialAccounts.length} accounts`)}</span>
           </div>
 
           {canManageMembers ? (
@@ -467,12 +469,12 @@ export default function DashboardPage() {
                         <strong>{provider.displayName}</strong>
                         <p className="muted">
                           {providerAccounts.length
-                            ? `${providerAccounts.length} 个账号已绑定`
-                            : "尚未绑定账号"}
+                            ? t(`${providerAccounts.length} 个账号已绑定`, `${providerAccounts.length} accounts connected`)
+                            : t("尚未绑定账号", "No account connected")}
                         </p>
                       </div>
                       <span className={provider.configured ? "status-pill ready" : "status-pill warning"}>
-                        {provider.configured ? "已配置" : "未配置"}
+                        {provider.configured ? t("已配置", "Configured") : t("未配置", "Not configured")}
                       </span>
                     </div>
 
@@ -493,7 +495,7 @@ export default function DashboardPage() {
                         onClick={() => setBindingProvider(provider)}
                         type="button"
                       >
-                        {provider.configured ? "添加账号" : "等待配置"}
+                        {provider.configured ? t("添加账号", "Add account") : t("等待配置", "Waiting for configuration")}
                       </button>
                       <button
                         className="button secondary"
@@ -501,7 +503,7 @@ export default function DashboardPage() {
                         onClick={() => createAuthorizationShareLink(provider)}
                         type="button"
                       >
-                        {creatingAuthorizationLink === provider.platform ? "生成中" : "分享授权"}
+                        {creatingAuthorizationLink === provider.platform ? t("生成中", "Generating...") : t("分享授权", "Share authorization")}
                       </button>
                       {providerAccounts.map((account) => (
                         <button
@@ -510,14 +512,14 @@ export default function DashboardPage() {
                           onClick={() => disconnectSocialAccount(account.id)}
                           type="button"
                         >
-                          {account.status === "disconnected" ? "删除记录" : "解除绑定"} {account.displayName}
+                          {account.status === "disconnected" ? t("删除记录", "Delete record") : t("解除绑定", "Disconnect")} {account.displayName}
                         </button>
                       ))}
                     </div>
 
                     {shareLink?.shareUrl ? (
                       <div className="oauth-config-box share-link-box">
-                        <span>24 小时授权链接</span>
+                        <span>{t("24 小时授权链接", "24-hour authorization link")}</span>
                         <div className="share-link-row">
                           <input readOnly value={shareLink.shareUrl} />
                           <button
@@ -525,7 +527,7 @@ export default function DashboardPage() {
                             onClick={() => copyAuthorizationShareLink(shareLink)}
                             type="button"
                           >
-                            复制
+                            {t("复制", "Copy")}
                           </button>
                         </div>
                         <small className="muted">
@@ -540,18 +542,18 @@ export default function DashboardPage() {
                   </article>
                 );
               })}
-              {!oauthStatuses.length ? <p className="muted">正在读取平台配置状态。</p> : null}
+              {!oauthStatuses.length ? <p className="muted">{t("正在读取平台配置状态。", "Loading platform configuration...")}</p> : null}
             </div>
           ) : (
-            <p className="muted">只有所有者和管理员可以绑定社交账号。</p>
+            <p className="muted">{t("只有所有者和管理员可以绑定社交账号。", "Only owners and admins can connect social accounts.")}</p>
           )}
 
           <div className="connected-table">
             <div className="connected-table-head">
-              <span>平台</span>
-              <span>账号</span>
-              <span>状态</span>
-              <span>操作</span>
+              <span>{t("平台", "Platform")}</span>
+              <span>{t("账号", "Account")}</span>
+              <span>{t("状态", "Status")}</span>
+              <span>{t("操作", "Actions")}</span>
             </div>
             {socialAccounts.map((account) => (
               <div className="connected-table-row" key={account.id}>
@@ -565,7 +567,7 @@ export default function DashboardPage() {
                       type="button"
                       onClick={() => disconnectSocialAccount(account.id)}
                     >
-                      {account.status === "disconnected" ? "删除记录" : "解除绑定"}
+                      {account.status === "disconnected" ? t("删除记录", "Delete record") : t("解除绑定", "Disconnect")}
                     </button>
                   ) : (
                     "-"
@@ -574,15 +576,15 @@ export default function DashboardPage() {
               </div>
             ))}
             {!socialAccounts.length ? (
-              <div className="connected-table-row empty-row">暂未绑定社交账号</div>
+              <div className="connected-table-row empty-row">{t("暂未绑定社交账号", "No social accounts connected")}</div>
             ) : null}
           </div>
         </section>
 
         <section className="panel">
           <div className="row">
-            <h2>待处理邀请</h2>
-            <span className="muted">{pendingInvitations.length} 个</span>
+            <h2>{t("待处理邀请", "Pending invitations")}</h2>
+            <span className="muted">{t(`${pendingInvitations.length} 个`, `${pendingInvitations.length}`)}</span>
           </div>
           <ul className="list compact-list">
             {invitations.map((invitation) => (
@@ -593,7 +595,7 @@ export default function DashboardPage() {
                 </div>
               </li>
             ))}
-            {!invitations.length ? <li className="muted">暂无邀请</li> : null}
+            {!invitations.length ? <li className="muted">{t("暂无邀请", "No invitations")}</li> : null}
           </ul>
         </section>
 
@@ -611,10 +613,10 @@ export default function DashboardPage() {
             >
               <div className="channel-modal-header">
                 <div>
-                  <h2>连接到 {bindingProvider.displayName} 账号</h2>
-                  <p>选择直接授权，或生成 24 小时分享授权链接给别人绑定。</p>
+                  <h2>{t(`连接到 ${bindingProvider.displayName} 账号`, `Connect a ${bindingProvider.displayName} account`)}</h2>
+                  <p>{t("选择直接授权，或生成 24 小时分享授权链接给别人绑定。", "Authorize directly, or generate a 24-hour sharing link for someone else to connect an account.")}</p>
                 </div>
-                <button aria-label="关闭" onClick={() => setBindingProvider(null)} type="button">
+                <button aria-label={t("关闭", "Close")} onClick={() => setBindingProvider(null)} type="button">
                   ×
                 </button>
               </div>
@@ -628,19 +630,19 @@ export default function DashboardPage() {
                     <strong>{bindingProvider.displayName}</strong>
                     <p className="muted">
                       {bindingProvider.configured
-                        ? "已接入平台 OAuth，可继续添加多个账号。"
-                        : "服务器暂未配置该平台的 Client ID / Secret。"}
+                        ? t("已接入平台 OAuth，可继续添加多个账号。", "Platform OAuth is connected. You can add multiple accounts.")
+                        : t("服务器暂未配置该平台的 Client ID / Secret。", "This platform's Client ID / Secret is not configured on the server.")}
                     </p>
                   </div>
                   <span className={bindingProvider.configured ? "status-pill ready" : "status-pill warning"}>
-                    {bindingProvider.configured ? "已配置" : "未配置"}
+                    {bindingProvider.configured ? t("已配置", "Configured") : t("未配置", "Not configured")}
                   </span>
                 </div>
 
                 <div className="binding-modal-section">
                   <div className="row">
-                    <h3>已绑定账号</h3>
-                    <span className="muted">{bindingProviderAccounts.length} 个</span>
+                    <h3>{t("已绑定账号", "Connected accounts")}</h3>
+                    <span className="muted">{t(`${bindingProviderAccounts.length} 个`, `${bindingProviderAccounts.length}`)}</span>
                   </div>
                   {bindingProviderAccounts.length ? (
                     <div className="binding-account-list">
@@ -657,20 +659,20 @@ export default function DashboardPage() {
                             onClick={() => disconnectSocialAccount(account.id)}
                             type="button"
                           >
-                            {account.status === "disconnected" ? "删除记录" : "解除绑定"}
+                            {account.status === "disconnected" ? t("删除记录", "Delete record") : t("解除绑定", "Disconnect")}
                           </button>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="muted">当前平台还没有绑定账号。</p>
+                    <p className="muted">{t("当前平台还没有绑定账号。", "No account is connected for this platform yet.")}</p>
                   )}
                 </div>
 
                 <div className="binding-action-panel">
                   <div>
-                    <strong>官方授权登录</strong>
-                    <p className="muted">点击后会跳转到平台官方 OAuth 页面完成授权。</p>
+                    <strong>{t("官方授权登录", "Official authorization")}</strong>
+                    <p className="muted">{t("点击后会跳转到平台官方 OAuth 页面完成授权。", "Continue to the platform's official OAuth page to authorize access.")}</p>
                   </div>
                   <button
                     className="button"
@@ -678,14 +680,14 @@ export default function DashboardPage() {
                     onClick={() => connectSocialAccount(bindingProvider.platformParam)}
                     type="button"
                   >
-                    立即连接
+                    {t("立即连接", "Connect now")}
                   </button>
                 </div>
 
                 <div className="binding-action-panel">
                   <div>
-                    <strong>分享授权链接</strong>
-                    <p className="muted">复制给对方后，对方 24 小时内打开即可授权绑定到当前工作区。</p>
+                    <strong>{t("分享授权链接", "Share authorization link")}</strong>
+                    <p className="muted">{t("复制给对方后，对方 24 小时内打开即可授权绑定到当前工作区。", "Anyone who opens this link within 24 hours can authorize an account for this workspace.")}</p>
                   </div>
                   <button
                     className="button secondary"
@@ -695,13 +697,13 @@ export default function DashboardPage() {
                     onClick={() => createAuthorizationShareLink(bindingProvider)}
                     type="button"
                   >
-                    {creatingAuthorizationLink === bindingProvider.platform ? "生成中" : "生成链接"}
+                    {creatingAuthorizationLink === bindingProvider.platform ? t("生成中", "Generating...") : t("生成链接", "Generate link")}
                   </button>
                 </div>
 
                 {bindingShareLink?.shareUrl ? (
                   <div className="oauth-config-box share-link-box">
-                    <span>24 小时授权链接</span>
+                    <span>{t("24 小时授权链接", "24-hour authorization link")}</span>
                     <div className="share-link-row">
                       <input readOnly value={bindingShareLink.shareUrl} />
                       <button
@@ -709,7 +711,7 @@ export default function DashboardPage() {
                         onClick={() => copyAuthorizationShareLink(bindingShareLink)}
                         type="button"
                       >
-                        复制
+                        {t("复制", "Copy")}
                       </button>
                     </div>
                     <small className="muted">

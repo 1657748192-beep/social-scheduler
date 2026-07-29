@@ -22,6 +22,7 @@ import { PostPreview } from "./PostPreview";
 import { SchedulePicker } from "./SchedulePicker";
 import { TextInsertToolbar } from "./TextInsertToolbar";
 import { TikTokPublishSettings, type TikTokPublishSettingsValue } from "./TikTokPublishSettings";
+import { useLanguage } from "../LanguageProvider";
 
 type ComposerFormProps = {
   token: string;
@@ -105,6 +106,7 @@ function isReusableMediaAsset(asset: MediaAsset) {
 }
 
 export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initialWorkspaceId }: ComposerFormProps) {
+  const { t } = useLanguage();
   const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId || workspaces[0]?.id || "");
   const [title, setTitle] = useState("");
   const [baseText, setBaseText] = useState("");
@@ -442,29 +444,31 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
 
   const publishChecks = [
     {
-      label: "内容文案",
+      label: t("内容文案", "Post copy"),
       done: baseText.trim().length > 0 || hasAnyVariantText
     },
     {
-      label: "发布账号",
+      label: t("发布账号", "Publishing accounts"),
       done: selectedAccounts.length > 0,
-      detail: selectedAccounts.length ? `已选 ${selectedAccounts.length} 个账号` : "请选择至少一个账号"
+      detail: selectedAccounts.length
+        ? t(`已选 ${selectedAccounts.length} 个账号`, `${selectedAccounts.length} accounts selected`)
+        : t("请选择至少一个账号", "Select at least one account")
     },
     {
-      label: publishMode === "scheduled" ? "定时发布时间" : "发布方式",
+      label: publishMode === "scheduled" ? t("定时发布时间", "Scheduled time") : t("发布方式", "Publishing method"),
       done: true,
       detail:
         publishMode === "now"
-          ? "保存后将立即分别发布"
+          ? t("保存后将立即分别发布", "Each account will publish immediately after saving")
           : publishMode === "scheduled"
-            ? "已选择北京时间"
-            : "将保存为草稿"
+            ? t("已选择北京时间", "Beijing time selected")
+            : t("将保存为草稿", "Will be saved as a draft")
     }
   ];
 
   if (selectedTikTokAccounts.length && publishMode !== "draft") {
     publishChecks.push({
-      label: "TikTok 发布确认",
+      label: t("TikTok 发布确认", "TikTok publishing confirmation"),
       done: selectedTikTokAccounts.every((account) => {
         const settings = tiktokSettingsByAccount[account.id];
         return Boolean(
@@ -474,7 +478,10 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
             settings.consentConfirmed
         );
       }),
-      detail: "为每个 TikTok 账号选择隐私、互动权限并确认音乐使用声明"
+      detail: t(
+        "为每个 TikTok 账号选择隐私、互动权限并确认音乐使用声明",
+        "Choose privacy and interaction permissions, and confirm music usage for each TikTok account"
+      )
     });
   }
 
@@ -541,12 +548,12 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
     event.preventDefault();
 
     if (!selectedWorkspace) {
-      setError("请先选择工作区");
+      setError(t("请先选择工作区", "Select a workspace first"));
       return;
     }
 
     if (!selectedAccounts.length) {
-      setError("请先选择至少一个已连接账号");
+      setError(t("请先选择至少一个已连接账号", "Select at least one connected account"));
       return;
     }
 
@@ -556,7 +563,7 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
         tiktokMedia.length === 1 && tiktokMedia[0].mimeType.startsWith("video/");
 
       if (!hasSingleVideo) {
-        setError("TikTok 真实发布需要为 TikTok 选择恰好一个 MP4、MOV 或 WebM 视频素材。");
+        setError(t("TikTok 真实发布需要为 TikTok 选择恰好一个 MP4、MOV 或 WebM 视频素材。", "TikTok publishing requires exactly one MP4, MOV, or WebM video."));
         return;
       }
     }
@@ -574,7 +581,7 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
       });
 
       if (incompleteTikTokAccount) {
-        setError(`请先完成 TikTok 账号「${incompleteTikTokAccount.displayName}」的发布设置和确认。`);
+        setError(t(`请先完成 TikTok 账号「${incompleteTikTokAccount.displayName}」的发布设置和确认。`, `Complete the publishing settings and confirmation for TikTok account “${incompleteTikTokAccount.displayName}”.`));
         return;
       }
     }
@@ -584,7 +591,7 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
     );
 
     if (hasInvalidWebsite) {
-      setError("网站链接请输入以 http:// 或 https:// 开头的完整地址");
+      setError(t("网站链接请输入以 http:// 或 https:// 开头的完整地址", "Enter a complete website URL starting with http:// or https://"));
       return;
     }
 
@@ -634,19 +641,22 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
           );
           setCopyNotice(
             publishMode === "draft"
-              ? "草稿已更新，将从这次保存起保留 72 小时。"
-              : "草稿已转为新的发布内容，原草稿已删除。"
+              ? t("草稿已更新，将从这次保存起保留 72 小时。", "Draft updated and kept for 72 hours from this save.")
+              : t("草稿已转为新的发布内容，原草稿已删除。", "Draft converted to new publishing content and removed.")
           );
         } catch (deleteError) {
           setCopyNotice(
-            `内容已保存，但原草稿未自动删除：${deleteError instanceof Error ? deleteError.message : "请在草稿箱手动删除。"}`
+            t(
+              `内容已保存，但原草稿未自动删除：${deleteError instanceof Error ? deleteError.message : "请在草稿箱手动删除。"}`,
+              `Content saved, but the original draft was not removed automatically: ${deleteError instanceof Error ? deleteError.message : "delete it manually from Drafts."}`
+            )
           );
         }
       }
 
       setResult(post);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "无法保存内容");
+      setError(requestError instanceof Error ? requestError.message : t("无法保存内容", "Unable to save content"));
     } finally {
       setIsSaving(false);
     }
@@ -668,32 +678,32 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
           <div className="step-heading">
             <span className="step-badge">2</span>
             <div>
-              <p className="section-kicker">内容编辑</p>
-              <h2>编辑帖子内容</h2>
-              <p className="muted">所有已选账号会使用基础内容；文案、链接和素材都可按平台单独调整。</p>
+              <p className="section-kicker">{t("内容编辑", "Content editor")}</p>
+              <h2>{t("编辑帖子内容", "Edit post content")}</h2>
+              <p className="muted">{t("所有已选账号会使用基础内容；文案、链接和素材都可按平台单独调整。", "Selected accounts use the base content. Copy, links, and media can be customized per platform.")}</p>
             </div>
           </div>
 
           <div className="row">
             <label className="field grow-field">
-              <span>内部标题（可选）</span>
+              <span>{t("内部标题（可选）", "Internal title (optional)")}</span>
               <input
                 onChange={(event) => setTitle(event.target.value)}
-                placeholder="例如：夏季新品发布"
+                placeholder={t("例如：夏季新品发布", "For example: Summer product launch")}
                 value={title}
               />
             </label>
             <button className="button secondary apply-copy-button" onClick={applyBaseContent} type="button">
-              应用基础内容
+              {t("应用基础内容", "Apply base content")}
             </button>
           </div>
 
           <label className="field">
-            <span>帖子文案</span>
+            <span>{t("帖子文案", "Post copy")}</span>
             <textarea
               className="composer-textarea compact"
               onChange={(event) => setBaseText(event.target.value)}
-              placeholder="先写一版通用文案，发布前可按平台调整。"
+              placeholder={t("先写一版通用文案，发布前可按平台调整。", "Write a base version first, then customize it for each platform.")}
               ref={baseTextAreaRef}
               required
               value={baseText}
@@ -701,7 +711,7 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
           </label>
           <TextInsertToolbar onInsert={insertBaseText} />
           <label className="field website-field">
-            <span>基础网站链接（可选）</span>
+            <span>{t("基础网站链接（可选）", "Base website link (optional)")}</span>
             <input
               inputMode="url"
               onChange={(event) => setBaseWebsite(event.target.value)}
@@ -709,12 +719,12 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
               type="url"
               value={baseWebsite}
             />
-            <small>默认会用于所有已选平台；可在平台版本中单独改写。</small>
+            <small>{t("默认会用于所有已选平台；可在平台版本中单独改写。", "Used for all selected platforms by default; customize it in each platform version if needed.")}</small>
           </label>
           <div className="content-summary">
-            <span>{selectedAccounts.length} 个账号</span>
-            <span>{activePlatformLabel}：{imageCount} 张图片</span>
-            <span>{activePlatformLabel}：{videoCount} 个视频</span>
+            <span>{t(`${selectedAccounts.length} 个账号`, `${selectedAccounts.length} accounts`)}</span>
+            <span>{t(`${activePlatformLabel}：${imageCount} 张图片`, `${activePlatformLabel}: ${imageCount} images`)}</span>
+            <span>{t(`${activePlatformLabel}：${videoCount} 个视频`, `${activePlatformLabel}: ${videoCount} videos`)}</span>
           </div>
 
           <PlatformTabs
@@ -773,9 +783,9 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
         {selectedWorkspace ? (
           <>
             <MediaUploader
-              description="上传一次后，默认会用于全部已选平台；每个平台都可以从共用素材复制一份再单独调整。"
+              description={t("上传一次后，默认会用于全部已选平台；每个平台都可以从共用素材复制一份再单独调整。", "Upload once to use media on all selected platforms by default. Copy it to customize a platform separately.")}
               disabled={publishingLocked}
-              label="共用素材"
+              label={t("共用素材", "Shared media")}
               media={sharedMedia}
               onMediaChange={setSharedMedia}
               token={token}
@@ -786,25 +796,25 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
               <section className="composer-panel platform-media-control">
                 <div className="row">
                   <div>
-                    <p className="section-kicker">平台素材版本</p>
+                    <p className="section-kicker">{t("平台素材版本", "Platform media version")}</p>
                     <h2>{activePlatformLabel}</h2>
                   </div>
                   <span className={activeMediaUsesShared ? "media-source-badge shared" : "media-source-badge custom"}>
-                    {activeMediaUsesShared ? "使用共用素材" : "已单独调整"}
+                    {activeMediaUsesShared ? t("使用共用素材", "Using shared media") : t("已单独调整", "Customized")}
                   </span>
                 </div>
                 <p className="muted">
                   {activeMediaUsesShared
-                    ? `当前 ${activePlatformLabel} 会使用全部 ${sharedMedia.length} 个共用素材。`
-                    : `当前 ${activePlatformLabel} 使用独立素材，不会再随共用素材变化。`}
+                    ? t(`当前 ${activePlatformLabel} 会使用全部 ${sharedMedia.length} 个共用素材。`, `${activePlatformLabel} uses all ${sharedMedia.length} shared media items.`)
+                    : t(`当前 ${activePlatformLabel} 使用独立素材，不会再随共用素材变化。`, `${activePlatformLabel} has custom media and will no longer follow shared-media changes.`)}
                 </p>
                 {activeMediaUsesShared ? (
                   <button className="button secondary" onClick={customizePlatformMedia} type="button">
-                    从共用素材复制并单独调整
+                    {t("从共用素材复制并单独调整", "Copy shared media and customize")}
                   </button>
                 ) : (
                   <button className="button secondary" onClick={restoreSharedMedia} type="button">
-                    恢复使用共用素材
+                    {t("恢复使用共用素材", "Use shared media again")}
                   </button>
                 )}
               </section>
@@ -812,9 +822,9 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
 
             {selectedPlatforms.length && !activeMediaUsesShared ? (
               <MediaUploader
-                description={`这里只影响已选的 ${activePlatformLabel} 账号；可移除复制来的素材，或追加该平台专属图片和视频。`}
+                description={t(`这里只影响已选的 ${activePlatformLabel} 账号；可移除复制来的素材，或追加该平台专属图片和视频。`, `Only selected ${activePlatformLabel} accounts are affected. Remove copied media or add platform-specific images and videos.`)}
                 disabled={publishingLocked}
-                label={`${activePlatformLabel} 专属素材`}
+                label={t(`${activePlatformLabel} 专属素材`, `${activePlatformLabel} media`) }
                 media={platformMediaByPlatform[activePlatform]}
                 onMediaChange={(nextMedia) =>
                   setPlatformMediaByPlatform((current) => ({
@@ -835,12 +845,12 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
           <div className="step-heading">
             <span className="step-badge">3</span>
             <div>
-              <p className="section-kicker">发布设置</p>
-              <h2>安排发布时间</h2>
+              <p className="section-kicker">{t("发布设置", "Publishing settings")}</p>
+              <h2>{t("安排发布时间", "Choose publishing time")}</h2>
             </div>
           </div>
           <label className="field">
-            <span>工作区</span>
+            <span>{t("工作区", "Workspace")}</span>
             <select value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)}>
               {workspaces.map((workspace) => (
                 <option key={workspace.id} value={workspace.id}>
@@ -852,14 +862,14 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
         </section>
 
         <section className="composer-panel publish-mode-panel">
-          <div className="publish-mode-toggle" role="group" aria-label="选择发布方式">
+          <div className="publish-mode-toggle" role="group" aria-label={t("选择发布方式", "Choose publishing method")}>
             <button
               className={publishMode === "now" ? "active" : ""}
               disabled={publishingLocked}
               onClick={() => setPublishMode("now")}
               type="button"
             >
-              立即发布
+              {t("立即发布", "Publish now")}
             </button>
             <button
               className={publishMode === "scheduled" ? "active" : ""}
@@ -867,27 +877,27 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
               onClick={() => setPublishMode("scheduled")}
               type="button"
             >
-              定时发布
+              {t("定时发布", "Schedule")}
             </button>
             <button
               className={publishMode === "draft" ? "active" : ""}
               onClick={() => setPublishMode("draft")}
               type="button"
             >
-              保存草稿
+              {t("保存草稿", "Save draft")}
             </button>
           </div>
           {publishMode === "scheduled" ? <SchedulePicker onChange={setScheduledAt} value={scheduledAt} /> : null}
-          {publishMode === "now" ? <p className="muted">确认后会为每个已选账号分别入队并立即发布。</p> : null}
-          {publishMode === "draft" ? <p className="muted">稍后可从内容日历继续安排发布时间。</p> : null}
+          {publishMode === "now" ? <p className="muted">{t("确认后会为每个已选账号分别入队并立即发布。", "After confirmation, each selected account is queued and published immediately.")}</p> : null}
+          {publishMode === "draft" ? <p className="muted">{t("稍后可从内容日历继续安排发布时间。", "You can schedule it later from the content calendar.")}</p> : null}
           {publishingLocked ? (
             <p className="error">
-              测试权限已到期：可以登录、查看和保存草稿，但不能上传素材、立即发布或定时发布。
+              {t("测试权限已到期：可以登录、查看和保存草稿，但不能上传素材、立即发布或定时发布。", "Test access has expired: you can sign in, view, and save drafts, but cannot upload media, publish now, or schedule posts.")}
             </p>
           ) : null}
           {requiresDraftOnly ? (
             <p className="error">
-              {unsupportedPublishingLabels} 暂不支持真实发布。请改为“保存草稿”，不要把它标记为已发布。
+              {t(`${unsupportedPublishingLabels} 暂不支持真实发布。请改为“保存草稿”，不要把它标记为已发布。`, `${unsupportedPublishingLabels} does not support real publishing yet. Save a draft instead; it will not be marked as published.`)}
             </p>
           ) : null}
         </section>
@@ -920,20 +930,20 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
             type="submit"
           >
             {isSaving
-              ? "正在保存…"
+                ? t("正在保存…", "Saving...")
               : requiresDraftOnly
-                ? `${unsupportedPublishingLabels} 暂不支持真实发布`
+                ? t(`${unsupportedPublishingLabels} 暂不支持真实发布`, `${unsupportedPublishingLabels} real publishing is not supported`)
               : publishMode === "now"
-                ? `立即发布到 ${selectedAccounts.length} 个账号`
+                ? t(`立即发布到 ${selectedAccounts.length} 个账号`, `Publish now to ${selectedAccounts.length} accounts`)
                 : publishMode === "scheduled"
-                  ? `确认定时发布到 ${selectedAccounts.length} 个账号`
-                  : `保存 ${selectedAccounts.length} 个账号的草稿`}
+                  ? t(`确认定时发布到 ${selectedAccounts.length} 个账号`, `Confirm schedule for ${selectedAccounts.length} accounts`)
+                  : t(`保存 ${selectedAccounts.length} 个账号的草稿`, `Save draft for ${selectedAccounts.length} accounts`) }
           </button>
           {result ? (
             <p className="success-message">
               {publishMode === "now"
-                ? `已为 ${selectedAccounts.length} 个账号分别创建即时发布任务。`
-                : `已创建 ${selectedAccounts.length} 个独立发布任务。`}
+                ? t(`已为 ${selectedAccounts.length} 个账号分别创建即时发布任务。`, `An immediate publishing task was created for each of ${selectedAccounts.length} accounts.`)
+                : t(`已创建 ${selectedAccounts.length} 个独立发布任务。`, `${selectedAccounts.length} independent publishing tasks were created.`)}
             </p>
           ) : null}
           {accountError ? <p className="error">{accountError}</p> : null}

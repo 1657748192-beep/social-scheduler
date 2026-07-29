@@ -1,6 +1,7 @@
 "use client";
 
 import type { TikTokCreatorPublishInfo } from "../../lib/api";
+import { useLanguage } from "../LanguageProvider";
 
 export type TikTokPublishSettingsValue = {
   privacyLevel: string;
@@ -21,11 +22,11 @@ type TikTokPublishSettingsProps = {
   onChange: (socialAccountId: string, value: Partial<TikTokPublishSettingsValue>) => void;
 };
 
-const privacyLabels: Record<string, string> = {
-  PUBLIC_TO_EVERYONE: "所有人可见",
-  MUTUAL_FOLLOW_FRIENDS: "互关好友可见",
-  FOLLOWER_OF_CREATOR: "关注者可见",
-  SELF_ONLY: "仅自己可见"
+const privacyLabels: Record<string, [string, string]> = {
+  PUBLIC_TO_EVERYONE: ["所有人可见", "Everyone"],
+  MUTUAL_FOLLOW_FRIENDS: ["互关好友可见", "Friends"],
+  FOLLOWER_OF_CREATOR: ["关注者可见", "Followers"],
+  SELF_ONLY: ["仅自己可见", "Only me"]
 };
 
 export function TikTokPublishSettings({
@@ -36,13 +37,14 @@ export function TikTokPublishSettings({
   settingsByAccount,
   onChange
 }: TikTokPublishSettingsProps) {
+  const { t, locale } = useLanguage();
   return (
     <section className="composer-panel tiktok-publish-settings">
       <div className="row">
         <div>
-          <p className="section-kicker">TikTok 发布设置</p>
-          <h2>视频发布到 TikTok</h2>
-          <p className="muted">发布前请选择隐私和互动权限，并确认 TikTok 的音乐使用声明。</p>
+          <p className="section-kicker">{t("TikTok 发布设置", "TikTok publishing settings")}</p>
+          <h2>{t("视频发布到 TikTok", "Publish video to TikTok")}</h2>
+          <p className="muted">{t("发布前请选择隐私和互动权限，并确认 TikTok 的音乐使用声明。", "Choose privacy and interaction settings, then confirm TikTok music usage before publishing.")}</p>
         </div>
       </div>
 
@@ -59,31 +61,31 @@ export function TikTokPublishSettings({
               {creatorInfo ? <span>@{creatorInfo.creatorUsername}</span> : null}
             </div>
 
-            {isLoading ? <p className="muted">正在读取 TikTok 账号可用的发布设置…</p> : null}
+            {isLoading ? <p className="muted">{t("正在读取 TikTok 账号可用的发布设置…", "Loading available publishing settings for this TikTok account...")}</p> : null}
             {error ? <p className="error-message">{error}</p> : null}
 
             {creatorInfo && settings ? (
               <>
                 {!creatorInfo.directPostAudited ? (
                   <p className="tiktok-private-notice">
-                    当前 TikTok 应用尚未通过发布审核，本次视频只能选择“仅自己可见”。
+                    {t("当前 TikTok 应用尚未通过发布审核，本次视频只能选择“仅自己可见”。", "This TikTok app has not passed publishing review yet. This video can only be visible to you.")}
                   </p>
                 ) : null}
 
                 <label className="field">
-                  <span>隐私设置 *</span>
+                  <span>{t("隐私设置 *", "Privacy setting *")}</span>
                   <select
                     onChange={(event) => onChange(account.id, { privacyLevel: event.target.value })}
                     required
                     value={settings.privacyLevel}
                   >
-                    <option value="">请选择隐私设置</option>
+                    <option value="">{t("请选择隐私设置", "Choose a privacy setting")}</option>
                     {creatorInfo.privacyLevelOptions.map((privacyLevel) => {
                       const blockedByAudit = !creatorInfo.directPostAudited && privacyLevel !== "SELF_ONLY";
                       return (
                         <option disabled={blockedByAudit} key={privacyLevel} value={privacyLevel}>
-                          {privacyLabels[privacyLevel] ?? privacyLevel}
-                          {blockedByAudit ? "（应用审核前不可用）" : ""}
+                          {privacyLabels[privacyLevel]?.[locale === "en" ? 1 : 0] ?? privacyLevel}
+                          {blockedByAudit ? t("（应用审核前不可用）", " (unavailable until app review is approved)") : ""}
                         </option>
                       );
                     })}
@@ -98,7 +100,7 @@ export function TikTokPublishSettings({
                       onChange={(event) => onChange(account.id, { allowComment: event.target.checked })}
                       type="checkbox"
                     />
-                    允许评论{creatorInfo.commentDisabled ? "（该账号已关闭）" : ""}
+                    {t("允许评论", "Allow comments")}{creatorInfo.commentDisabled ? t("（该账号已关闭）", " (disabled for this account)") : ""}
                   </label>
                   <label>
                     <input
@@ -107,7 +109,7 @@ export function TikTokPublishSettings({
                       onChange={(event) => onChange(account.id, { allowDuet: event.target.checked })}
                       type="checkbox"
                     />
-                    允许合拍{creatorInfo.duetDisabled ? "（该账号已关闭）" : ""}
+                    {t("允许合拍", "Allow Duet")}{creatorInfo.duetDisabled ? t("（该账号已关闭）", " (disabled for this account)") : ""}
                   </label>
                   <label>
                     <input
@@ -116,7 +118,7 @@ export function TikTokPublishSettings({
                       onChange={(event) => onChange(account.id, { allowStitch: event.target.checked })}
                       type="checkbox"
                     />
-                    允许拼接{creatorInfo.stitchDisabled ? "（该账号已关闭）" : ""}
+                    {t("允许拼接", "Allow Stitch")}{creatorInfo.stitchDisabled ? t("（该账号已关闭）", " (disabled for this account)") : ""}
                   </label>
                 </div>
 
@@ -127,7 +129,7 @@ export function TikTokPublishSettings({
                       onChange={(event) => onChange(account.id, { brandOrganic: event.target.checked })}
                       type="checkbox"
                     />
-                    推广我自己的品牌/产品
+                    {t("推广我自己的品牌/产品", "Promote my own brand/product")}
                   </label>
                   <label>
                     <input
@@ -135,7 +137,7 @@ export function TikTokPublishSettings({
                       onChange={(event) => onChange(account.id, { isAigc: event.target.checked })}
                       type="checkbox"
                     />
-                    此视频由 AI 生成
+                    {t("此视频由 AI 生成", "This video was generated by AI")}
                   </label>
                 </div>
 
@@ -146,7 +148,7 @@ export function TikTokPublishSettings({
                     required
                     type="checkbox"
                   />
-                  我确认：发布即表示同意 TikTok 的音乐使用确认；视频可能需要数分钟处理后才会显示在主页。
+                  {t("我确认：发布即表示同意 TikTok 的音乐使用确认；视频可能需要数分钟处理后才会显示在主页。", "I confirm that publishing means I agree to TikTok's music usage confirmation. The video may take a few minutes to appear on the profile.")}
                 </label>
               </>
             ) : null}

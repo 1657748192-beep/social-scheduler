@@ -9,6 +9,7 @@ import {
   type Workspace
 } from "../../lib/api";
 import { formatChinaDateTime } from "../../lib/chinaTime";
+import { useLanguage } from "../LanguageProvider";
 
 type PublishedPostManagerProps = {
   token: string;
@@ -35,14 +36,14 @@ function getPostExcerpt(post: PublishedPost) {
   return value.length > 180 ? `${value.slice(0, 180)}…` : value;
 }
 
-function getMediaReuseStatus(post: PublishedPost, now: number) {
+function getMediaReuseStatus(post: PublishedPost, now: number, locale: "zh-CN" | "en") {
   const availableCount = post.media.filter(({ mediaAsset }) => mediaAsset.originalAvailable !== false).length;
 
   if (!post.media.length) {
     return {
       active: false,
       availableCount,
-      text: "暂无可复用素材"
+      text: locale === "en" ? "No media to reuse" : "暂无可复用素材"
     };
   }
 
@@ -50,7 +51,7 @@ function getMediaReuseStatus(post: PublishedPost, now: number) {
     return {
       active: false,
       availableCount,
-      text: "原素材已清理"
+      text: locale === "en" ? "Original media cleared" : "原素材已清理"
     };
   }
 
@@ -58,7 +59,7 @@ function getMediaReuseStatus(post: PublishedPost, now: number) {
     return {
       active: false,
       availableCount,
-      text: "素材清理中"
+      text: locale === "en" ? "Media is being cleared" : "素材清理中"
     };
   }
 
@@ -68,7 +69,7 @@ function getMediaReuseStatus(post: PublishedPost, now: number) {
     return {
       active: false,
       availableCount,
-      text: "素材清理中"
+      text: locale === "en" ? "Media is being cleared" : "素材清理中"
     };
   }
 
@@ -76,16 +77,19 @@ function getMediaReuseStatus(post: PublishedPost, now: number) {
   const days = Math.floor(totalMinutes / (24 * 60));
   const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
   const minutes = totalMinutes % 60;
-  const remaining = days ? `${days} 天 ${hours} 小时` : `${hours} 小时 ${minutes} 分`;
+  const remaining = locale === "en"
+    ? days ? `${days}d ${hours}h` : `${hours}h ${minutes}m`
+    : days ? `${days} 天 ${hours} 小时` : `${hours} 小时 ${minutes} 分`;
 
   return {
     active: true,
     availableCount,
-    text: `还可复用 ${remaining}`
+    text: locale === "en" ? `Reusable for ${remaining}` : `还可复用 ${remaining}`
   };
 }
 
 export function PublishedPostManager({ token, workspaces }: PublishedPostManagerProps) {
+  const { t, locale } = useLanguage();
   const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? "");
   const [platform, setPlatform] = useState<ComposerPlatform | "all">("all");
   const [posts, setPosts] = useState<PublishedPost[]>([]);
@@ -114,7 +118,7 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
       );
       setPosts(response);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "无法读取已发布帖子");
+      setError(requestError instanceof Error ? requestError.message : t("无法读取已发布帖子", "Unable to load published posts"));
     } finally {
       setIsLoading(false);
     }
@@ -137,13 +141,13 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
     <div className="post-manager-layout">
       <section className="published-post-toolbar">
         <div>
-          <p className="section-kicker">发布记录</p>
-          <h2>已发布帖子</h2>
-          <p className="muted">按账号保存每次发布的文案、素材、时间和平台链接，可复制后微调并再次发布。</p>
+          <p className="section-kicker">{t("发布记录", "Publishing records")}</p>
+          <h2>{t("已发布帖子", "Published posts")}</h2>
+          <p className="muted">{t("按账号保存每次发布的文案、素材、时间和平台链接，可复制后微调并再次发布。", "Every account's copy, media, time, and platform link are saved. Copy one to adjust and publish again.")}</p>
         </div>
         <div className="published-post-actions">
           <label className="field">
-            <span>工作区</span>
+            <span>{t("工作区", "Workspace")}</span>
             <select onChange={(event) => setWorkspaceId(event.target.value)} value={workspaceId}>
               {workspaces.map((workspace) => (
                 <option key={workspace.id} value={workspace.id}>
@@ -153,9 +157,9 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
             </select>
           </label>
           <label className="field">
-            <span>平台</span>
+            <span>{t("平台", "Platform")}</span>
             <select onChange={(event) => setPlatform(event.target.value as ComposerPlatform | "all")} value={platform}>
-              <option value="all">全部平台</option>
+              <option value="all">{t("全部平台", "All platforms")}</option>
               {Object.entries(platformLabels).map(([key, label]) => (
                 <option key={key} value={key}>
                   {label}
@@ -164,36 +168,36 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
             </select>
           </label>
           <button className="button secondary published-refresh-button" disabled={isLoading} onClick={loadPosts} type="button">
-            {isLoading ? "正在刷新…" : "刷新列表"}
+            {isLoading ? t("正在刷新…", "Refreshing...") : t("刷新列表", "Refresh")}
           </button>
         </div>
       </section>
 
-      <section className="published-post-stats" aria-label="发布统计">
+      <section className="published-post-stats" aria-label={t("发布统计", "Publishing statistics")}>
         <article>
           <strong>{posts.length}</strong>
-          <span>已发布账号帖子</span>
+          <span>{t("已发布账号帖子", "Published account posts")}</span>
         </article>
         <article>
           <strong>{publishedPlatformCount}</strong>
-          <span>已发布平台</span>
+          <span>{t("已发布平台", "Published platforms")}</span>
         </article>
         <article>
           <strong>{filteredPosts.length}</strong>
-          <span>当前筛选结果</span>
+          <span>{t("当前筛选结果", "Current results")}</span>
         </article>
       </section>
 
       {error ? <p className="error">{error}</p> : null}
 
-      {isLoading && !posts.length ? <p className="muted">正在读取已发布帖子…</p> : null}
+      {isLoading && !posts.length ? <p className="muted">{t("正在读取已发布帖子…", "Loading published posts...")}</p> : null}
 
       {!isLoading && !filteredPosts.length ? (
         <section className="published-post-empty">
-          <h2>还没有已发布的帖子</h2>
-          <p>完成一次立即发布或定时发布后，记录会自动显示在这里。</p>
+          <h2>{t("还没有已发布的帖子", "No published posts yet")}</h2>
+          <p>{t("完成一次立即发布或定时发布后，记录会自动显示在这里。", "Records appear here after publishing now or scheduling a post.")}</p>
           <Link className="button" href="/composer">
-            新建内容
+            {t("新建内容", "New content")}
           </Link>
         </section>
       ) : null}
@@ -205,7 +209,7 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
             thumbnail?.originalAvailable !== false ? thumbnail?.fileUrl : null
           );
           const composerUrl = `/composer?workspaceId=${encodeURIComponent(workspaceId)}&copyPostId=${encodeURIComponent(post.postId)}`;
-          const mediaReuse = getMediaReuseStatus(post, now);
+          const mediaReuse = getMediaReuseStatus(post, now, locale);
 
           return (
             <article className="published-post-card" key={post.id}>
@@ -213,15 +217,15 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
                 {thumbnail && thumbnailUrl ? (
                   <>
                     <img alt="" src={thumbnailUrl} />
-                    {thumbnail.mimeType.startsWith("video/") ? <span>视频</span> : null}
+                    {thumbnail.mimeType.startsWith("video/") ? <span>{t("视频", "Video")}</span> : null}
                     {thumbnail.originalAvailable === false ? (
-                      <span className="published-post-thumb-cleaned">原素材已清理</span>
+                      <span className="published-post-thumb-cleaned">{t("原素材已清理", "Original media cleared")}</span>
                     ) : null}
                   </>
                 ) : thumbnail ? (
-                  <span className="published-post-placeholder">原素材已清理</span>
+                  <span className="published-post-placeholder">{t("原素材已清理", "Original media cleared")}</span>
                 ) : (
-                  <span className="published-post-placeholder">无素材</span>
+                  <span className="published-post-placeholder">{t("无素材", "No media")}</span>
                 )}
               </div>
 
@@ -231,27 +235,27 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
                     <span className={`published-platform-tag ${post.platform}`}>{platformLabels[post.platform]}</span>
                     <h2>{getPostLabel(post)}</h2>
                   </div>
-                  <span className="published-status">已发布</span>
+                  <span className="published-status">{t("已发布", "Published")}</span>
                 </div>
                 <p>{getPostExcerpt(post)}</p>
                 <dl className="published-post-meta">
                   <div>
-                    <dt>发布账号</dt>
-                    <dd>{post.socialAccount?.displayName || "原账号已移除"}</dd>
+                    <dt>{t("发布账号", "Publishing account")}</dt>
+                    <dd>{post.socialAccount?.displayName || t("原账号已移除", "Original account removed")}</dd>
                   </div>
                   <div>
-                    <dt>发布时间</dt>
+                    <dt>{t("发布时间", "Published at")}</dt>
                     <dd>{formatChinaDateTime(new Date(post.publishedAt))}</dd>
                   </div>
                   <div>
-                    <dt>原计划时间</dt>
+                    <dt>{t("原计划时间", "Original scheduled time")}</dt>
                     <dd>{formatChinaDateTime(new Date(post.scheduledAt))}</dd>
                   </div>
                   <div>
-                    <dt>素材复用</dt>
+                    <dt>{t("素材复用", "Media reuse")}</dt>
                     <dd className={mediaReuse.active ? "published-media-reuse active" : "published-media-reuse"}>
                       {post.media.length
-                        ? `${mediaReuse.availableCount}/${post.media.length} 个 · ${mediaReuse.text}`
+                        ? t(`${mediaReuse.availableCount}/${post.media.length} 个 · ${mediaReuse.text}`, `${mediaReuse.availableCount}/${post.media.length} items · ${mediaReuse.text}`)
                         : mediaReuse.text}
                     </dd>
                   </div>
@@ -259,21 +263,21 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
                 <div className="published-post-footer">
                   <span>
                     {mediaReuse.active
-                      ? "请在倒计时结束前复制，可带入当前素材后再次编辑。"
-                      : "可复制原文案再次编辑；如需图片或视频，请重新上传素材。"}
+                      ? t("请在倒计时结束前复制，可带入当前素材后再次编辑。", "Copy before the countdown ends to carry current media into the editor.")
+                      : t("可复制原文案再次编辑；如需图片或视频，请重新上传素材。", "Copy the original text to edit again. Upload media again if you need images or video.")}
                   </span>
                   <div className="published-post-footer-actions">
                     {post.providerPermalink ? (
                       <a className="button secondary" href={post.providerPermalink} rel="noreferrer" target="_blank">
-                        打开已发布内容 ↗
+                        {t("打开已发布内容 ↗", "Open published post ↗")}
                       </a>
                     ) : (
                       <span aria-disabled="true" className="button secondary published-post-link-unavailable">
-                        发布链接不可用
+                        {t("发布链接不可用", "Publishing link unavailable")}
                       </span>
                     )}
                     <Link className="button" href={composerUrl}>
-                      {mediaReuse.active ? "复制到发布页" : "复制文案到发布页"}
+                      {mediaReuse.active ? t("复制到发布页", "Copy to composer") : t("复制文案到发布页", "Copy text to composer")}
                     </Link>
                   </div>
                 </div>

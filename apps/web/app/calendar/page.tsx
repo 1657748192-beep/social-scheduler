@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import { AppShell } from "../../components/AppShell";
 import { ContentCalendar } from "../../components/calendar/ContentCalendar";
 import { apiRequest, type Workspace } from "../../lib/api";
+import { useLanguage } from "../../components/LanguageProvider";
 
 export default function CalendarPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [token, setToken] = useState<string | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +31,7 @@ export default function CalendarPage() {
   }, [router]);
 
   return (
-    <AppShell title="排程日历" subtitle="按周/月查看已安排内容，支持拖拽调整时间" wide>
+    <AppShell title={t("排程日历", "Content calendar")} subtitle={t("按周/月查看已安排内容，支持拖拽调整时间", "View scheduled content by week or month and adjust its time")} wide>
       {error ? <p className="error">{error}</p> : null}
       {token && workspaces.length ? <ContentCalendar token={token} workspaces={workspaces} /> : null}
       {token && !workspaces.length ? (

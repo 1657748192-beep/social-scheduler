@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { ComposerPlatform, SocialAccount } from "../../lib/api";
 import { composerPlatforms } from "./platformConfig";
+import { useLanguage } from "../LanguageProvider";
 
 type AccountTargetSelectorProps = {
   accounts: SocialAccount[];
@@ -23,6 +24,7 @@ export function AccountTargetSelector({
   onToggleAccount,
   onToggleAll
 }: AccountTargetSelectorProps) {
+  const { t } = useLanguage();
   const [expandedPlatforms, setExpandedPlatforms] = useState<Partial<Record<ComposerPlatform, boolean>>>({});
   const selectedIds = new Set(selectedAccountIds);
   const allSelected = accounts.length > 0 && selectedAccountIds.length === accounts.length;
@@ -34,30 +36,30 @@ export function AccountTargetSelector({
     .filter((group) => group.accounts.length > 0);
 
   return (
-    <section className="composer-panel account-target-panel" aria-label="选择发布账号">
+    <section className="composer-panel account-target-panel" aria-label={t("选择发布账号", "Select publishing accounts")}>
       <div className="target-panel-heading">
         <div className="step-heading">
           <span className="step-badge">1</span>
           <div>
-            <p className="section-kicker">发布范围</p>
-            <h1>选择发布账号</h1>
+            <p className="section-kicker">{t("发布范围", "Publishing targets")}</p>
+            <h1>{t("选择发布账号", "Select publishing accounts")}</h1>
             <p className="muted">
               {loading
-                ? "正在读取已连接账号…"
-                : `已选择 ${selectedAccountIds.length} 个账号，将各自创建独立发布任务。`}
+                ? t("正在读取已连接账号…", "Loading connected accounts...")
+                : t(`已选择 ${selectedAccountIds.length} 个账号，将各自创建独立发布任务。`, `${selectedAccountIds.length} accounts selected. A separate publishing task will be created for each one.`)}
             </p>
           </div>
         </div>
         <button className="text-button" disabled={!accounts.length || loading} onClick={onToggleAll} type="button">
-          {allSelected ? "取消全选" : "选择全部"}
+          {allSelected ? t("取消全选", "Clear selection") : t("选择全部", "Select all")}
         </button>
       </div>
 
       {!loading && !accounts.length ? (
         <div className="account-target-empty">
-          <strong>还没有可发布的已连接账号</strong>
-          <span>先连接 Facebook 页面或 YouTube 频道，再回来创建内容。</span>
-          <a href="/dashboard">去连接渠道</a>
+          <strong>{t("还没有可发布的已连接账号", "No connected accounts are ready to publish")}</strong>
+          <span>{t("先连接 Facebook 页面或 YouTube 频道，再回来创建内容。", "Connect a Facebook Page or YouTube channel, then come back to create content.")}</span>
+          <a href="/dashboard">{t("去连接渠道", "Connect channels")}</a>
         </div>
       ) : null}
 
@@ -87,7 +89,7 @@ export function AccountTargetSelector({
                   </small>
                 </span>
                 <span className="account-group-toggle-action">
-                  {expanded ? "收起账号" : "展开账号"}
+                  {expanded ? t("收起账号", "Collapse accounts") : t("展开账号", "Expand accounts")}
                   <span aria-hidden="true" className={`account-group-chevron ${expanded ? "expanded" : ""}`}>
                     ▾
                   </span>
@@ -115,9 +117,9 @@ export function AccountTargetSelector({
                         </span>
                         <span className="account-target-meta">
                           <strong>{account.displayName}</strong>
-                          <small>{account.accountType === "page" ? "Facebook 主页" : account.accountType === "channel" ? "YouTube 频道" : platform.label}</small>
+                          <small>{account.accountType === "page" ? t("Facebook 主页", "Facebook Page") : account.accountType === "channel" ? t("YouTube 频道", "YouTube channel") : platform.label}</small>
                         </span>
-                        <span className="account-target-status">已连接</span>
+                        <span className="account-target-status">{t("已连接", "Connected")}</span>
                       </label>
                     );
                   })}

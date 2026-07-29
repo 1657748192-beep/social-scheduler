@@ -9,6 +9,7 @@ import {
   type Workspace
 } from "../../lib/api";
 import { formatChinaDateTime } from "../../lib/chinaTime";
+import { useLanguage } from "../LanguageProvider";
 
 type DraftManagerProps = {
   token: string;
@@ -51,6 +52,7 @@ function getTimeRemaining(expiresAt: string, now: number) {
 }
 
 export function DraftManager({ token, workspaces }: DraftManagerProps) {
+  const { t } = useLanguage();
   const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? "");
   const [drafts, setDrafts] = useState<DraftPost[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -79,7 +81,7 @@ export function DraftManager({ token, workspaces }: DraftManagerProps) {
       );
       setDrafts(response);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "无法读取草稿箱");
+      setError(requestError instanceof Error ? requestError.message : t("无法读取草稿箱", "Unable to load drafts"));
     } finally {
       setIsLoading(false);
     }
@@ -100,7 +102,7 @@ export function DraftManager({ token, workspaces }: DraftManagerProps) {
   }, [drafts]);
 
   async function deleteDraft(draft: DraftPost) {
-    if (!window.confirm(`确定删除草稿“${getDraftTitle(draft)}”吗？删除后无法恢复。`)) {
+    if (!window.confirm(t(`确定删除草稿“${getDraftTitle(draft)}”吗？删除后无法恢复。`, `Delete draft “${getDraftTitle(draft)}”? This cannot be undone.`))) {
       return;
     }
 
@@ -114,7 +116,7 @@ export function DraftManager({ token, workspaces }: DraftManagerProps) {
       });
       setDrafts((current) => current.filter((item) => item.id !== draft.id));
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "删除草稿失败");
+      setError(requestError instanceof Error ? requestError.message : t("删除草稿失败", "Unable to delete draft"));
     } finally {
       setDeletingId(null);
     }
@@ -124,13 +126,13 @@ export function DraftManager({ token, workspaces }: DraftManagerProps) {
     <div className="draft-manager-layout">
       <section className="draft-toolbar">
         <div>
-          <p className="section-kicker">草稿内容</p>
-          <h2>草稿箱</h2>
-          <p className="muted">草稿会保留 72 小时；到期后文案、图片和视频会自动清理。</p>
+          <p className="section-kicker">{t("草稿内容", "Draft content")}</p>
+          <h2>{t("草稿箱", "Drafts")}</h2>
+          <p className="muted">{t("草稿会保留 72 小时；到期后文案、图片和视频会自动清理。", "Drafts are kept for 72 hours. Copy, images, and videos are cleared automatically when they expire.")}</p>
         </div>
         <div className="draft-toolbar-actions">
           <label className="field">
-            <span>工作区</span>
+            <span>{t("工作区", "Workspace")}</span>
             <select onChange={(event) => setWorkspaceId(event.target.value)} value={workspaceId}>
               {workspaces.map((workspace) => (
                 <option key={workspace.id} value={workspace.id}>
@@ -140,38 +142,38 @@ export function DraftManager({ token, workspaces }: DraftManagerProps) {
             </select>
           </label>
           <button className="button secondary" disabled={isLoading} onClick={loadDrafts} type="button">
-            {isLoading ? "正在刷新…" : "刷新列表"}
+            {isLoading ? t("正在刷新…", "Refreshing...") : t("刷新列表", "Refresh")}
           </button>
           <Link className="button" href={`/composer?workspaceId=${encodeURIComponent(workspaceId)}`}>
-            新建内容
+            {t("新建内容", "New content")}
           </Link>
         </div>
       </section>
 
-      <section className="draft-stats" aria-label="草稿统计">
+      <section className="draft-stats" aria-label={t("草稿统计", "Draft statistics")}>
         <article>
           <strong>{drafts.length}</strong>
-          <span>当前草稿</span>
+          <span>{t("当前草稿", "Current drafts")}</span>
         </article>
         <article>
           <strong>{draftStats.platformCount}</strong>
-          <span>涉及平台</span>
+          <span>{t("涉及平台", "Platforms")}</span>
         </article>
         <article>
           <strong>{draftStats.mediaCount}</strong>
-          <span>关联素材</span>
+          <span>{t("关联素材", "Media items")}</span>
         </article>
       </section>
 
       {error ? <p className="error">{error}</p> : null}
-      {isLoading && !drafts.length ? <p className="muted">正在读取草稿…</p> : null}
+      {isLoading && !drafts.length ? <p className="muted">{t("正在读取草稿…", "Loading drafts...")}</p> : null}
 
       {!isLoading && !drafts.length ? (
         <section className="draft-empty">
-          <h2>草稿箱为空</h2>
-          <p>在内容编辑页选择“保存草稿”后，内容会显示在这里。</p>
+          <h2>{t("草稿箱为空", "No drafts yet")}</h2>
+          <p>{t("在内容编辑页选择“保存草稿”后，内容会显示在这里。", "Choose Save draft in the content editor and it will appear here.")}</p>
           <Link className="button" href={`/composer?workspaceId=${encodeURIComponent(workspaceId)}`}>
-            去创建草稿
+            {t("去创建草稿", "Create a draft")}
           </Link>
         </section>
       ) : null}
@@ -194,32 +196,32 @@ export function DraftManager({ token, workspaces }: DraftManagerProps) {
           return (
             <article className="draft-card" key={draft.id}>
               <div className="draft-thumb" aria-hidden="true">
-                {thumbnailUrl ? <img alt="" src={thumbnailUrl} /> : <span>{firstAsset ? "素材" : "无素材"}</span>}
-                {firstAsset?.mimeType.startsWith("video/") ? <small>视频</small> : null}
+                {thumbnailUrl ? <img alt="" src={thumbnailUrl} /> : <span>{firstAsset ? t("素材", "Media") : t("无素材", "No media")}</span>}
+                {firstAsset?.mimeType.startsWith("video/") ? <small>{t("视频", "Video")}</small> : null}
               </div>
               <div className="draft-copy">
                 <div className="draft-heading">
                   <div>
-                    <p>{platforms.map((platform) => platformLabels[platform]).join(" · ") || "未选择平台"}</p>
+                    <p>{platforms.map((platform) => platformLabels[platform]).join(" · ") || t("未选择平台", "No platform selected")}</p>
                     <h2>{getDraftTitle(draft)}</h2>
                   </div>
                   <span className="draft-expiry">{getTimeRemaining(draft.expiresAt, now)}</span>
                 </div>
-                <p className="draft-excerpt">{getDraftExcerpt(draft) || "未填写文案"}</p>
+                <p className="draft-excerpt">{getDraftExcerpt(draft) || t("未填写文案", "No copy entered")}</p>
                 <dl className="draft-meta">
                   <div>
-                    <dt>保存时间</dt>
+                    <dt>{t("保存时间", "Saved")}</dt>
                     <dd>{formatChinaDateTime(new Date(draft.updatedAt))}</dd>
                   </div>
                   <div>
-                    <dt>发布账号</dt>
-                    <dd title={accounts.join("、") || "未选择账号"}>
-                      {accounts.join("、") || "未选择账号"}
+                    <dt>{t("发布账号", "Publishing accounts")}</dt>
+                    <dd title={accounts.join("、") || t("未选择账号", "No accounts selected")}>
+                      {accounts.join("、") || t("未选择账号", "No accounts selected")}
                     </dd>
                   </div>
                   <div>
-                    <dt>素材</dt>
-                    <dd>{draft.variants.reduce((count, variant) => count + variant.media.length, 0)} 个</dd>
+                    <dt>{t("素材", "Media")}</dt>
+                    <dd>{t(`${draft.variants.reduce((count, variant) => count + variant.media.length, 0)} 个`, `${draft.variants.reduce((count, variant) => count + variant.media.length, 0)} items`)}</dd>
                   </div>
                 </dl>
                 <div className="draft-actions">
@@ -227,7 +229,7 @@ export function DraftManager({ token, workspaces }: DraftManagerProps) {
                     className="button"
                     href={`/composer?workspaceId=${encodeURIComponent(workspaceId)}&draftPostId=${encodeURIComponent(draft.id)}`}
                   >
-                    继续编辑
+                    {t("继续编辑", "Continue editing")}
                   </Link>
                   <button
                     className="button secondary draft-delete-button"
@@ -235,7 +237,7 @@ export function DraftManager({ token, workspaces }: DraftManagerProps) {
                     onClick={() => void deleteDraft(draft)}
                     type="button"
                   >
-                    {deletingId === draft.id ? "正在删除…" : "删除草稿"}
+                    {deletingId === draft.id ? t("正在删除…", "Deleting...") : t("删除草稿", "Delete draft")}
                   </button>
                 </div>
               </div>
