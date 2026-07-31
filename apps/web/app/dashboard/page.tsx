@@ -21,6 +21,7 @@ import {
   platformLabel,
   roleLabel
 } from "../../lib/labels";
+import { getActiveWorkspaceId, setActiveWorkspaceId } from "../../lib/activeWorkspace";
 import { useLanguage } from "../../components/LanguageProvider";
 
 function publishingAccessLabel(status?: Workspace["publishingAccessStatus"]) {
@@ -92,7 +93,12 @@ export default function DashboardPage() {
 
     setUser(currentUser);
     setWorkspaces(workspaceList);
-    setSelectedWorkspaceId((current) => current || workspaceList[0]?.id || "");
+    setSelectedWorkspaceId((current) => getActiveWorkspaceId(workspaceList, current));
+  }
+
+  function selectWorkspace(workspaceId: string) {
+    setActiveWorkspaceId(workspaceId);
+    setSelectedWorkspaceId(workspaceId);
   }
 
   async function loadWorkspaceDetails(storedToken: string, workspaceId: string) {
@@ -372,7 +378,7 @@ export default function DashboardPage() {
               <span>{t("当前工作区", "Current workspace")}</span>
               <select
                 value={selectedWorkspaceId}
-                onChange={(event) => setSelectedWorkspaceId(event.target.value)}
+                onChange={(event) => selectWorkspace(event.target.value)}
               >
                 {workspaces.map((workspace) => (
                   <option key={workspace.id} value={workspace.id}>

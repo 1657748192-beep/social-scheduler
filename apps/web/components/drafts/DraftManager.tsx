@@ -9,6 +9,7 @@ import {
   type Workspace
 } from "../../lib/api";
 import { formatChinaDateTime } from "../../lib/chinaTime";
+import { getActiveWorkspaceId, setActiveWorkspaceId } from "../../lib/activeWorkspace";
 import { useLanguage } from "../LanguageProvider";
 
 type DraftManagerProps = {
@@ -53,12 +54,22 @@ function getTimeRemaining(expiresAt: string, now: number) {
 
 export function DraftManager({ token, workspaces }: DraftManagerProps) {
   const { t } = useLanguage();
-  const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? "");
+  const [workspaceId, setWorkspaceId] = useState("");
   const [drafts, setDrafts] = useState<DraftPost[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const nextWorkspaceId = getActiveWorkspaceId(workspaces, workspaceId);
+    setWorkspaceId(nextWorkspaceId);
+  }, [workspaces]);
+
+  function selectWorkspace(nextWorkspaceId: string) {
+    setActiveWorkspaceId(nextWorkspaceId);
+    setWorkspaceId(nextWorkspaceId);
+  }
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60 * 1000);
@@ -133,7 +144,7 @@ export function DraftManager({ token, workspaces }: DraftManagerProps) {
         <div className="draft-toolbar-actions">
           <label className="field">
             <span>{t("工作区", "Workspace")}</span>
-            <select onChange={(event) => setWorkspaceId(event.target.value)} value={workspaceId}>
+            <select onChange={(event) => selectWorkspace(event.target.value)} value={workspaceId}>
               {workspaces.map((workspace) => (
                 <option key={workspace.id} value={workspace.id}>
                   {workspace.name}

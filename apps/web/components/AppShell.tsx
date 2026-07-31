@@ -10,6 +10,7 @@ import {
   type SocialAccount,
   type Workspace
 } from "../lib/api";
+import { getActiveWorkspaceChangeEvent, getActiveWorkspaceId } from "../lib/activeWorkspace";
 import { LanguageToggle, useLanguage, type AppLocale } from "./LanguageProvider";
 
 type AppShellProps = {
@@ -158,12 +159,20 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
   const router = useRouter();
   const { locale, t } = useLanguage();
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [workspaceRefresh, setWorkspaceRefresh] = useState(0);
   const [channels, setChannels] = useState<SocialAccount[]>([]);
   const [providerStatuses, setProviderStatuses] = useState<OAuthProviderStatus[]>([]);
   const [channelsLoading, setChannelsLoading] = useState(true);
   const [isChannelModalOpen, setIsChannelModalOpen] = useState(false);
   const [channelActionError, setChannelActionError] = useState<string | null>(null);
   const [disconnectingChannelId, setDisconnectingChannelId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const refreshWorkspace = () => setWorkspaceRefresh((current) => current + 1);
+    window.addEventListener(getActiveWorkspaceChangeEvent(), refreshWorkspace);
+
+    return () => window.removeEventListener(getActiveWorkspaceChangeEvent(), refreshWorkspace);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -187,7 +196,8 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
           return;
         }
 
-        const activeWorkspace = workspaceList[0];
+        const activeWorkspaceId = getActiveWorkspaceId(workspaceList);
+        const activeWorkspace = workspaceList.find((workspace) => workspace.id === activeWorkspaceId);
         setWorkspaceId(activeWorkspace?.id ?? null);
         setProviderStatuses(oauthStatusList);
 
@@ -221,7 +231,7 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [workspaceRefresh]);
 
   const channelProviders = useMemo(
     () => mergeProviderStatuses(providerStatuses),

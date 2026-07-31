@@ -7,6 +7,7 @@ import {
   type Workspace
 } from "../../lib/api";
 import { getChinaDateParts, withChinaTime } from "../../lib/chinaTime";
+import { getActiveWorkspaceId, setActiveWorkspaceId } from "../../lib/activeWorkspace";
 import {
   addDays,
   startOfMonthGrid,
@@ -27,12 +28,22 @@ type ContentCalendarProps = {
 
 export function ContentCalendar({ token, workspaces }: ContentCalendarProps) {
   const { t } = useLanguage();
-  const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? "");
+  const [workspaceId, setWorkspaceId] = useState("");
   const [view, setView] = useState<CalendarViewMode>("month");
   const [cursor, setCursor] = useState(new Date());
   const [schedules, setSchedules] = useState<CalendarSchedule[]>([]);
   const [selectedSchedule, setSelectedSchedule] = useState<CalendarSchedule | null>(null);
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    const nextWorkspaceId = getActiveWorkspaceId(workspaces, workspaceId);
+    setWorkspaceId(nextWorkspaceId);
+  }, [workspaces]);
+
+  function selectWorkspace(nextWorkspaceId: string) {
+    setActiveWorkspaceId(nextWorkspaceId);
+    setWorkspaceId(nextWorkspaceId);
+  }
+
   const selectedWorkspace = workspaces.find((workspace) => workspace.id === workspaceId);
   const publishingLocked =
     selectedWorkspace?.publishingAccessStatus === "expired" ||
@@ -152,7 +163,7 @@ export function ContentCalendar({ token, workspaces }: ContentCalendarProps) {
           cursor={cursor}
           onCursorChange={setCursor}
           onViewChange={setView}
-          onWorkspaceChange={setWorkspaceId}
+          onWorkspaceChange={selectWorkspace}
           view={view}
           workspaceId={workspaceId}
           workspaces={workspaces}

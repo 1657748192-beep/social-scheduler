@@ -12,6 +12,7 @@ import {
   type Workspace
 } from "../../lib/api";
 import { chinaLocalInputToISOString } from "../../lib/chinaTime";
+import { getActiveWorkspaceId, setActiveWorkspaceId } from "../../lib/activeWorkspace";
 import { AccountTargetSelector } from "./AccountTargetSelector";
 import { appendWebsiteToText, isValidWebsite } from "./contentUtils";
 import { MediaUploader } from "./MediaUploader";
@@ -107,7 +108,7 @@ function isReusableMediaAsset(asset: MediaAsset) {
 
 export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initialWorkspaceId }: ComposerFormProps) {
   const { t } = useLanguage();
-  const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId || workspaces[0]?.id || "");
+  const [workspaceId, setWorkspaceId] = useState("");
   const [title, setTitle] = useState("");
   const [baseText, setBaseText] = useState("");
   const [baseWebsite, setBaseWebsite] = useState("");
@@ -152,10 +153,15 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
   const copiedPostRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (initialWorkspaceId && workspaces.some((workspace) => workspace.id === initialWorkspaceId)) {
-      setWorkspaceId(initialWorkspaceId);
-    }
+    const nextWorkspaceId = getActiveWorkspaceId(workspaces, initialWorkspaceId || workspaceId);
+    setWorkspaceId(nextWorkspaceId);
+    setActiveWorkspaceId(nextWorkspaceId);
   }, [initialWorkspaceId, workspaces]);
+
+  function selectWorkspace(nextWorkspaceId: string) {
+    setActiveWorkspaceId(nextWorkspaceId);
+    setWorkspaceId(nextWorkspaceId);
+  }
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === workspaceId),
@@ -851,7 +857,7 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
           </div>
           <label className="field">
             <span>{t("工作区", "Workspace")}</span>
-            <select value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)}>
+            <select value={workspaceId} onChange={(event) => selectWorkspace(event.target.value)}>
               {workspaces.map((workspace) => (
                 <option key={workspace.id} value={workspace.id}>
                   {workspace.name}
