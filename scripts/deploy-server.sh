@@ -117,7 +117,7 @@ prepare_env() {
   force_env_value PUBLIC_WEB_URL "${PUBLIC_WEB_URL:-https://app.bufferhelp.com}"
   ensure_env_value POSTGRES_PASSWORD "$(random_hex 24)"
   ensure_env_value JWT_SECRET "$(random_hex 48)"
-  force_env_value JWT_EXPIRES_IN "30d"
+  force_env_value JWT_EXPIRES_IN "24h"
   ensure_env_value ADMIN_EMAILS "${ADMIN_EMAILS:-1657748192@qq.com}"
   ensure_env_value PASSWORD_RESET_TOKEN_MINUTES "${PASSWORD_RESET_TOKEN_MINUTES:-30}"
   ensure_env_value PASSWORD_RESET_DEBUG_LINKS "${PASSWORD_RESET_DEBUG_LINKS:-false}"

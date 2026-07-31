@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import { createHash, randomBytes, randomUUID } from "crypto";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
-import { config } from "../config";
+import { config, LOGIN_SESSION_DURATION, LOGIN_SESSION_MAX_AGE_MS } from "../config";
 import { prisma } from "../prisma";
 import { HttpError } from "../utils/errors";
 import { sendPasswordResetEmail } from "./emailService";
@@ -27,29 +27,9 @@ export const confirmPasswordResetSchema = z.object({
   password: z.string().min(8)
 });
 
-function parseDurationMs(duration: string) {
-  const match = /^(\d+)([smhd])$/.exec(duration);
-
-  if (!match) {
-    return 7 * 24 * 60 * 60 * 1000;
-  }
-
-  const value = Number(match[1]);
-  const unit = match[2];
-
-  const multipliers: Record<string, number> = {
-    s: 1000,
-    m: 60 * 1000,
-    h: 60 * 60 * 1000,
-    d: 24 * 60 * 60 * 1000
-  };
-
-  return value * multipliers[unit];
-}
-
 async function createSessionAndToken(user: { id: string; email: string }) {
   const tokenId = randomUUID();
-  const expiresAt = new Date(Date.now() + parseDurationMs(config.JWT_EXPIRES_IN));
+  const expiresAt = new Date(Date.now() + LOGIN_SESSION_MAX_AGE_MS);
 
   const session = await prisma.userSession.create({
     data: {
@@ -77,7 +57,7 @@ function signToken(user: { id: string; email: string }, sessionId: string, token
     {
       subject: user.id,
       jwtid: tokenId,
-      expiresIn: config.JWT_EXPIRES_IN as jwt.SignOptions["expiresIn"]
+      expiresIn: LOGIN_SESSION_DURATION as jwt.SignOptions["expiresIn"]
     }
   );
 }

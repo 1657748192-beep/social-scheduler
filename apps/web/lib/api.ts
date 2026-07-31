@@ -6,6 +6,19 @@ type ApiOptions = {
   body?: unknown;
 };
 
+function redirectToLoginAfterSessionExpiry() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem("social_scheduler_token");
+  window.localStorage.removeItem("social_scheduler_active_workspace_id");
+
+  if (!window.location.pathname.startsWith("/login")) {
+    window.location.assign("/login?reason=session-expired");
+  }
+}
+
 export async function apiRequest<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: options.method ?? "GET",
@@ -19,6 +32,9 @@ export async function apiRequest<T>(path: string, options: ApiOptions = {}): Pro
   const payload = await response.json().catch(() => null);
 
   if (!response.ok) {
+    if (response.status === 401 && options.token) {
+      redirectToLoginAfterSessionExpiry();
+    }
     throw new Error(payload?.message ?? "请求失败");
   }
 
@@ -65,6 +81,10 @@ export function apiUpload<T>(
       if (request.status >= 200 && request.status < 300) {
         resolve(payload as T);
         return;
+      }
+
+      if (request.status === 401) {
+        redirectToLoginAfterSessionExpiry();
       }
 
       reject(new Error(payload?.message ?? `上传失败（HTTP ${request.status}）`));

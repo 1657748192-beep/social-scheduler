@@ -8,7 +8,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   REDIS_URL: z.string().url(),
   JWT_SECRET: z.string().min(16),
-  JWT_EXPIRES_IN: z.string().default("30d"),
+  JWT_EXPIRES_IN: z.string().default("24h"),
   ADMIN_EMAILS: z.string().optional().default(""),
   PASSWORD_RESET_TOKEN_MINUTES: z.coerce.number().int().positive().default(30),
   PASSWORD_RESET_DEBUG_LINKS: z
@@ -88,3 +88,9 @@ if (parsedConfig.MEDIA_STORAGE === "cos") {
 }
 
 export const config = parsedConfig;
+
+// Login sessions are deliberately short-lived. Keep this as a fixed product
+// rule instead of allowing an environment value to accidentally extend a
+// user's access beyond one day.
+export const LOGIN_SESSION_DURATION = "24h";
+export const LOGIN_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
