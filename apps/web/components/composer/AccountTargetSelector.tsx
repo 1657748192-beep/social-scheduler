@@ -26,6 +26,7 @@ export function AccountTargetSelector({
 }: AccountTargetSelectorProps) {
   const { t } = useLanguage();
   const [expandedPlatforms, setExpandedPlatforms] = useState<Partial<Record<ComposerPlatform, boolean>>>({});
+  const [failedAvatarIds, setFailedAvatarIds] = useState<Record<string, true>>({});
   const selectedIds = new Set(selectedAccountIds);
   const allSelected = accounts.length > 0 && selectedAccountIds.length === accounts.length;
   const groupedAccounts = composerPlatforms
@@ -113,7 +114,20 @@ export function AccountTargetSelector({
                           type="checkbox"
                         />
                         <span className={`account-target-avatar ${platform.platform}`}>
-                          {account.avatarUrl ? <img alt="" src={account.avatarUrl} /> : initials(account.displayName)}
+                          {account.avatarUrl && !failedAvatarIds[account.id] ? (
+                            <img
+                              alt=""
+                              onError={() =>
+                                setFailedAvatarIds((current) =>
+                                  current[account.id] ? current : { ...current, [account.id]: true }
+                                )
+                              }
+                              referrerPolicy="no-referrer"
+                              src={account.avatarUrl}
+                            />
+                          ) : (
+                            initials(account.displayName)
+                          )}
                         </span>
                         <span className="account-target-meta">
                           <strong>{account.displayName}</strong>
