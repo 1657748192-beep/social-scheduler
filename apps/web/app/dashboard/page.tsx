@@ -78,6 +78,7 @@ export default function DashboardPage() {
   >({});
   const [bindingProvider, setBindingProvider] = useState<OAuthProviderStatus | null>(null);
   const [creatingAuthorizationLink, setCreatingAuthorizationLink] = useState<string | null>(null);
+  const [memberActionId, setMemberActionId] = useState<string | null>(null);
   const [latestInviteUrl, setLatestInviteUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -217,6 +218,66 @@ export default function DashboardPage() {
       await loadWorkspaceDetails(token, selectedWorkspace.id);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "请求失败");
+    }
+  }
+
+  async function toggleMemberStatus(member: WorkspaceMember) {
+    if (!token || !selectedWorkspace || member.role === "owner") {
+      return;
+    }
+
+    const nextStatus = member.status === "disabled" ? "active" : "disabled";
+    const actionLabel = nextStatus === "disabled" ? t("停用", "disable") : t("恢复", "restore");
+
+    if (!window.confirm(t(`确定要${actionLabel}成员 ${member.email} 吗？`, `Are you sure you want to ${actionLabel} ${member.email}?`))) {
+      return;
+    }
+
+    setError(null);
+    setMemberActionId(member.id);
+
+    try {
+      await apiRequest<WorkspaceMember>(
+        `/workspaces/${selectedWorkspace.id}/members/${member.id}`,
+        {
+          method: "PATCH",
+          token,
+          body: { status: nextStatus }
+        }
+      );
+      await loadWorkspaceDetails(token, selectedWorkspace.id);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : t("无法更新成员状态", "Unable to update member status"));
+    } finally {
+      setMemberActionId(null);
+    }
+  }
+
+  async function removeMember(member: WorkspaceMember) {
+    if (!token || !selectedWorkspace || member.role === "owner") {
+      return;
+    }
+
+    if (!window.confirm(t(`确定从当前工作区移除 ${member.email} 吗？对方账号和自己的工作区不会被删除。`, `Remove ${member.email} from this workspace? Their account and personal workspaces will not be deleted.`))) {
+      return;
+    }
+
+    setError(null);
+    setMemberActionId(member.id);
+
+    try {
+      await apiRequest<{ ok: true }>(
+        `/workspaces/${selectedWorkspace.id}/members/${member.id}`,
+        {
+          method: "DELETE",
+          token
+        }
+      );
+      await loadWorkspaceDetails(token, selectedWorkspace.id);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : t("无法移除成员", "Unable to remove member"));
+    } finally {
+      setMemberActionId(null);
     }
   }
 
@@ -416,11 +477,33 @@ export default function DashboardPage() {
 
             <ul className="list compact-list">
               {members.map((member) => (
-                <li key={member.id}>
-                  <strong>{member.name}</strong>
-                  <div className="muted">
-                    {member.email} · {roleLabel(member.role)} · {memberStatusLabel(member.status)}
+                <li className="workspace-member-row" key={member.id}>
+                  <div>
+                    <strong>{member.name}</strong>
+                    <div className="muted">
+                      {member.email} · {roleLabel(member.role)} · {memberStatusLabel(member.status)}
+                    </div>
                   </div>
+                  {canManageMembers && member.role !== "owner" ? (
+                    <div className="workspace-member-actions">
+                      <button
+                        className="button secondary"
+                        disabled={memberActionId === member.id}
+                        onClick={() => toggleMemberStatus(member)}
+                        type="button"
+                      >
+                        {member.status === "disabled" ? t("恢复成员", "Restore") : t("停用成员", "Disable")}
+                      </button>
+                      <button
+                        className="button danger-button"
+                        disabled={memberActionId === member.id}
+                        onClick={() => removeMember(member)}
+                        type="button"
+                      >
+                        {t("移除成员", "Remove")}
+                      </button>
+                    </div>
+                  ) : null}
                 </li>
               ))}
             </ul>

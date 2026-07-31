@@ -243,6 +243,31 @@ export async function updateMember(
   });
 }
 
+export async function removeMember(actorId: string, workspaceId: string, memberId: string) {
+  await requireWorkspaceManager(actorId, workspaceId);
+
+  const member = await prisma.workspaceMember.findFirst({
+    where: {
+      id: memberId,
+      workspaceId
+    }
+  });
+
+  if (!member) {
+    throw new HttpError(404, "Member not found");
+  }
+
+  if (member.role === "owner") {
+    throw new HttpError(400, "Workspace owner cannot be removed");
+  }
+
+  await prisma.workspaceMember.delete({
+    where: { id: member.id }
+  });
+
+  return { ok: true };
+}
+
 export async function listInvitations(userId: string, workspaceId: string) {
   await requireWorkspaceManager(userId, workspaceId);
 

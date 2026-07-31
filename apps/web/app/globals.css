@@ -1435,6 +1435,26 @@ textarea {
   padding: 10px 12px;
 }
 
+.workspace-member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.workspace-member-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.workspace-member-actions .button {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
 .row {
   display: flex;
   align-items: center;
@@ -4526,6 +4546,15 @@ textarea {
 
   .page {
     padding: 20px;
+  }
+
+  .workspace-member-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .workspace-member-actions {
+    justify-content: flex-start;
   }
 
   .public-site {

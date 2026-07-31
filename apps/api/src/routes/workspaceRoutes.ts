@@ -8,6 +8,7 @@ import {
   listInvitationsController,
   listMembersController,
   listWorkspacesController,
+  removeMemberController,
   revokeInvitationController,
   updateMemberController
 } from "../controllers/workspaceController";
@@ -29,6 +30,11 @@ workspaceRoutes.patch(
   "/workspaces/:workspaceId/members/:memberId",
   requireAuth,
   asyncHandler(updateMemberController)
+);
+workspaceRoutes.delete(
+  "/workspaces/:workspaceId/members/:memberId",
+  requireAuth,
+  asyncHandler(removeMemberController)
 );
 
 workspaceRoutes.get(

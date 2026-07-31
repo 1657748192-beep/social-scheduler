@@ -10,6 +10,7 @@ import {
   listInvitations,
   listMembers,
   listWorkspaces,
+  removeMember,
   revokeInvitation,
   updateMember,
   updateMemberSchema
@@ -40,6 +41,11 @@ export async function updateMemberController(req: Request, res: Response) {
   const body = updateMemberSchema.parse(req.body);
   const member = await updateMember(req.user!.id, req.params.workspaceId, req.params.memberId, body);
   return res.json(member);
+}
+
+export async function removeMemberController(req: Request, res: Response) {
+  const result = await removeMember(req.user!.id, req.params.workspaceId, req.params.memberId);
+  return res.json(result);
 }
 
 export async function listInvitationsController(req: Request, res: Response) {
