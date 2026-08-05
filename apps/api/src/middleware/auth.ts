@@ -1,8 +1,9 @@
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
-import { config, LOGIN_SESSION_MAX_AGE_MS } from "../config";
+import { config } from "../config";
 import { prisma } from "../prisma";
 import { HttpError } from "../utils/errors";
+import { LOGIN_SESSION_MAX_AGE_MS, isLoginSessionActive } from "../utils/sessionLifetime";
 
 type JwtPayload = {
   sub: string;
@@ -52,10 +53,7 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
       }
     });
 
-    if (
-      !session ||
-      session.createdAt.getTime() + LOGIN_SESSION_MAX_AGE_MS <= Date.now()
-    ) {
+    if (!session || !isLoginSessionActive(session)) {
       return next(new HttpError(401, "Session is expired or revoked"));
     }
 

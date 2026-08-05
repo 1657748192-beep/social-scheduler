@@ -2,9 +2,13 @@ import bcrypt from "bcryptjs";
 import { createHash, randomBytes, randomUUID } from "crypto";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
-import { config, LOGIN_SESSION_DURATION, LOGIN_SESSION_MAX_AGE_MS } from "../config";
+import { config } from "../config";
 import { prisma } from "../prisma";
 import { HttpError } from "../utils/errors";
+import {
+  LOGIN_SESSION_DURATION,
+  loginSessionExpiresAt
+} from "../utils/sessionLifetime";
 import { sendPasswordResetEmail } from "./emailService";
 
 export const registerSchema = z.object({
@@ -29,7 +33,7 @@ export const confirmPasswordResetSchema = z.object({
 
 async function createSessionAndToken(user: { id: string; email: string }) {
   const tokenId = randomUUID();
-  const expiresAt = new Date(Date.now() + LOGIN_SESSION_MAX_AGE_MS);
+  const expiresAt = loginSessionExpiresAt(new Date());
 
   const session = await prisma.userSession.create({
     data: {

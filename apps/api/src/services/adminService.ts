@@ -1,5 +1,6 @@
 import { config } from "../config";
 import { prisma } from "../prisma";
+import { isLoginSessionActive, loginSessionExpiresAt } from "../utils/sessionLifetime";
 import { publishQueue } from "../queues/publishQueue";
 import { deleteStoredMedia } from "./mediaStorageService";
 import { HttpError } from "../utils/errors";
@@ -115,9 +116,7 @@ export async function listAdminUsers(requesterEmail: string) {
     generatedAt: now,
     users: users.map((user) => {
       const userSessions = sessionsByUserId.get(user.id) ?? [];
-      const activeSessions = userSessions.filter(
-        (session) => !session.revokedAt && session.expiresAt.getTime() > now.getTime()
-      );
+      const activeSessions = userSessions.filter((session) => isLoginSessionActive(session, now));
       const latestSession = userSessions[0];
 
       return {
@@ -142,7 +141,7 @@ export async function listAdminUsers(requesterEmail: string) {
           totalSessions: user._count.sessions,
           activeSessions: activeSessions.length,
           latestSessionCreatedAt: latestSession?.createdAt ?? null,
-          latestSessionExpiresAt: latestSession?.expiresAt ?? null,
+          latestSessionExpiresAt: latestSession ? loginSessionExpiresAt(latestSession.createdAt) : null,
           latestSessionRevokedAt: latestSession?.revokedAt ?? null
         },
         stats: {
