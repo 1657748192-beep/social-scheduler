@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "BufferHelp Social Scheduler | Plan and publish social content",
+  title: "Social Scheduler | Plan and publish social content",
   description:
-    "BufferHelp Social Scheduler helps creators and businesses connect social accounts, prepare original content, schedule posts, and review publishing results."
+    "Social Scheduler helps creators and businesses connect social accounts, prepare original content, schedule posts, and review publishing results."
 };
 
 const features = [
@@ -18,7 +18,7 @@ const features = [
     eyebrow: "CONNECT",
     title: "Connect only accounts you authorize",
     description:
-      "Users start authorization from BufferHelp and approve access on each platform's official OAuth page. BufferHelp never collects platform passwords."
+      "Users start authorization from Social Scheduler and approve access on each platform's official OAuth page. Social Scheduler never collects platform passwords."
   },
   {
     eyebrow: "SCHEDULE",
@@ -32,11 +32,10 @@ export default function HomePage() {
   return (
     <main className="public-site">
       <header className="public-header">
-        <Link className="public-brand" href="/" aria-label="BufferHelp Social Scheduler home">
+        <Link className="public-brand" href="/" aria-label="Social Scheduler home">
           <span className="public-brand-mark">S</span>
           <span>
             <strong>Social Scheduler</strong>
-            <small>by BufferHelp</small>
           </span>
         </Link>
 
@@ -55,7 +54,7 @@ export default function HomePage() {
           <p className="public-kicker">SOCIAL MEDIA CONTENT WORKSPACE</p>
           <h1 id="public-hero-title">Plan original content. Publish with control.</h1>
           <p className="public-lead">
-            BufferHelp Social Scheduler is a web workspace for creators and businesses to connect authorized social accounts,
+            Social Scheduler is a web workspace for creators and businesses to connect authorized social accounts,
             create original posts, schedule publishing, and review results in one place.
           </p>
           <div className="public-hero-actions">
@@ -129,7 +128,7 @@ export default function HomePage() {
       <footer className="public-footer">
         <div>
           <strong>Social Scheduler</strong>
-          <span>Content planning and publishing workspace by BufferHelp.</span>
+          <span>Content planning and publishing workspace.</span>
         </div>
         <nav aria-label="Legal links">
           <Link href="/privacy">Privacy Policy</Link>
