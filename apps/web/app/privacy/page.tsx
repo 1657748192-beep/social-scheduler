@@ -13,7 +13,7 @@ export default function PrivacyPage() {
       <section className="legal-card">
         <p className="legal-kicker">Social Scheduler</p>
         <h1>隐私政策</h1>
-        <p>生效及最后更新日期：2026 年 7 月 24 日</p>
+        <p>生效及最后更新日期：2026 年 8 月 5 日</p>
         <p>
           Social Scheduler（下称“本服务”）帮助用户连接已授权的社交媒体账号、创建内容、安排发布时间并将用户确认的内容发布到所选平台。
           本政策说明我们处理哪些信息、处理目的、保存时间，以及用户如何行使数据权利。
@@ -28,22 +28,25 @@ export default function PrivacyPage() {
             <strong>用户创建的内容：</strong>帖子文案、链接、排程时间、平台专属版本、发布设置、草稿，以及用户主动上传的图片和视频。
           </li>
           <li>
-            <strong>社交账号授权信息：</strong>用户连接平台后返回的账号标识、公开显示名称、头像（如平台提供）和访问令牌。访问令牌会加密保存，仅用于用户已授权的连接、查询和发布功能。
+            <strong>社交账号授权信息：</strong>用户连接 Facebook、Instagram、YouTube、TikTok、LinkedIn、Pinterest、X 或其他已支持平台后返回的账号标识、公开显示名称、头像（如平台提供）和访问令牌。访问令牌会加密保存，仅用于用户已授权的连接、查询和发布功能。
           </li>
           <li>
             <strong>发布与运行记录：</strong>发布任务状态、发布时间、平台返回的内容链接或错误信息，用于显示发布结果、排查失败和避免重复发布。
           </li>
         </ul>
 
-        <h2>2. TikTok 授权信息和用途</h2>
+        <h2>2. 第三方平台授权信息与用途</h2>
         <p>
-          当用户主动选择“连接 TikTok”并完成 TikTok 授权时，本服务仅在所授予的权限范围内处理信息。对于
-          <code>user.info.basic</code>，我们读取 TikTok 返回的 Open ID、公开头像和显示名称，用于识别并展示用户选择的发布账号；对于
-          <code>video.publish</code>，我们仅在用户选定视频、填写或确认文案、选择隐私与互动设置并点击发布后，将该用户选择的原创视频提交至 TikTok。
+          用户可自主选择是否连接 Facebook、Instagram、YouTube、TikTok、LinkedIn、Pinterest 或 X。我们只在用户通过相应平台的官方 OAuth 授权页明确授权后，才在该平台授予的权限范围内处理数据；我们不会收集或保存任何第三方平台密码。
         </p>
-        <p>
-          我们不会获取 TikTok 密码、私信内容或未获授权的账号数据，不会在没有用户主动操作的情况下向 TikTok 发布内容。
-        </p>
+        <ul>
+          <li><strong>Facebook：</strong>读取用户公开资料及其已授权主页的标识、名称、头像和主页访问权限，用于展示可连接主页，并仅在用户选定主页并确认操作时执行该主页允许的发布或管理操作。</li>
+          <li><strong>Instagram：</strong>读取已授权专业账号的账号标识、用户名或显示名称、头像及必要访问令牌，用于显示用户选择的 Instagram 账号并处理用户明确发起的内容操作。</li>
+          <li><strong>YouTube：</strong><code>youtube.readonly</code> 仅用于读取并显示用户已授权的 YouTube 频道；<code>youtube.upload</code> 仅在用户选择原创视频、填写标题或描述并确认发布后，用于上传该视频至用户选择的频道。</li>
+          <li><strong>TikTok：</strong><code>user.info.basic</code> 仅用于读取 TikTok 返回的 Open ID、公开头像和显示名称，以识别和展示用户选择的账号；<code>video.publish</code> 仅在用户选择视频、确认文案、隐私与互动设置并点击发布后，用于提交该用户选择的原创视频。</li>
+          <li><strong>LinkedIn、Pinterest 与 X：</strong>读取用户授权返回的账号标识、公开显示名称、头像（如平台提供）及必要令牌，用于账号连接、账号展示以及用户明确发起且平台允许的操作。</li>
+        </ul>
+        <p>我们不会读取未获授权的私信、私人内容或其他无关数据，也不会在没有用户主动操作的情况下向任何第三方平台发布内容。</p>
 
         <h2>3. 我们如何使用信息</h2>
         <ul>
@@ -57,7 +60,7 @@ export default function PrivacyPage() {
         <h2>4. 信息共享、出售和广告</h2>
         <p>
           我们不会出售、出租或交易用户个人信息，也不会将用户数据用于定向广告。我们仅在以下必要情形共享信息：
-          （1）用户主动授权并请求连接或发布时，向 Facebook、Instagram、YouTube、TikTok 或其他用户选择的平台发送完成该操作所需的信息；
+          （1）用户主动授权并请求连接或发布时，向 Facebook、Instagram、YouTube、TikTok、LinkedIn、Pinterest、X 或其他用户选择的平台发送完成该操作所需的信息；
           （2）为运行本服务而使用受合同约束的基础设施、数据库、邮件或安全服务提供商；（3）为遵守适用法律、保护用户或服务安全而依法必须披露时。
         </p>
 
@@ -77,7 +80,7 @@ export default function PrivacyPage() {
           <li>用户可在本服务内取消连接社交账号；取消后，我们将停止使用该账号的授权令牌进行新的操作。</li>
           <li>用户可删除草稿；草稿内容与关联素材将进入系统清理流程。</li>
           <li>用户可通过管理员功能或联系邮箱请求删除账户、工作区、发布记录和相关素材。处理前我们可能要求验证请求人的账户控制权。</li>
-          <li>用户可通过 TikTok 或其他平台的账号设置撤销对本服务的授权。</li>
+          <li>用户可通过 Facebook、Instagram、YouTube、TikTok、LinkedIn、Pinterest、X 或其他平台的账号设置撤销对本服务的授权。</li>
         </ul>
         <p>
           如需删除数据，请访问 <a href="/data-deletion">数据删除说明</a>，或发送邮件至 <a href={`mailto:${supportEmail}`}>{supportEmail}</a>，并说明注册邮箱及希望删除的数据范围。
@@ -96,7 +99,7 @@ export default function PrivacyPage() {
 
         <h2>10. 联系我们</h2>
         <p>
-          如有隐私、数据删除或 TikTok 授权相关问题，请联系：<a href={`mailto:${supportEmail}`}>{supportEmail}</a>。
+          如有隐私、数据删除或第三方平台授权相关问题，请联系：<a href={`mailto:${supportEmail}`}>{supportEmail}</a>。
         </p>
       </section>
     </main>
