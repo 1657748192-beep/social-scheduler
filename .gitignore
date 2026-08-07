@@ -14,3 +14,4 @@ coverage
 .DS_Store
 docker-data
 apps/api/uploads
+.worktrees
