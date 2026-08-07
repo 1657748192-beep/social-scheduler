@@ -350,6 +350,12 @@ textarea {
   line-height: 1.5;
 }
 
+.public-platform-section .public-region-note {
+  margin-top: 8px;
+  color: #265166;
+  font-weight: 700;
+}
+
 .public-footer {
   justify-content: space-between;
   gap: 24px;
