@@ -120,6 +120,31 @@ textarea {
   text-decoration: underline;
 }
 
+.public-language-links {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid #c6d3de;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.public-language-links a {
+  padding: 7px 9px;
+  color: #506176;
+  font-size: 12px;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.public-language-links a.active {
+  background: var(--primary);
+  color: #ffffff;
+}
+
+.public-language-links a:hover {
+  text-decoration: none;
+}
+
 .public-nav .public-sign-in {
   border: 1px solid #b8c6d3;
   border-radius: 8px;
