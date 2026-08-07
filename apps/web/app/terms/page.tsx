@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PublicFooter, PublicHeader } from "../../components/public/PublicSiteChrome";
 
 export const metadata: Metadata = {
   title: "服务条款 | Social Scheduler",
@@ -9,8 +10,10 @@ const supportEmail = "1657748192@qq.com";
 
 export default function TermsPage() {
   return (
-    <main className="legal-page">
-      <section className="legal-card">
+    <main className="public-site">
+      <PublicHeader locale="zh-CN" page="terms" />
+      <section className="legal-page public-legal-page">
+        <section className="legal-card">
         <p className="legal-kicker">Social Scheduler</p>
         <h1>服务条款</h1>
         <p>生效及最后更新日期：2026 年 7 月 24 日</p>
@@ -71,7 +74,9 @@ export default function TermsPage() {
         <p>
           如对本条款、账号、删除请求或平台授权有疑问，请联系：<a href={`mailto:${supportEmail}`}>{supportEmail}</a>。
         </p>
+        </section>
       </section>
+      <PublicFooter locale="zh-CN" />
     </main>
   );
 }
