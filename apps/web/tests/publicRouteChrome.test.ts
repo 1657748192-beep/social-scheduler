@@ -9,4 +9,8 @@ test("public chrome maps both languages to stable counterparts", () => {
   assert.match(chrome, /"en": \{ home: "\/en", privacy: "\/en\/privacy", terms: "\/en\/terms" \}/);
   assert.match(chrome, /中文/);
   assert.match(chrome, /English/);
+  assert.match(chrome, /href={publicPaths\["zh-CN"\]\[page\]}/);
+  assert.match(chrome, /href={publicPaths\.en\[page\]}/);
+  assert.match(chrome, /<Link href={paths\.privacy}>{copy\.privacy}<\/Link>/);
+  assert.match(chrome, /<Link href={paths\.terms}>{copy\.terms}<\/Link>/);
 });
