@@ -1256,6 +1256,12 @@ textarea {
   color: var(--text);
 }
 
+.public-legal-page {
+  min-height: auto;
+  margin-top: 28px;
+  border-radius: 16px;
+}
+
 .legal-card {
   max-width: 860px;
   margin: 0 auto;

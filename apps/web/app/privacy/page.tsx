@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PublicFooter, PublicHeader } from "../../components/public/PublicSiteChrome";
 
 export const metadata: Metadata = {
   title: "隐私政策 | Social Scheduler",
@@ -9,8 +10,10 @@ const supportEmail = "1657748192@qq.com";
 
 export default function PrivacyPage() {
   return (
-    <main className="legal-page">
-      <section className="legal-card">
+    <main className="public-site">
+      <PublicHeader locale="zh-CN" page="privacy" />
+      <section className="legal-page public-legal-page">
+        <section className="legal-card">
         <p className="legal-kicker">Social Scheduler</p>
         <h1>隐私政策</h1>
         <p>生效及最后更新日期：2026 年 8 月 5 日</p>
@@ -101,7 +104,9 @@ export default function PrivacyPage() {
         <p>
           如有隐私、数据删除或第三方平台授权相关问题，请联系：<a href={`mailto:${supportEmail}`}>{supportEmail}</a>。
         </p>
+        </section>
       </section>
+      <PublicFooter locale="zh-CN" />
     </main>
   );
 }
