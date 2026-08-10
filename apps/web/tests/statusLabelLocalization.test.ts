@@ -43,3 +43,18 @@ test("status consumers pass the active locale to shared label helpers", () => {
   assert.match(dashboard, /invitationStatusLabel\(invitation\.status, locale\)/);
   assert.match(invitation, /invitationStatusLabel\(invitation\.status, locale\)/);
 });
+
+test("publishing access states provide English labels in dashboard and admin views", () => {
+  const dashboard = readFileSync("apps/web/app/dashboard/page.tsx", "utf8");
+  const admin = readFileSync("apps/web/app/admin/page.tsx", "utf8");
+
+  assert.match(dashboard, /t\("发布权限已停用", "Publishing access disabled"\)/);
+  assert.match(dashboard, /t\("测试发布权限已到期", "Publishing access expired"\)/);
+  assert.match(dashboard, /t\("截止：", "Ends: "\)/);
+  assert.match(admin, /import \{ useLanguage \} from "\.\.\/\.\.\/components\/LanguageProvider"/);
+  assert.match(admin, /t\("使用中", "Active"\)/);
+  assert.match(admin, /accessStatusLabel\(user\.publishingAccessStatus, t\)/);
+  assert.match(admin, /roleLabel\(workspace\.role, locale\)/);
+  assert.match(admin, /memberStatusLabel\(workspace\.status, locale\)/);
+  assert.match(admin, /accountStatusLabel\(account\.status, locale\)/);
+});

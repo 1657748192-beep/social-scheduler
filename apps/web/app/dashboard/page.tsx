@@ -24,16 +24,18 @@ import {
 import { getActiveWorkspaceId, setActiveWorkspaceId } from "../../lib/activeWorkspace";
 import { useLanguage } from "../../components/LanguageProvider";
 
-function publishingAccessLabel(status?: Workspace["publishingAccessStatus"]) {
+type Translate = (chinese: string, english: string) => string;
+
+function publishingAccessLabel(status: Workspace["publishingAccessStatus"] | undefined, t: Translate) {
   if (status === "disabled") {
-    return "发布权限已停用";
+    return t("发布权限已停用", "Publishing access disabled");
   }
 
   if (status === "expired") {
-    return "测试发布权限已到期";
+    return t("测试发布权限已到期", "Publishing access expired");
   }
 
-  return "测试发布权限生效中";
+  return t("测试发布权限生效中", "Publishing access active");
 }
 
 function formatBeijingDateTime(value?: string | null) {
@@ -49,17 +51,27 @@ function formatBeijingDateTime(value?: string | null) {
 
 function publishingAccessDescription(
   status?: Workspace["publishingAccessStatus"],
-  expiresAt?: string | null
+  expiresAt?: string | null,
+  t: Translate = (chinese) => chinese
 ) {
   if (status === "disabled") {
-    return "管理员已停用你的发布权限。你仍可登录、查看后台和保存草稿，但不能上传素材、立即发布或创建排程。";
+    return t(
+      "管理员已停用你的发布权限。你仍可登录、查看后台和保存草稿，但不能上传素材、立即发布或创建排程。",
+      "An administrator has disabled your publishing access. You can still sign in, view the dashboard, and save drafts, but cannot upload media, publish immediately, or create schedules."
+    );
   }
 
   if (status === "expired") {
-    return "测试期限已结束。你仍可登录、查看后台和保存草稿，但不能上传素材、立即发布或创建排程。";
+    return t(
+      "测试期限已结束。你仍可登录、查看后台和保存草稿，但不能上传素材、立即发布或创建排程。",
+      "Your test publishing access has expired. You can still sign in, view the dashboard, and save drafts, but cannot upload media, publish immediately, or create schedules."
+    );
   }
 
-  return `可发布至 ${formatBeijingDateTime(expiresAt)}（北京时间）。到期后仍可登录查看后台和保存草稿，但不能发布或创建排程。`;
+  return t(
+    `可发布至 ${formatBeijingDateTime(expiresAt)}（北京时间）。到期后仍可登录查看后台和保存草稿，但不能发布或创建排程。`,
+    `Publishing is available until ${formatBeijingDateTime(expiresAt)} (Beijing time). After expiration, you can still sign in, view the dashboard, and save drafts, but cannot publish or create schedules.`
+  );
 }
 
 export default function DashboardPage() {
@@ -398,11 +410,12 @@ export default function DashboardPage() {
           >
             <div>
             <p className="section-kicker">{t("测试人员发布权限", "Tester publishing access")}</p>
-              <h2>{publishingAccessLabel(selectedWorkspace?.publishingAccessStatus)}</h2>
+              <h2>{publishingAccessLabel(selectedWorkspace?.publishingAccessStatus, t)}</h2>
               <p className="muted">
                 {publishingAccessDescription(
                   selectedWorkspace?.publishingAccessStatus,
-                  selectedWorkspace?.publishingAccessExpiresAt
+                  selectedWorkspace?.publishingAccessExpiresAt,
+                  t
                 )}
               </p>
             </div>
@@ -412,8 +425,8 @@ export default function DashboardPage() {
               }`}
             >
               {selectedWorkspace?.publishingAccessStatus === "active"
-                ? `截止：${formatBeijingDateTime(selectedWorkspace.publishingAccessExpiresAt)}`
-                : publishingAccessLabel(selectedWorkspace?.publishingAccessStatus)}
+                ? `${t("截止：", "Ends: ")}${formatBeijingDateTime(selectedWorkspace.publishingAccessExpiresAt)}`
+                : publishingAccessLabel(selectedWorkspace?.publishingAccessStatus, t)}
             </span>
           </section>
         ) : null}

@@ -3,8 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "../../components/AppShell";
+import { useLanguage } from "../../components/LanguageProvider";
 import { apiRequest, type AdminUser, type AdminUsersResponse } from "../../lib/api";
-import { memberStatusLabel, platformLabel, roleLabel } from "../../lib/labels";
+import { accountStatusLabel, memberStatusLabel, platformLabel, roleLabel } from "../../lib/labels";
+
+type Translate = (chinese: string, english: string) => string;
 
 const dateFormatter = new Intl.DateTimeFormat("zh-CN", {
   timeZone: "Asia/Shanghai",
@@ -24,16 +27,22 @@ function formatDate(value?: string | null) {
   return dateFormatter.format(new Date(value));
 }
 
-function sessionStatus(user: AdminUser) {
+function sessionStatus(user: AdminUser, t: Translate) {
   if (user.sessionSummary.activeSessions > 0) {
-    return `有效，最近到期 ${formatDate(user.sessionSummary.latestSessionExpiresAt)}`;
+    return t(
+      `有效，最近到期 ${formatDate(user.sessionSummary.latestSessionExpiresAt)}`,
+      `Active; latest expiry ${formatDate(user.sessionSummary.latestSessionExpiresAt)}`
+    );
   }
 
   if (user.sessionSummary.latestSessionExpiresAt) {
-    return `无有效登录，最近到期 ${formatDate(user.sessionSummary.latestSessionExpiresAt)}`;
+    return t(
+      `无有效登录，最近到期 ${formatDate(user.sessionSummary.latestSessionExpiresAt)}`,
+      `No active session; latest expiry ${formatDate(user.sessionSummary.latestSessionExpiresAt)}`
+    );
   }
 
-  return "还没有登录会话";
+  return t("还没有登录会话", "No sign-in session yet");
 }
 
 function dateTimeLocalValue(value?: string | null) {
@@ -47,20 +56,21 @@ function dateTimeLocalValue(value?: string | null) {
   return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`;
 }
 
-function accessStatusLabel(accessStatus: "active" | "disabled" | "expired") {
+function accessStatusLabel(accessStatus: "active" | "disabled" | "expired", t: Translate) {
   if (accessStatus === "expired") {
-    return "测试已到期";
+    return t("测试已到期", "Expired");
   }
 
   if (accessStatus === "disabled") {
-    return "已停用";
+    return t("已停用", "Disabled");
   }
 
-  return "使用中";
+  return t("使用中", "Active");
 }
 
 export default function AdminPage() {
   const router = useRouter();
+  const { locale, t } = useLanguage();
   const [token, setToken] = useState<string | null>(null);
   const [data, setData] = useState<AdminUsersResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -262,7 +272,7 @@ export default function AdminPage() {
                       user.publishingAccessStatus === "active" ? "ready" : "warning"
                     }`}
                   >
-                    发布权限：{accessStatusLabel(user.publishingAccessStatus)}
+                    {t("发布权限：", "Publishing access: ")}{accessStatusLabel(user.publishingAccessStatus, t)}
                   </span>
                 </header>
 
@@ -273,7 +283,7 @@ export default function AdminPage() {
                   </div>
                   <div>
                     <dt>登录有效期</dt>
-                    <dd>{sessionStatus(user)}</dd>
+                    <dd>{sessionStatus(user, t)}</dd>
                   </div>
                   <div>
                     <dt>最近登录</dt>
@@ -389,7 +399,7 @@ export default function AdminPage() {
                       <div className="row">
                         <strong>{workspace.name}</strong>
                         <span>
-                          {roleLabel(workspace.role)} · {memberStatusLabel(workspace.status)}
+                          {roleLabel(workspace.role, locale)} · {memberStatusLabel(workspace.status, locale)}
                         </span>
                       </div>
                       <p className="muted">
@@ -401,7 +411,7 @@ export default function AdminPage() {
                           workspace.socialAccounts.map((account) => (
                             <span key={account.id}>
                               {platformLabel(account.platform)} · {account.displayName} ·{" "}
-                              {account.status}
+                              {accountStatusLabel(account.status, locale)}
                             </span>
                           ))
                         ) : (
