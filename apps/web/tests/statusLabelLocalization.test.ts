@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   accountStatusLabel,
@@ -27,4 +28,18 @@ test("shared status labels keep Chinese as the default and preserve unknown valu
   assert.equal(scheduleStatusLabel("published"), "已发布");
   assert.equal(publishJobStatusLabel("succeeded"), "成功");
   assert.equal(scheduleStatusLabel("future-status", "en"), "future-status");
+});
+
+test("status consumers pass the active locale to shared label helpers", () => {
+  const calendarDetail = readFileSync("apps/web/components/calendar/ScheduleDetailPanel.tsx", "utf8");
+  const dashboard = readFileSync("apps/web/app/dashboard/page.tsx", "utf8");
+  const invitation = readFileSync("apps/web/app/invitations/[token]/page.tsx", "utf8");
+
+  assert.match(calendarDetail, /const \{ locale, t \} = useLanguage\(\)/);
+  assert.match(calendarDetail, /scheduleStatusLabel\(schedule\.status, locale\)/);
+  assert.match(calendarDetail, /publishJobStatusLabel\(latestJob\.status, locale\)/);
+  assert.match(dashboard, /accountStatusLabel\(account\.status, locale\)/);
+  assert.match(dashboard, /memberStatusLabel\(member\.status, locale\)/);
+  assert.match(dashboard, /invitationStatusLabel\(invitation\.status, locale\)/);
+  assert.match(invitation, /invitationStatusLabel\(invitation\.status, locale\)/);
 });

@@ -31,7 +31,7 @@ export function ScheduleDetailPanel({
   publishingLocked = false,
   workspaceId
 }: ScheduleDetailPanelProps) {
-  const { t } = useLanguage();
+  const { locale, t } = useLanguage();
   const [text, setText] = useState("");
   const [scheduledAtValue, setScheduledAtValue] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -168,11 +168,11 @@ export function ScheduleDetailPanel({
         <dt>{t("发布时间", "Publishing time")}</dt>
         <dd>{formatDateTime(scheduledAt)}</dd>
         <dt>{t("状态", "Status")}</dt>
-        <dd>{scheduleStatusLabel(schedule.status)}</dd>
+        <dd>{scheduleStatusLabel(schedule.status, locale)}</dd>
         <dt>{t("发布任务", "Publishing task")}</dt>
         <dd>
           {latestJob
-            ? t(`${publishJobStatusLabel(latestJob.status)}，已尝试 ${latestJob.attempts} 次`, `${publishJobStatusLabel(latestJob.status)}, attempted ${latestJob.attempts} times`)
+            ? t(`${publishJobStatusLabel(latestJob.status, locale)}，已尝试 ${latestJob.attempts} 次`, `${publishJobStatusLabel(latestJob.status, locale)}, attempted ${latestJob.attempts} times`)
             : t("暂无", "None")}
         </dd>
       </dl>

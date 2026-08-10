@@ -64,7 +64,7 @@ function publishingAccessDescription(
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { t } = useLanguage();
+  const { locale, t } = useLanguage();
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -443,7 +443,7 @@ export default function DashboardPage() {
               >
                 {workspaces.map((workspace) => (
                   <option key={workspace.id} value={workspace.id}>
-                    {workspace.name} ({roleLabel(workspace.role)})
+                    {workspace.name} ({roleLabel(workspace.role, locale)})
                   </option>
                 ))}
               </select>
@@ -462,7 +462,7 @@ export default function DashboardPage() {
                 <li key={workspace.id}>
                   <strong>{workspace.name}</strong>
                   <div className="muted">
-                    {workspace.slug} · {roleLabel(workspace.role)}
+                    {workspace.slug} · {roleLabel(workspace.role, locale)}
                   </div>
                 </li>
               ))}
@@ -481,7 +481,7 @@ export default function DashboardPage() {
                   <div>
                     <strong>{member.name}</strong>
                     <div className="muted">
-                      {member.email} · {roleLabel(member.role)} · {memberStatusLabel(member.status)}
+                      {member.email} · {roleLabel(member.role, locale)} · {memberStatusLabel(member.status, locale)}
                     </div>
                   </div>
                   {canManageMembers && member.role !== "owner" ? (
@@ -648,7 +648,7 @@ export default function DashboardPage() {
               <div className="connected-table-row" key={account.id}>
                 <span>{platformLabel(account.platform)}</span>
                 <strong>{account.displayName}</strong>
-                <span>{accountStatusLabel(account.status)}</span>
+                <span>{accountStatusLabel(account.status, locale)}</span>
                 <span>
                   {canManageMembers ? (
                     <button
@@ -680,7 +680,7 @@ export default function DashboardPage() {
               <li key={invitation.id}>
                 <strong>{invitation.email}</strong>
                 <div className="muted">
-                  {roleLabel(invitation.role)} · {invitationStatusLabel(invitation.status)}
+                  {roleLabel(invitation.role, locale)} · {invitationStatusLabel(invitation.status, locale)}
                 </div>
               </li>
             ))}
@@ -740,7 +740,7 @@ export default function DashboardPage() {
                           <div>
                             <strong>{account.displayName}</strong>
                             <small className="muted">
-                              {account.accountType ?? "account"} · {accountStatusLabel(account.status)}
+                              {account.accountType ?? "account"} · {accountStatusLabel(account.status, locale)}
                             </small>
                           </div>
                           <button

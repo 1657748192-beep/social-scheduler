@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useLanguage } from "../../../components/LanguageProvider";
 import { apiRequest } from "../../../lib/api";
 import { invitationStatusLabel, roleLabel } from "../../../lib/labels";
 
@@ -21,6 +22,7 @@ export default function InvitationPage() {
   const params = useParams<{ token: string }>();
   const router = useRouter();
   const token = params.token;
+  const { locale, t } = useLanguage();
   const [invitation, setInvitation] = useState<InvitationPreview | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,10 +62,9 @@ export default function InvitationPage() {
         {invitation ? (
           <>
             <p className="muted">
-              {invitation.email} 被邀请加入 {invitation.workspace.name}，权限为{" "}
-              {roleLabel(invitation.role)}。
+              {invitation.email} {t("被邀请加入", "was invited to join")} {invitation.workspace.name}，{t("权限为", "with the role")} {roleLabel(invitation.role, locale)}。
             </p>
-            <p className="muted">状态：{invitationStatusLabel(invitation.status)}</p>
+            <p className="muted">{t("状态：", "Status: ")}{invitationStatusLabel(invitation.status, locale)}</p>
             <button className="button" type="button" onClick={acceptInvite}>
               接受邀请
             </button>
