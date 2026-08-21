@@ -9,6 +9,7 @@ import { config } from "../config";
 import { maxMediaUploadBytes, uploadRoot } from "../middleware/upload";
 import { prisma } from "../prisma";
 import { HttpError } from "../utils/errors";
+import { isLinkedMediaReadyForCleanup } from "./mediaCleanupPolicy";
 
 const cosStorageUrlPrefix = "cos://";
 
@@ -381,32 +382,12 @@ export async function cleanUpExpiredMedia() {
     take: 500
   });
 
-  const finalScheduleStatuses = new Set(["published", "failed", "canceled"]);
-  const finalVariantStatuses = new Set(["published", "failed", "canceled"]);
   const publishedRetentionMs = config.MEDIA_PUBLISHED_RETENTION_HOURS * 60 * 60 * 1000;
   const failedRetentionMs = config.MEDIA_FAILED_RETENTION_HOURS * 60 * 60 * 1000;
 
-  const terminalCandidates = linkedCandidates.filter((asset) => {
-    const expiryTimes: number[] = [];
-
-    for (const link of asset.variantLinks) {
-      const variant = link.postVariant;
-
-      if (!finalVariantStatuses.has(variant.publishStatus)) {
-        return false;
-      }
-
-      if (!variant.schedules.length || variant.schedules.some((schedule) => !finalScheduleStatuses.has(schedule.status))) {
-        return false;
-      }
-
-      const finalTime = Math.max(...variant.schedules.map((schedule) => schedule.updatedAt.getTime()));
-      const retentionMs = variant.publishStatus === "published" ? publishedRetentionMs : failedRetentionMs;
-      expiryTimes.push(finalTime + retentionMs);
-    }
-
-    return expiryTimes.length > 0 && Math.max(...expiryTimes) <= now;
-  });
+  const terminalCandidates = linkedCandidates.filter((asset) =>
+    isLinkedMediaReadyForCleanup(asset, now, publishedRetentionMs, failedRetentionMs)
+  );
 
   const expiredThumbnailCandidates = await prisma.mediaAsset.findMany({
     where: {
