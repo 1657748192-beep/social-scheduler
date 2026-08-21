@@ -38,3 +38,10 @@ test("registers a manager-protected route for creating Pinterest test boards", a
   const routes = await readFile(new URL("../src/routes/socialAccountRoutes.ts", import.meta.url), "utf8");
   assert.match(routes, /pinterest-boards[\s\S]*?requireAuth[\s\S]*?createPinterestBoardController/);
 });
+
+test("passes the Pinterest API environment to both server containers", async () => {
+  const compose = await readFile(new URL("../../../docker-compose.server.yml", import.meta.url), "utf8");
+  const matches = compose.match(/PINTEREST_API_ENV: \$\{PINTEREST_API_ENV:-production\}/g) ?? [];
+
+  assert.equal(matches.length, 2);
+});

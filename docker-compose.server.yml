@@ -67,6 +67,7 @@ services:
       TIKTOK_DIRECT_POST_AUDITED: ${TIKTOK_DIRECT_POST_AUDITED:-false}
       PINTEREST_CLIENT_ID: ${PINTEREST_CLIENT_ID:-}
       PINTEREST_CLIENT_SECRET: ${PINTEREST_CLIENT_SECRET:-}
+      PINTEREST_API_ENV: ${PINTEREST_API_ENV:-production}
     volumes:
       - api_uploads:/app/apps/api/uploads
 
@@ -125,6 +126,7 @@ services:
       TIKTOK_DIRECT_POST_AUDITED: ${TIKTOK_DIRECT_POST_AUDITED:-false}
       PINTEREST_CLIENT_ID: ${PINTEREST_CLIENT_ID:-}
       PINTEREST_CLIENT_SECRET: ${PINTEREST_CLIENT_SECRET:-}
+      PINTEREST_API_ENV: ${PINTEREST_API_ENV:-production}
     volumes:
       - api_uploads:/app/apps/api/uploads
 
