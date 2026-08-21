@@ -393,6 +393,7 @@ export type PublishedPost = {
     mediaAsset: MediaAsset;
   }>;
   providerPermalink?: string | null;
+  providerProfilePermalink?: string | null;
 };
 
 export type CosUploadIntent = {
@@ -454,6 +455,7 @@ export type CalendarSchedule = {
     attempts: number;
     maxAttempts: number;
     providerPermalink?: string;
+    providerProfilePermalink?: string | null;
     lastError?: string;
     updatedAt: string;
   }>;

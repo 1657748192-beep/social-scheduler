@@ -258,6 +258,10 @@ export function ScheduleDetailPanel({
         <a className="button" href={latestJob.providerPermalink} rel="noreferrer" target="_blank">
           {t("打开已发布内容", "Open published post")}
         </a>
+      ) : latestJob?.providerProfilePermalink ? (
+        <a className="button secondary" href={latestJob.providerProfilePermalink} rel="noreferrer" target="_blank">
+          {t("打开 TikTok 主页", "Open TikTok profile")}
+        </a>
       ) : null}
 
       {latestJob?.lastError ? <p className="error">{latestJob.lastError}</p> : null}

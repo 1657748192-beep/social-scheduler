@@ -89,6 +89,30 @@ type TikTokPublishStatusResponse = {
   error?: TikTokApiError;
 };
 
+export function tiktokProfilePermalink(creatorUsername: string) {
+  const normalizedUsername = creatorUsername.trim().replace(/^@+/, "");
+
+  if (!normalizedUsername) {
+    return undefined;
+  }
+
+  return `https://www.tiktok.com/@${encodeURIComponent(normalizedUsername)}`;
+}
+
+export function tiktokPublicPostPermalink(
+  creatorUsername: string,
+  publiclyAvailablePostIds: Array<string | number> | undefined
+) {
+  const postId = publiclyAvailablePostIds?.[0];
+  const profilePermalink = tiktokProfilePermalink(creatorUsername);
+
+  if (!postId || !profilePermalink) {
+    return undefined;
+  }
+
+  return `${profilePermalink}/video/${encodeURIComponent(postId.toString())}`;
+}
+
 function wait(milliseconds: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 }
@@ -187,9 +211,14 @@ export class TikTokPublisher implements SocialPublisher {
     const publishId = await this.initializeDirectPost(accessToken, input.text, video, creatorInfo, settings);
     const status = await this.waitForPublishCompletion(accessToken, publishId);
     const providerPostId = status.publicaly_available_post_id?.[0]?.toString() ?? publishId;
+    const providerPermalink = tiktokPublicPostPermalink(
+      creatorInfo.creatorUsername,
+      status.publicaly_available_post_id
+    );
 
     return {
       providerPostId,
+      providerPermalink,
       rawResponse: {
         platform: "tiktok",
         type: "video",
@@ -198,6 +227,7 @@ export class TikTokPublisher implements SocialPublisher {
         creatorUsername: creatorInfo.creatorUsername,
         publishId,
         providerPostId,
+        providerPermalink,
         privacyLevel: settings.privacyLevel,
         mediaAssetIds: [video.id]
       }

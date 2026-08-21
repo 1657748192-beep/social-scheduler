@@ -282,6 +282,10 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
                       <a className="button secondary" href={post.providerPermalink} rel="noreferrer" target="_blank">
                         {t("打开已发布内容 ↗", "Open published post ↗")}
                       </a>
+                    ) : post.providerProfilePermalink ? (
+                      <a className="button secondary" href={post.providerProfilePermalink} rel="noreferrer" target="_blank">
+                        {t("打开 TikTok 主页 ↗", "Open TikTok profile ↗")}
+                      </a>
                     ) : (
                       <span aria-disabled="true" className="button secondary published-post-link-unavailable">
                         {t("发布链接不可用", "Publishing link unavailable")}

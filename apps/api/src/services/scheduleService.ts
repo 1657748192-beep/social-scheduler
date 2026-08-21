@@ -9,6 +9,7 @@ import {
 } from "../queues/publishQueue";
 import { config } from "../config";
 import { isRealPublishingSupported } from "../integrations/social/registry";
+import { tiktokProfilePermalink } from "../integrations/social/tiktokPublisher";
 import { HttpError } from "../utils/errors";
 import { withResolvedMediaUrl } from "./mediaStorageService";
 import { requireWorkspaceMembership, requireWorkspacePublishingAccess } from "./workspaceService";
@@ -108,9 +109,27 @@ function ensureCanSchedule(role: WorkspaceRole) {
   }
 }
 
-function resolveScheduleMediaUrls<T extends { postVariant: { media: Array<{ mediaAsset: MediaAsset }> } }>(schedule: T) {
+function getTikTokProfilePermalink(platform: string, rawResponse: unknown) {
+  if (platform !== "tiktok" || !rawResponse || typeof rawResponse !== "object" || Array.isArray(rawResponse)) {
+    return null;
+  }
+
+  const creatorUsername = (rawResponse as { creatorUsername?: unknown }).creatorUsername;
+  return typeof creatorUsername === "string" ? tiktokProfilePermalink(creatorUsername) ?? null : null;
+}
+
+function resolveScheduleMediaUrls<
+  T extends {
+    postVariant: { platform: string; media: Array<{ mediaAsset: MediaAsset }> };
+    publishJobs: Array<{ rawResponse?: unknown }>;
+  }
+>(schedule: T) {
   return {
     ...schedule,
+    publishJobs: schedule.publishJobs.map((publishJob) => ({
+      ...publishJob,
+      providerProfilePermalink: getTikTokProfilePermalink(schedule.postVariant.platform, publishJob.rawResponse)
+    })),
     postVariant: {
       ...schedule.postVariant,
       media: schedule.postVariant.media.map((item) => ({
@@ -343,7 +362,11 @@ export async function listPublishedPosts(userId: string, workspaceId: string) {
         ...item,
         mediaAsset: withResolvedMediaUrl(item.mediaAsset)
       })),
-      providerPermalink: publishJob?.providerPermalink ?? null
+      providerPermalink: publishJob?.providerPermalink ?? null,
+      providerProfilePermalink: getTikTokProfilePermalink(
+        schedule.postVariant.platform,
+        publishJob?.rawResponse
+      )
     };
   });
 }
