@@ -12,6 +12,25 @@ export type PinterestPinMedia = {
   fileUrl?: string;
 };
 
+export type PinterestBoard = {
+  id: string;
+  name: string;
+  description?: string;
+  privacy?: string;
+};
+
+export type PinterestBoardPage = {
+  items?: PinterestBoard[];
+  bookmark?: string;
+};
+
+export type PinterestApiError = {
+  code?: string | number;
+  message?: string;
+};
+
+const pinterestBoardPageLimit = 20;
+
 type PinterestCreatePinBody = {
   board_id: string;
   title: string;
@@ -26,6 +45,33 @@ type PinterestCreatePinBody = {
 
 function readTrimmedString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+export function describePinterestApiError(error: PinterestApiError | undefined, fallback: string) {
+  if (!error?.message) {
+    return fallback;
+  }
+
+  return error.code === undefined ? error.message : `Pinterest error ${error.code}: ${error.message}`;
+}
+
+export async function loadPinterestBoardPages(
+  loadPage: (bookmark?: string) => Promise<PinterestBoardPage>
+) {
+  const boards: PinterestBoard[] = [];
+  let bookmark: string | undefined;
+
+  for (let page = 0; page < pinterestBoardPageLimit; page += 1) {
+    const response = await loadPage(bookmark);
+    boards.push(...(response.items ?? []).filter((board) => board.id && board.name));
+    bookmark = response.bookmark?.trim() || undefined;
+
+    if (!bookmark) {
+      break;
+    }
+  }
+
+  return boards;
 }
 
 export function readPinterestPinSettings(value: Prisma.JsonValue | Record<string, unknown> | undefined): PinterestPinSettings | null {
