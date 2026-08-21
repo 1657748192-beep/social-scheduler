@@ -8,6 +8,7 @@ import {
   redirectUriFor,
   type OAuthProviderConfig
 } from "../integrations/oauth/oauthProviders";
+import { PinterestPublisher } from "../integrations/social/pinterestPublisher";
 import { TikTokPublisher } from "../integrations/social/tiktokPublisher";
 import { prisma } from "../prisma";
 import { encryptToken } from "../utils/tokenCrypto";
@@ -702,6 +703,15 @@ export async function getTikTokCreatorPublishInfo(
 ) {
   await requireWorkspaceMembership(userId, workspaceId);
   return new TikTokPublisher().getCreatorPublishInfo(workspaceId, socialAccountId);
+}
+
+export async function getPinterestBoards(
+  userId: string,
+  workspaceId: string,
+  socialAccountId: string
+) {
+  await requireWorkspaceMembership(userId, workspaceId);
+  return new PinterestPublisher().listBoards(workspaceId, socialAccountId);
 }
 
 export async function disconnectSocialAccount(

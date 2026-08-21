@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import test from "node:test";
 import {
   describePinterestApiError,
@@ -48,4 +50,20 @@ test("uses Pinterest's useful API error data without exposing raw response objec
     "Pinterest error 31: Board not found"
   );
   assert.equal(describePinterestApiError({}, "Pinterest request failed"), "Pinterest request failed");
+});
+
+test("exposes Pinterest board lookup only through the authenticated workspace account route", async () => {
+  const root = path.resolve(import.meta.dirname, "..");
+  const [service, controller, routes] = await Promise.all([
+    readFile(path.join(root, "src/services/socialAccountService.ts"), "utf8"),
+    readFile(path.join(root, "src/controllers/socialAccountController.ts"), "utf8"),
+    readFile(path.join(root, "src/routes/socialAccountRoutes.ts"), "utf8")
+  ]);
+
+  assert.match(service, /export async function getPinterestBoards/);
+  assert.match(service, /requireWorkspaceMembership\(userId, workspaceId\)/);
+  assert.match(service, /PinterestPublisher\(\)\.listBoards\(workspaceId, socialAccountId\)/);
+  assert.match(controller, /getPinterestBoardsController/);
+  assert.match(routes, /pinterest-boards/);
+  assert.match(routes, /requireAuth/);
 });

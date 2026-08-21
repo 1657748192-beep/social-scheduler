@@ -8,6 +8,7 @@ import {
   createAuthorizationLink,
   createAuthorizationLinkSchema,
   disconnectSocialAccount,
+  getPinterestBoards,
   getTikTokCreatorPublishInfo,
   getAuthorizationLink,
   listSocialAccounts,
@@ -60,6 +61,15 @@ export async function getTikTokCreatorPublishInfoController(req: Request, res: R
     req.params.socialAccountId
   );
   return res.json(creatorInfo);
+}
+
+export async function getPinterestBoardsController(req: Request, res: Response) {
+  const boards = await getPinterestBoards(
+    req.user!.id,
+    req.params.workspaceId,
+    req.params.socialAccountId
+  );
+  return res.json(boards);
 }
 
 export async function createAuthorizationLinkController(req: Request, res: Response) {
