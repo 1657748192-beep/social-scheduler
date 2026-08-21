@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import test from "node:test";
 import {
   buildPinterestCreatePinBody,
@@ -94,4 +96,14 @@ test("builds an image_url Pinterest request without placing the link in the desc
     }
   );
   assert.equal(pinterestPinPermalink("pin-123"), "https://www.pinterest.com/pin/pin-123/");
+});
+
+test("validates Pinterest publishing requests against ready workspace media before queueing", async () => {
+  const root = path.resolve(import.meta.dirname, "..");
+  const service = await readFile(path.join(root, "src/services/composerService.ts"), "utf8");
+
+  assert.match(service, /getReadyWorkspaceMediaById/);
+  assert.match(service, /getPinterestPinValidationError/);
+  assert.match(service, /assertPinterestPublishSettings\(input\.variants, mediaById\)/);
+  assert.match(service, /status:\s*"ready"/);
 });

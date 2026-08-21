@@ -8,6 +8,7 @@ import {
   type ComposerPlatform
 } from "../config/platformLimits";
 import { isRealPublishingSupported } from "../integrations/social/registry";
+import { getPinterestPinValidationError } from "../integrations/social/pinterestPublishing";
 import { readTikTokPublishSettings } from "../integrations/social/tiktokPublisher";
 import { prisma } from "../prisma";
 import { HttpError } from "../utils/errors";
@@ -109,26 +110,33 @@ function validateVariant(platform: ComposerPlatform, text: string, mediaCount: n
   return errors;
 }
 
-async function assertMediaBelongsToWorkspace(workspaceId: string, mediaAssetIds: string[]) {
+async function getReadyWorkspaceMediaById(workspaceId: string, mediaAssetIds: string[]) {
   const uniqueIds = Array.from(new Set(mediaAssetIds));
 
   if (!uniqueIds.length) {
-    return;
+    return new Map<string, { mimeType: string; fileUrl: string }>();
   }
 
-  const count = await prisma.mediaAsset.count({
+  const mediaAssets = await prisma.mediaAsset.findMany({
     where: {
       id: {
         in: uniqueIds
       },
       workspaceId,
       status: "ready"
+    },
+    select: {
+      id: true,
+      mimeType: true,
+      fileUrl: true
     }
   });
 
-  if (count !== uniqueIds.length) {
+  if (mediaAssets.length !== uniqueIds.length) {
     throw new HttpError(400, "One or more media assets are invalid for this workspace");
   }
+
+  return new Map(mediaAssets.map((asset) => [asset.id, asset]));
 }
 
 async function assertVariantsTargetActiveWorkspaceAccounts(
@@ -197,6 +205,30 @@ function assertTikTokPublishSettings(variants: z.infer<typeof variantSchema>[]) 
   }
 }
 
+function assertPinterestPublishSettings(
+  variants: z.infer<typeof variantSchema>[],
+  mediaById: Map<string, { mimeType: string; fileUrl: string }>
+) {
+  const invalidVariant = variants.find((variant) => {
+    if (variant.platform !== "pinterest") {
+      return false;
+    }
+
+    const media = variant.mediaAssetIds.map((mediaAssetId) => mediaById.get(mediaAssetId)!);
+    return Boolean(getPinterestPinValidationError(variant.platformPayload as Prisma.JsonValue, media, variant.text));
+  });
+
+  if (invalidVariant) {
+    const media = invalidVariant.mediaAssetIds.map((mediaAssetId) => mediaById.get(mediaAssetId)!);
+    const message = getPinterestPinValidationError(
+      invalidVariant.platformPayload as Prisma.JsonValue,
+      media,
+      invalidVariant.text
+    );
+    throw new HttpError(400, message ?? "Complete the Pinterest Pin settings before publishing.");
+  }
+}
+
 export async function createComposerPost(
   userId: string,
   workspaceId: string,
@@ -209,8 +241,8 @@ export async function createComposerPost(
   ensureCanWrite(membership.role);
 
   const allMediaIds = input.variants.flatMap((variant) => variant.mediaAssetIds);
-  await Promise.all([
-    assertMediaBelongsToWorkspace(workspaceId, allMediaIds),
+  const [mediaById] = await Promise.all([
+    getReadyWorkspaceMediaById(workspaceId, allMediaIds),
     assertVariantsTargetActiveWorkspaceAccounts(workspaceId, input.variants)
   ]);
 
@@ -228,6 +260,7 @@ export async function createComposerPost(
   if (input.scheduledAt || input.publishNow) {
     assertVariantsSupportRealPublishing(input.variants);
     assertTikTokPublishSettings(input.variants);
+    assertPinterestPublishSettings(input.variants, mediaById);
   }
 
   if (input.publishNow && input.scheduledAt) {
