@@ -13,6 +13,7 @@ import { TikTokPublisher } from "../integrations/social/tiktokPublisher";
 import { prisma } from "../prisma";
 import { encryptToken } from "../utils/tokenCrypto";
 import { HttpError } from "../utils/errors";
+import { removeOAuthStateIfPresent } from "./oauthStateCleanup";
 import { requireWorkspaceManager, requireWorkspaceMembership } from "./workspaceService";
 
 export const startOAuthSchema = z.object({
@@ -574,9 +575,7 @@ export async function completeOAuth(platformParam: string, code: string, state: 
         firstAccount ??= account;
       }
 
-      await tx.oauthState.delete({
-        where: { id: oauthState.id }
-      });
+      await removeOAuthStateIfPresent(tx.oauthState, oauthState.id);
 
       return firstAccount!;
     }
@@ -639,9 +638,7 @@ export async function completeOAuth(platformParam: string, code: string, state: 
       }
     });
 
-    await tx.oauthState.delete({
-      where: { id: oauthState.id }
-    });
+    await removeOAuthStateIfPresent(tx.oauthState, oauthState.id);
 
     return account;
   });
