@@ -5,12 +5,21 @@ import test from "node:test";
 const composer = readFileSync(new URL("../components/composer/ComposerForm.tsx", import.meta.url), "utf8");
 const editor = readFileSync(new URL("../components/composer/PlatformEditor.tsx", import.meta.url), "utf8");
 const preview = readFileSync(new URL("../components/composer/PostPreview.tsx", import.meta.url), "utf8");
+const pinterestSettings = readFileSync(new URL("../components/composer/PinterestPinSettings.tsx", import.meta.url), "utf8");
 
 test("composer enables Pinterest as a real publishing platform with board-backed settings", () => {
   assert.match(composer, /new Set<ComposerPlatform>\(\["instagram", "facebook", "youtube", "tiktok", "pinterest"\]\)/);
   assert.match(composer, /pinterest-boards/);
   assert.match(composer, /PinterestPinSettings/);
   assert.match(composer, /pinterestSettingsByAccount/);
+});
+
+test("Pinterest Sandbox accounts can create a test board from the composer", () => {
+  assert.match(pinterestSettings, /Pinterest Sandbox test mode/);
+  assert.match(pinterestSettings, /Create Sandbox test board/);
+  assert.match(composer, /method: "POST"/);
+  assert.match(composer, /pinterest-boards/);
+  assert.match(composer, /pinterestApiEnvironment/);
 });
 
 test("Pinterest keeps the website link out of the description and uses it as the Pin destination", () => {

@@ -3,11 +3,19 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import {
+  buildPinterestCreateBoardBody,
   buildPinterestCreatePinBody,
   getPinterestPinValidationError,
   pinterestPinPermalink,
   readPinterestPinSettings
 } from "../src/integrations/social/pinterestPublishing";
+
+test("builds a public Pinterest board creation request", () => {
+  assert.deepEqual(buildPinterestCreateBoardBody("Sandbox recording board"), {
+    name: "Sandbox recording board",
+    privacy: "PUBLIC"
+  });
+});
 
 const completeSettings = {
   boardId: "board-123",

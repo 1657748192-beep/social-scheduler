@@ -1,7 +1,10 @@
 import type { OauthCredential, Platform, Prisma, SocialAccount } from "@prisma/client";
+import { config } from "../../config";
 import { prisma } from "../../prisma";
 import { decryptToken } from "../../utils/tokenCrypto";
+import { assertPinterestAccountEnvironment, pinterestApiBaseUrl } from "./pinterestEnvironment";
 import {
+  buildPinterestCreateBoardBody,
   buildPinterestCreatePinBody,
   describePinterestApiError,
   getPinterestPinValidationError,
@@ -9,11 +12,11 @@ import {
   pinterestPinPermalink,
   readPinterestPinSettings,
   type PinterestApiError,
+  type PinterestBoard,
   type PinterestBoardPage
 } from "./pinterestPublishing";
 import type { PublishInput, PublishResult, SocialPublisher } from "./socialPublisher";
 
-const pinterestApiBaseUrl = "https://api.pinterest.com/v5";
 type PinterestPinResponse = {
   id?: string;
   code?: string | number;
@@ -37,10 +40,11 @@ export class PinterestPublisher implements SocialPublisher {
 
   async listBoards(workspaceId: string, socialAccountId: string) {
     const account = await this.findPinterestAccount(workspaceId, socialAccountId);
+    assertPinterestAccountEnvironment(account?.capabilities, config.PINTEREST_API_ENV);
     const accessToken = await this.getAccessToken(account, "boards:read", "list Pinterest boards");
 
     return loadPinterestBoardPages(async (bookmark) => {
-      const url = new URL(`${pinterestApiBaseUrl}/boards`);
+      const url = new URL(`${pinterestApiBaseUrl(config.PINTEREST_API_ENV)}/boards`);
       url.searchParams.set("page_size", "100");
       if (bookmark) {
         url.searchParams.set("bookmark", bookmark);
@@ -50,10 +54,32 @@ export class PinterestPublisher implements SocialPublisher {
     });
   }
 
+  async createBoard(workspaceId: string, socialAccountId: string, name: string): Promise<PinterestBoard> {
+    const account = await this.findPinterestAccount(workspaceId, socialAccountId);
+    assertPinterestAccountEnvironment(account?.capabilities, config.PINTEREST_API_ENV);
+    const accessToken = await this.getAccessToken(account, "boards:write", "create a Pinterest board");
+    const response = await fetch(`${pinterestApiBaseUrl(config.PINTEREST_API_ENV)}/boards`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(buildPinterestCreateBoardBody(name))
+    });
+    const payload = (await response.json().catch(() => ({}))) as PinterestBoard & PinterestApiError;
+
+    if (!response.ok || !payload.id || !payload.name) {
+      throw new Error(describePinterestApiError(payload, `Pinterest board creation failed (${response.status}).`));
+    }
+
+    return payload;
+  }
+
   async publish(input: PublishInput): Promise<PublishResult> {
     await this.validate(input);
 
     const account = await this.findPinterestAccount(input.workspaceId, input.socialAccountId);
+    assertPinterestAccountEnvironment(account?.capabilities, config.PINTEREST_API_ENV);
     const accessToken = await this.getAccessToken(account, "pins:write", "publish a Pinterest Pin");
 
     if (!account) {
@@ -67,7 +93,7 @@ export class PinterestPublisher implements SocialPublisher {
       throw new Error("Pinterest publishing settings are incomplete.");
     }
 
-    const response = await fetch(`${pinterestApiBaseUrl}/pins`, {
+    const response = await fetch(`${pinterestApiBaseUrl(config.PINTEREST_API_ENV)}/pins`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,

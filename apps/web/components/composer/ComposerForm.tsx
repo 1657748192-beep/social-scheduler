@@ -182,6 +182,7 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
     Record<string, string | undefined>
   >({});
   const [pinterestSettingsLoadingAccountIds, setPinterestSettingsLoadingAccountIds] = useState<string[]>([]);
+  const [pinterestBoardCreatingAccountIds, setPinterestBoardCreatingAccountIds] = useState<string[]>([]);
   const baseTextAreaRef = useRef<HTMLTextAreaElement>(null);
   const copiedPostRef = useRef<string | null>(null);
 
@@ -698,6 +699,33 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
     }));
   }
 
+  async function createPinterestSandboxBoard(socialAccountId: string, name: string) {
+    if (!workspaceId) {
+      return;
+    }
+
+    setPinterestBoardCreatingAccountIds((current) => [...current, socialAccountId]);
+    setPinterestSettingsErrorByAccount((current) => ({ ...current, [socialAccountId]: undefined }));
+
+    try {
+      const board = await apiRequest<PinterestBoard>(
+        `/workspaces/${workspaceId}/social-accounts/${socialAccountId}/pinterest-boards`,
+        { method: "POST", token, body: { name } }
+      );
+      setPinterestBoardsByAccount((current) => ({
+        ...current,
+        [socialAccountId]: [...(current[socialAccountId] ?? []), board]
+      }));
+      updatePinterestPinSettings(socialAccountId, { boardId: board.id, boardName: board.name });
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : t("无法创建 Pinterest 测试看板", "Unable to create the Pinterest test board");
+      setPinterestSettingsErrorByAccount((current) => ({ ...current, [socialAccountId]: message }));
+      throw requestError;
+    } finally {
+      setPinterestBoardCreatingAccountIds((current) => current.filter((accountId) => accountId !== socialAccountId));
+    }
+  }
+
   async function savePost(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -982,11 +1010,17 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
           ) : null}
           {activePlatform === "pinterest" && selectedPinterestAccounts.length ? (
             <PinterestPinSettings
-              accounts={selectedPinterestAccounts}
+              accounts={selectedPinterestAccounts.map((account) => ({
+                id: account.id,
+                displayName: account.displayName,
+                pinterestApiEnvironment: account.capabilities.pinterestApiEnvironment
+              }))}
               boardsByAccount={pinterestBoardsByAccount}
               errorByAccount={pinterestSettingsErrorByAccount}
               loadingAccountIds={pinterestSettingsLoadingAccountIds}
               onChange={updatePinterestPinSettings}
+              creatingAccountIds={pinterestBoardCreatingAccountIds}
+              onCreateBoard={createPinterestSandboxBoard}
               settingsByAccount={pinterestSettingsByAccount}
             />
           ) : null}

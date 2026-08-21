@@ -1,6 +1,7 @@
 import type { Platform } from "@prisma/client";
 import { config } from "../../config";
 import { HttpError } from "../../utils/errors";
+import { pinterestOAuthTokenUrl, pinterestProfileUrl, type PinterestApiEnvironment } from "../social/pinterestEnvironment";
 
 export type OAuthPlatformParam =
   | "twitter"
@@ -44,6 +45,7 @@ export type OAuthProviderStatus = {
   docsUrl: string;
   requiredEnv: string[];
   scopes: string[];
+  pinterestApiEnvironment?: PinterestApiEnvironment;
 };
 
 const oauthPlatforms: Platform[] = [
@@ -180,8 +182,8 @@ const providerConfigs: Record<Platform, OAuthProviderConfig> = {
     clientId: config.PINTEREST_CLIENT_ID,
     clientSecret: config.PINTEREST_CLIENT_SECRET,
     authorizationUrl: "https://www.pinterest.com/oauth/",
-    tokenUrl: "https://api.pinterest.com/v5/oauth/token",
-    profileUrl: "https://api.pinterest.com/v5/user_account",
+    tokenUrl: pinterestOAuthTokenUrl(config.PINTEREST_API_ENV),
+    profileUrl: pinterestProfileUrl(config.PINTEREST_API_ENV),
     defaultScopes: [
       "user_accounts:read",
       "pins:read",
@@ -299,7 +301,8 @@ export function listOAuthProviderStatuses(): OAuthProviderStatus[] {
       clientSecretConfigured,
       clientSecretRequired,
       redirectUri: redirectUriFor(platform),
-      scopes: provider.defaultScopes
+      scopes: provider.defaultScopes,
+      ...(platform === "pinterest" ? { pinterestApiEnvironment: config.PINTEREST_API_ENV } : {})
     };
   });
 }

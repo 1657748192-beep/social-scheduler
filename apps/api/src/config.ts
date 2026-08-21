@@ -72,7 +72,8 @@ const envSchema = z.object({
     .default("false")
     .transform((value) => value === "true"),
   PINTEREST_CLIENT_ID: z.string().optional().default(""),
-  PINTEREST_CLIENT_SECRET: z.string().optional().default("")
+  PINTEREST_CLIENT_SECRET: z.string().optional().default(""),
+  PINTEREST_API_ENV: z.enum(["production", "sandbox"]).default("production")
 });
 
 const parsedConfig = envSchema.parse(process.env);

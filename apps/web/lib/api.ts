@@ -221,7 +221,11 @@ export type SocialAccount = {
   avatarUrl?: string;
   accountType?: string;
   status: "active" | "disconnected" | "token_expired";
-  capabilities: unknown;
+  capabilities: {
+    oauth2?: boolean;
+    scopes?: string[];
+    pinterestApiEnvironment?: "production" | "sandbox";
+  };
   createdAt: string;
   credential?: {
     scopes: string[];
@@ -279,6 +283,7 @@ export type OAuthProviderStatus = {
   docsUrl: string;
   requiredEnv: string[];
   scopes: string[];
+  pinterestApiEnvironment?: "production" | "sandbox";
 };
 
 export type ComposerPlatform =

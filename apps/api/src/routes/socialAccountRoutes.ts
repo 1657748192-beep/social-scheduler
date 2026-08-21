@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   createAuthorizationLinkController,
+  createPinterestBoardController,
   disconnectSocialAccountController,
   getAuthorizationLinkController,
   getPinterestBoardsController,
@@ -53,6 +54,11 @@ socialAccountRoutes.get(
   "/workspaces/:workspaceId/social-accounts/:socialAccountId/pinterest-boards",
   requireAuth,
   asyncHandler(getPinterestBoardsController)
+);
+socialAccountRoutes.post(
+  "/workspaces/:workspaceId/social-accounts/:socialAccountId/pinterest-boards",
+  requireAuth,
+  asyncHandler(createPinterestBoardController)
 );
 socialAccountRoutes.post(
   "/workspaces/:workspaceId/social-accounts/authorization-links",

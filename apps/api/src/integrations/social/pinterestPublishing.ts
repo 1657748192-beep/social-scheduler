@@ -43,6 +43,13 @@ type PinterestCreatePinBody = {
   };
 };
 
+export function buildPinterestCreateBoardBody(name: string) {
+  return {
+    name,
+    privacy: "PUBLIC" as const
+  };
+}
+
 function readTrimmedString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }

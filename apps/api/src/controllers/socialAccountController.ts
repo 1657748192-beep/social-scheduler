@@ -5,6 +5,8 @@ import {
 } from "../integrations/oauth/oauthProviders";
 import {
   completeOAuth,
+  createPinterestBoard,
+  createPinterestBoardSchema,
   createAuthorizationLink,
   createAuthorizationLinkSchema,
   disconnectSocialAccount,
@@ -70,6 +72,17 @@ export async function getPinterestBoardsController(req: Request, res: Response) 
     req.params.socialAccountId
   );
   return res.json(boards);
+}
+
+export async function createPinterestBoardController(req: Request, res: Response) {
+  const body = createPinterestBoardSchema.parse(req.body);
+  const board = await createPinterestBoard(
+    req.user!.id,
+    req.params.workspaceId,
+    req.params.socialAccountId,
+    body
+  );
+  return res.status(201).json(board);
 }
 
 export async function createAuthorizationLinkController(req: Request, res: Response) {

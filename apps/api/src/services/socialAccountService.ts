@@ -24,6 +24,10 @@ export const createAuthorizationLinkSchema = z.object({
   platform: z.string().min(1)
 });
 
+export const createPinterestBoardSchema = z.object({
+  name: z.string().trim().min(1).max(180)
+});
+
 type TokenResponse = {
   access_token: string;
   refresh_token?: string;
@@ -510,6 +514,11 @@ export async function completeOAuth(platformParam: string, code: string, state: 
   const expiresAt = credentialTokenResponse.expires_in
     ? new Date(Date.now() + credentialTokenResponse.expires_in * 1000)
     : null;
+  const capabilities = {
+    oauth2: true,
+    scopes,
+    ...(provider.platform === "pinterest" ? { pinterestApiEnvironment: config.PINTEREST_API_ENV } : {})
+  };
 
   const socialAccount = await prisma.$transaction(async (tx) => {
     if (facebookPages.length) {
@@ -596,20 +605,14 @@ export async function completeOAuth(platformParam: string, code: string, state: 
         avatarUrl: profile.avatarUrl,
         accountType: profile.accountType,
         status: "active",
-        capabilities: {
-          oauth2: true,
-          scopes
-        }
+        capabilities
       },
       update: {
         displayName: profile.displayName,
         avatarUrl: profile.avatarUrl,
         accountType: profile.accountType,
         status: "active",
-        capabilities: {
-          oauth2: true,
-          scopes
-        }
+        capabilities
       }
     });
 
@@ -709,6 +712,16 @@ export async function getPinterestBoards(
 ) {
   await requireWorkspaceMembership(userId, workspaceId);
   return new PinterestPublisher().listBoards(workspaceId, socialAccountId);
+}
+
+export async function createPinterestBoard(
+  userId: string,
+  workspaceId: string,
+  socialAccountId: string,
+  input: z.infer<typeof createPinterestBoardSchema>
+) {
+  await requireWorkspaceManager(userId, workspaceId);
+  return new PinterestPublisher().createBoard(workspaceId, socialAccountId, input.name);
 }
 
 export async function disconnectSocialAccount(
