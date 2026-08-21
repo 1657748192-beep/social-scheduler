@@ -2097,6 +2097,23 @@ textarea {
   background: linear-gradient(135deg, #fff 0%, #fcfbff 100%);
 }
 
+.pinterest-pin-settings {
+  display: grid;
+  gap: 14px;
+  margin-top: 4px;
+  border-color: #efd4d7;
+  background: linear-gradient(135deg, #fff 0%, #fffafa 100%);
+}
+
+.pinterest-settings-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #f0e2e3;
+  border-radius: 8px;
+  background: #fff;
+}
+
 .tiktok-settings-card {
   display: grid;
   gap: 12px;
@@ -2727,6 +2744,27 @@ textarea {
 
 .social-post-preview.linkedin {
   border-top-color: #0a66c2;
+}
+
+.social-post-preview.pinterest {
+  border-top-color: #e60023;
+}
+
+.pinterest-pin-title {
+  margin: 0;
+  padding: 4px 14px 6px;
+  color: #172033;
+  font-size: 19px;
+  line-height: 1.25;
+}
+
+.pinterest-pin-destination {
+  margin: 0;
+  padding: 11px 14px;
+  overflow-wrap: anywhere;
+  border-top: 1px solid #e7edf3;
+  color: #47627d;
+  font-size: 12px;
 }
 
 .social-preview-account {

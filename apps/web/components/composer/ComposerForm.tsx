@@ -7,6 +7,7 @@ import {
   type ComposerPost,
   type ComposerPostDetail,
   type MediaAsset,
+  type PinterestBoard,
   type SocialAccount,
   type TikTokCreatorPublishInfo,
   type Workspace
@@ -19,6 +20,7 @@ import { MediaUploader } from "./MediaUploader";
 import { PlatformEditor, type WebsiteMode } from "./PlatformEditor";
 import { platformLimits } from "./platformConfig";
 import { PlatformTabs } from "./PlatformTabs";
+import { PinterestPinSettings, type PinterestPinSettingsValue } from "./PinterestPinSettings";
 import { PostPreview } from "./PostPreview";
 import { SchedulePicker } from "./SchedulePicker";
 import { TextInsertToolbar } from "./TextInsertToolbar";
@@ -42,7 +44,7 @@ const allComposerPlatforms: ComposerPlatform[] = [
   "pinterest",
   "x"
 ];
-const realPublishingPlatforms = new Set<ComposerPlatform>(["instagram", "facebook", "youtube", "tiktok"]);
+const realPublishingPlatforms = new Set<ComposerPlatform>(["instagram", "facebook", "youtube", "tiktok", "pinterest"]);
 
 type MediaSource = "shared" | "custom";
 
@@ -84,6 +86,13 @@ function createTikTokPublishSettings(): TikTokPublishSettingsValue {
   };
 }
 
+function createPinterestPinSettings(): PinterestPinSettingsValue {
+  return {
+    boardId: "",
+    title: ""
+  };
+}
+
 function readTikTokPublishSettings(value: Record<string, unknown> | undefined): TikTokPublishSettingsValue {
   const fallback = createTikTokPublishSettings();
 
@@ -99,6 +108,20 @@ function readTikTokPublishSettings(value: Record<string, unknown> | undefined): 
     consentConfirmed: value.consentConfirmed === true,
     brandOrganic: value.brandOrganic === true,
     isAigc: value.isAigc === true
+  };
+}
+
+function readPinterestPinSettings(value: Record<string, unknown> | undefined): PinterestPinSettingsValue {
+  const fallback = createPinterestPinSettings();
+
+  if (!value) {
+    return fallback;
+  }
+
+  return {
+    boardId: typeof value.boardId === "string" ? value.boardId : "",
+    boardName: typeof value.boardName === "string" ? value.boardName : undefined,
+    title: typeof value.title === "string" ? value.title : ""
   };
 }
 
@@ -149,6 +172,16 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
     Record<string, string | undefined>
   >({});
   const [tiktokSettingsLoadingAccountIds, setTikTokSettingsLoadingAccountIds] = useState<string[]>([]);
+  const [pinterestBoardsByAccount, setPinterestBoardsByAccount] = useState<
+    Record<string, PinterestBoard[] | undefined>
+  >({});
+  const [pinterestSettingsByAccount, setPinterestSettingsByAccount] = useState<
+    Record<string, PinterestPinSettingsValue | undefined>
+  >({});
+  const [pinterestSettingsErrorByAccount, setPinterestSettingsErrorByAccount] = useState<
+    Record<string, string | undefined>
+  >({});
+  const [pinterestSettingsLoadingAccountIds, setPinterestSettingsLoadingAccountIds] = useState<string[]>([]);
   const baseTextAreaRef = useRef<HTMLTextAreaElement>(null);
   const copiedPostRef = useRef<string | null>(null);
 
@@ -186,6 +219,14 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
   const selectedTikTokAccountIds = useMemo(
     () => selectedTikTokAccounts.map((account) => account.id).join(","),
     [selectedTikTokAccounts]
+  );
+  const selectedPinterestAccounts = useMemo(
+    () => selectedAccounts.filter((account) => account.platform === "pinterest"),
+    [selectedAccounts]
+  );
+  const selectedPinterestAccountIds = useMemo(
+    () => selectedPinterestAccounts.map((account) => account.id).join(","),
+    [selectedPinterestAccounts]
   );
   const accountCountByPlatform = useMemo(
     () =>
@@ -257,6 +298,10 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
     setTikTokSettingsByAccount({});
     setTikTokSettingsErrorByAccount({});
     setTikTokSettingsLoadingAccountIds([]);
+    setPinterestBoardsByAccount({});
+    setPinterestSettingsByAccount({});
+    setPinterestSettingsErrorByAccount({});
+    setPinterestSettingsLoadingAccountIds([]);
 
     async function loadAccountsAndCopiedPost() {
       try {
@@ -293,7 +338,10 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
           const nextPlatformMedia = createPlatformMediaMap();
           const nextMediaSources = createPlatformMediaSourceMap();
           const nextTexts = createVariantTextMap(copiedPost.baseText);
+          const nextWebsites = createVariantTextMap();
+          const nextWebsiteModes = createPlatformWebsiteModeMap();
           const nextTikTokSettings: Record<string, TikTokPublishSettingsValue | undefined> = {};
+          const nextPinterestSettings: Record<string, PinterestPinSettingsValue | undefined> = {};
           const sharedAssetIds = sharedAssets.map((asset) => asset.id).join(":");
 
           for (const platform of allComposerPlatforms) {
@@ -312,6 +360,14 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
               nextTikTokSettings[variant.socialAccountId] = readTikTokPublishSettings(variant.platformPayload);
             }
 
+            if (variant.platform === "pinterest" && variant.socialAccountId) {
+              nextPinterestSettings[variant.socialAccountId] = readPinterestPinSettings(variant.platformPayload);
+              if (typeof variant.platformPayload?.link === "string") {
+                nextWebsites.pinterest = variant.platformPayload.link;
+                nextWebsiteModes.pinterest = "custom";
+              }
+            }
+
             if (assets.map((asset) => asset.id).join(":") !== sharedAssetIds) {
               nextPlatformMedia[platform] = assets;
               nextMediaSources[platform] = "custom";
@@ -322,12 +378,13 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
           setBaseText(copiedPost.baseText);
           setBaseWebsite("");
           setVariantTexts(nextTexts);
-          setVariantWebsites(createVariantTextMap());
-          setVariantWebsiteModes(createPlatformWebsiteModeMap());
+          setVariantWebsites(nextWebsites);
+          setVariantWebsiteModes(nextWebsiteModes);
           setSharedMedia(sharedAssets);
           setPlatformMediaByPlatform(nextPlatformMedia);
           setMediaSourceByPlatform(nextMediaSources);
           setTikTokSettingsByAccount(nextTikTokSettings);
+          setPinterestSettingsByAccount(nextPinterestSettings);
           setSelectedAccountIds(
             reusableVariants.flatMap((variant) => (variant.socialAccountId ? [variant.socialAccountId] : []))
           );
@@ -448,6 +505,70 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
     };
   }, [selectedTikTokAccountIds, token, workspaceId]);
 
+  useEffect(() => {
+    const accountIds = selectedPinterestAccountIds ? selectedPinterestAccountIds.split(",") : [];
+    let cancelled = false;
+
+    if (!workspaceId || !accountIds.length) {
+      setPinterestSettingsLoadingAccountIds([]);
+      return;
+    }
+
+    setPinterestSettingsLoadingAccountIds(accountIds);
+
+    async function loadPinterestBoards() {
+      const results = await Promise.all(
+        accountIds.map(async (socialAccountId) => {
+          try {
+            const boards = await apiRequest<PinterestBoard[]>(
+              `/workspaces/${workspaceId}/social-accounts/${socialAccountId}/pinterest-boards`,
+              { token }
+            );
+            return { socialAccountId, boards };
+          } catch (requestError) {
+            return {
+              socialAccountId,
+              error: requestError instanceof Error ? requestError.message : t("无法读取 Pinterest 看板", "Unable to load Pinterest boards")
+            };
+          }
+        })
+      );
+
+      if (cancelled) {
+        return;
+      }
+
+      setPinterestBoardsByAccount((current) => {
+        const next = { ...current };
+        for (const result of results) {
+          next[result.socialAccountId] = result.boards;
+        }
+        return next;
+      });
+      setPinterestSettingsByAccount((current) => {
+        const next = { ...current };
+        for (const result of results) {
+          next[result.socialAccountId] ??= createPinterestPinSettings();
+        }
+        return next;
+      });
+      setPinterestSettingsErrorByAccount((current) => {
+        const next = { ...current };
+        for (const result of results) {
+          next[result.socialAccountId] = result.error;
+        }
+        return next;
+      });
+      setPinterestSettingsLoadingAccountIds([]);
+    }
+
+    void loadPinterestBoards();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPinterestAccountIds, t, token, workspaceId]);
+
   const publishChecks = [
     {
       label: t("内容文案", "Post copy"),
@@ -488,6 +609,23 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
         "为每个 TikTok 账号选择隐私、互动权限并确认音乐使用声明",
         "Choose privacy and interaction permissions, and confirm music usage for each TikTok account"
       )
+    });
+  }
+
+  if (selectedPinterestAccounts.length && publishMode !== "draft") {
+    publishChecks.push({
+      label: t("Pinterest Pin 设置", "Pinterest Pin settings"),
+      done: selectedPinterestAccounts.every((account) => {
+        const settings = pinterestSettingsByAccount[account.id];
+        return Boolean(
+          !pinterestSettingsLoadingAccountIds.includes(account.id) &&
+            !pinterestSettingsErrorByAccount[account.id] &&
+            pinterestBoardsByAccount[account.id]?.length &&
+            settings?.boardId &&
+            settings.title.trim()
+        );
+      }),
+      detail: t("为每个 Pinterest 账号选择看板并填写 Pin 标题", "Choose a board and enter a Pin title for every Pinterest account")
     });
   }
 
@@ -550,6 +688,16 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
     }));
   }
 
+  function updatePinterestPinSettings(socialAccountId: string, value: Partial<PinterestPinSettingsValue>) {
+    setPinterestSettingsByAccount((current) => ({
+      ...current,
+      [socialAccountId]: {
+        ...(current[socialAccountId] ?? createPinterestPinSettings()),
+        ...value
+      }
+    }));
+  }
+
   async function savePost(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -570,6 +718,44 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
 
       if (!hasSingleVideo) {
         setError(t("TikTok 真实发布需要为 TikTok 选择恰好一个 MP4、MOV 或 WebM 视频素材。", "TikTok publishing requires exactly one MP4, MOV, or WebM video."));
+        return;
+      }
+    }
+
+    if (publishMode !== "draft" && selectedPinterestAccounts.length) {
+      const invalidPinterestMediaAccount = selectedPinterestAccounts.find((account) => {
+        const media = resolvedMediaByPlatform.pinterest;
+        return media.length !== 1 || !media[0].mimeType.startsWith("image/");
+      });
+
+      if (invalidPinterestMediaAccount) {
+        setError(
+          t(
+            `Pinterest 账号「${invalidPinterestMediaAccount.displayName}」真实发布需要恰好一张图片，暂不支持视频 Pin。`,
+            `Pinterest account “${invalidPinterestMediaAccount.displayName}” requires exactly one image for real publishing. Video Pins are not supported yet.`
+          )
+        );
+        return;
+      }
+
+      const incompletePinterestAccount = selectedPinterestAccounts.find((account) => {
+        const settings = pinterestSettingsByAccount[account.id];
+        return Boolean(
+          pinterestSettingsLoadingAccountIds.includes(account.id) ||
+            pinterestSettingsErrorByAccount[account.id] ||
+            !pinterestBoardsByAccount[account.id]?.length ||
+            !settings?.boardId ||
+            !settings.title.trim()
+        );
+      });
+
+      if (incompletePinterestAccount) {
+        setError(
+          t(
+            `请先完成 Pinterest 账号「${incompletePinterestAccount.displayName}」的看板和 Pin 标题设置。`,
+            `Complete the board and Pin title settings for Pinterest account “${incompletePinterestAccount.displayName}”.`
+          )
+        );
         return;
       }
     }
@@ -613,7 +799,7 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
           token,
           body: {
             title: title || undefined,
-            baseText: appendWebsiteToText(baseText, baseWebsite),
+            baseText,
             scheduledAt:
               publishMode === "scheduled" && scheduledAt
                 ? chinaLocalInputToISOString(scheduledAt)
@@ -622,14 +808,24 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
             variants: selectedAccounts.map((account) => ({
               socialAccountId: account.id,
               platform: account.platform,
-              text: appendWebsiteToText(
-                variantTexts[account.platform] || baseText,
-                resolvedWebsitesByPlatform[account.platform]
-              ),
+              text:
+                account.platform === "pinterest"
+                  ? variantTexts.pinterest || baseText
+                  : appendWebsiteToText(
+                      variantTexts[account.platform] || baseText,
+                      resolvedWebsitesByPlatform[account.platform]
+                    ),
               mediaAssetIds: resolvedMediaByPlatform[account.platform].map((asset) => asset.id),
               platformPayload:
                 account.platform === "tiktok"
                   ? tiktokSettingsByAccount[account.id] ?? createTikTokPublishSettings()
+                  : account.platform === "pinterest"
+                    ? {
+                        ...(pinterestSettingsByAccount[account.id] ?? createPinterestPinSettings()),
+                        ...(resolvedWebsitesByPlatform.pinterest
+                          ? { link: resolvedWebsitesByPlatform.pinterest }
+                          : {})
+                      }
                   : {}
             }))
           }
@@ -784,6 +980,16 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
               settingsByAccount={tiktokSettingsByAccount}
             />
           ) : null}
+          {activePlatform === "pinterest" && selectedPinterestAccounts.length ? (
+            <PinterestPinSettings
+              accounts={selectedPinterestAccounts}
+              boardsByAccount={pinterestBoardsByAccount}
+              errorByAccount={pinterestSettingsErrorByAccount}
+              loadingAccountIds={pinterestSettingsLoadingAccountIds}
+              onChange={updatePinterestPinSettings}
+              settingsByAccount={pinterestSettingsByAccount}
+            />
+          ) : null}
         </section>
 
         {selectedWorkspace ? (
@@ -914,6 +1120,7 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
           loading={accountsLoading}
           mediaByPlatform={resolvedMediaByPlatform}
           mediaSources={mediaSourceByPlatform}
+          pinterestSettingsByAccount={pinterestSettingsByAccount}
           texts={variantTexts}
           websites={resolvedWebsitesByPlatform}
         />

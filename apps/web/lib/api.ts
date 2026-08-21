@@ -347,6 +347,13 @@ export type TikTokCreatorPublishInfo = {
   directPostAudited: boolean;
 };
 
+export type PinterestBoard = {
+  id: string;
+  name: string;
+  description?: string;
+  privacy?: string;
+};
+
 export type ComposerPostDetail = ComposerPost & {
   workspaceId: string;
   title?: string | null;

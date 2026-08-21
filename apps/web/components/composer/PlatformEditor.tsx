@@ -36,7 +36,8 @@ export function PlatformEditor({
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const limit = platformLimits[platform];
   const resolvedWebsite = websiteMode === "inherit" ? baseWebsite : websiteMode === "custom" ? website : "";
-  const contentWithWebsite = appendWebsiteToText(text, resolvedWebsite);
+  const isPinterest = platform === "pinterest";
+  const contentWithWebsite = isPinterest ? text : appendWebsiteToText(text, resolvedWebsite);
   const overTextLimit = contentWithWebsite.length > limit.maxTextLength;
   const overMediaLimit = mediaCount > limit.maxImages;
 
@@ -114,7 +115,9 @@ export function PlatformEditor({
         <small>
           {websiteMode === "inherit"
             ? t("跟随基础网站链接；选择“单独编辑”后可为此平台填写不同链接。", "Follows the base website link. Choose Custom link to use a different URL for this platform.")
-            : t("链接会附在该平台文案末尾，并计入字数限制。", "The link is added to the end of this platform's copy and counts toward its character limit.")}
+            : isPinterest
+              ? t("链接会作为 Pinterest Pin 的跳转地址，不会加入文案，也不计入文案字数。", "The link opens when viewers click this Pin. It is not added to the description or its character count.")
+              : t("链接会附在该平台文案末尾，并计入字数限制。", "The link is added to the end of this platform's copy and counts toward its character limit.")}
         </small>
       </label>
 

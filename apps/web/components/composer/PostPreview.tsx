@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { ComposerPlatform, MediaAsset, SocialAccount } from "../../lib/api";
 import { appendWebsiteToText } from "./contentUtils";
+import type { PinterestPinSettingsValue } from "./PinterestPinSettings";
 import { platformLimits } from "./platformConfig";
 import { useLanguage } from "../LanguageProvider";
 
@@ -13,6 +14,7 @@ type PostPreviewProps = {
   baseText: string;
   mediaByPlatform: Record<ComposerPlatform, MediaAsset[]>;
   mediaSources: Record<ComposerPlatform, "shared" | "custom">;
+  pinterestSettingsByAccount: Record<string, PinterestPinSettingsValue | undefined>;
   loading: boolean;
 };
 
@@ -23,6 +25,7 @@ export function PostPreview({
   baseText,
   mediaByPlatform,
   mediaSources,
+  pinterestSettingsByAccount,
   loading
 }: PostPreviewProps) {
   const { t } = useLanguage();
@@ -40,7 +43,9 @@ export function PostPreview({
 
   const previewAccounts = previewPlatform ? groups.get(previewPlatform) ?? [] : [];
   const previewText = previewPlatform
-    ? appendWebsiteToText(texts[previewPlatform] || baseText, websites[previewPlatform])
+    ? previewPlatform === "pinterest"
+      ? texts.pinterest || baseText
+      : appendWebsiteToText(texts[previewPlatform] || baseText, websites[previewPlatform])
     : "";
   const previewMedia = previewPlatform ? mediaByPlatform[previewPlatform] : [];
   const previewAsset = previewMedia[0];
@@ -50,6 +55,10 @@ export function PostPreview({
       : null
   );
   const previewAccount = previewAccounts[0];
+  const pinterestPinTitle =
+    previewPlatform === "pinterest" && previewAccount
+      ? pinterestSettingsByAccount[previewAccount.id]?.title.trim()
+      : "";
 
   return (
     <>
@@ -70,10 +79,10 @@ export function PostPreview({
       <div className="publish-summary-list">
         {[...groups.entries()].map(([platform, platformAccounts]) => {
           const limit = platformLimits[platform];
-          const text = appendWebsiteToText(
-            texts[platform] || baseText,
-            websites[platform]
-          );
+          const text =
+            platform === "pinterest"
+              ? texts.pinterest || baseText
+              : appendWebsiteToText(texts[platform] || baseText, websites[platform]);
           const platformMedia = mediaByPlatform[platform];
           const mediaSource = mediaSources[platform];
 
@@ -143,11 +152,15 @@ export function PostPreview({
                   <small>{t(`${platformLimits[previewPlatform].label} · 发布后效果模拟`, `${platformLimits[previewPlatform].label} · simulated post`)}</small>
                 </div>
               </div>
+              {pinterestPinTitle ? <h3 className="pinterest-pin-title">{pinterestPinTitle}</h3> : null}
               <p className="social-preview-text">{previewText || t("这里会显示你填写的帖子文案。", "Your post copy will appear here.")}</p>
               {previewImageUrl ? (
                 <img alt={t("发布素材预览", "Publishing media preview")} className="social-preview-media" src={previewImageUrl} />
               ) : previewAsset?.mimeType.startsWith("video/") ? (
                 <div className="social-preview-media-placeholder">{t("视频素材将显示首帧封面", "Video media will show its cover frame")}</div>
+              ) : null}
+              {previewPlatform === "pinterest" && websites.pinterest ? (
+                <p className="pinterest-pin-destination">{t("点击 Pin 将跳转至：", "This Pin will open:")} {websites.pinterest}</p>
               ) : null}
               <div className="social-preview-engagement">
                 <span>♡</span>
