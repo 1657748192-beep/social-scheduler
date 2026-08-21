@@ -53,7 +53,7 @@ export const composerPlatformLimits: Record<ComposerPlatform, PlatformLimit> = {
   pinterest: {
     platform: "pinterest",
     label: "Pinterest",
-    maxTextLength: 500,
+    maxTextLength: 800,
     maxImages: 1
   },
   x: {
