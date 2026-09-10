@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { composerPlatforms } from "../components/composer/platformConfig";
+import * as platformCounts from "../lib/platformCounts";
 
 test("composer only offers platforms that are still supported", () => {
   assert.deepEqual(
@@ -11,7 +12,6 @@ test("composer only offers platforms that are still supported", () => {
 });
 
 test("sidebar ignores retired platforms when reporting connected platform count", async () => {
-  const platformCounts = await import("../lib/platformCounts").catch(() => ({} as Record<string, unknown>));
   const countConnectedSupportedPlatforms = platformCounts.countConnectedSupportedPlatforms as
     | ((
         accounts: Array<{ platform: string; status: string }>,
@@ -33,6 +33,25 @@ test("sidebar ignores retired platforms when reporting connected platform count"
     ),
     2
   );
+});
+
+test("channel management hides retired OAuth providers", () => {
+  const filterSupportedPlatforms = platformCounts.filterSupportedPlatforms as
+    | ((providers: Array<{ platform: string }>) => Array<{ platform: string }>)
+    | undefined;
+  const dashboard = readFileSync(new URL("../app/dashboard/page.tsx", import.meta.url), "utf8");
+
+  assert.deepEqual(
+    filterSupportedPlatforms?.([
+      { platform: "instagram" },
+      { platform: "linkedin" },
+      { platform: "facebook" },
+      { platform: "x" },
+      { platform: "pinterest" }
+    ]).map((provider) => provider.platform),
+    ["instagram", "facebook", "pinterest"]
+  );
+  assert.match(dashboard, /filterSupportedPlatforms\(oauthStatuses\)/);
 });
 
 test("local and server deployment configuration omit retired platform credentials", () => {

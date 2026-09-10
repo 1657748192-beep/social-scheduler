@@ -22,6 +22,7 @@ import {
   roleLabel
 } from "../../lib/labels";
 import { getActiveWorkspaceId, setActiveWorkspaceId } from "../../lib/activeWorkspace";
+import { filterSupportedPlatforms } from "../../lib/platformCounts";
 import { useLanguage } from "../../components/LanguageProvider";
 
 type Translate = (chinese: string, english: string) => string;
@@ -161,6 +162,7 @@ export default function DashboardPage() {
   }, [token, selectedWorkspaceId, canManageMembers]);
 
   const connectedAccounts = socialAccounts.filter((account) => account.status === "active");
+  const supportedOAuthStatuses = filterSupportedPlatforms(oauthStatuses);
   const pendingInvitations = invitations.filter((invitation) => invitation.status === "pending");
   const dashboardStats = [
     { label: t("工作区", "Workspaces"), value: workspaces.length, detail: selectedWorkspace?.plan ?? "MVP" },
@@ -559,7 +561,7 @@ export default function DashboardPage() {
 
           {canManageMembers ? (
             <div className="provider-grid">
-              {oauthStatuses.map((provider) => {
+              {supportedOAuthStatuses.map((provider) => {
                 const providerAccounts = socialAccounts.filter(
                   (item) => item.platform === provider.platform && item.status === "active"
                 );
@@ -644,7 +646,7 @@ export default function DashboardPage() {
                   </article>
                 );
               })}
-              {!oauthStatuses.length ? <p className="muted">{t("正在读取平台配置状态。", "Loading platform configuration...")}</p> : null}
+              {!supportedOAuthStatuses.length ? <p className="muted">{t("正在读取平台配置状态。", "Loading platform configuration...")}</p> : null}
             </div>
           ) : (
             <p className="muted">{t("只有所有者和管理员可以绑定社交账号。", "Only owners and admins can connect social accounts.")}</p>
