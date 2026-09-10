@@ -17,7 +17,7 @@ type PublishedPostManagerProps = {
   workspaces: Workspace[];
 };
 
-const platformLabels: Record<ComposerPlatform, string> = {
+const platformLabels: Record<string, string> = {
   instagram: "Instagram",
   linkedin: "LinkedIn",
   facebook: "Facebook",

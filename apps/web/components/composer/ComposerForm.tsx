@@ -18,7 +18,11 @@ import { AccountTargetSelector } from "./AccountTargetSelector";
 import { appendWebsiteToText, isValidWebsite } from "./contentUtils";
 import { MediaUploader } from "./MediaUploader";
 import { PlatformEditor, type WebsiteMode } from "./PlatformEditor";
-import { platformLimits } from "./platformConfig";
+import {
+  isComposerPlatform,
+  platformLimits,
+  type ComposerSocialAccount
+} from "./platformConfig";
 import { PlatformTabs } from "./PlatformTabs";
 import { PinterestPinSettings, type PinterestPinSettingsValue } from "./PinterestPinSettings";
 import { PostPreview } from "./PostPreview";
@@ -37,12 +41,10 @@ type ComposerFormProps = {
 
 const allComposerPlatforms: ComposerPlatform[] = [
   "instagram",
-  "linkedin",
   "facebook",
   "youtube",
   "tiktok",
-  "pinterest",
-  "x"
+  "pinterest"
 ];
 const realPublishingPlatforms = new Set<ComposerPlatform>(["instagram", "facebook", "youtube", "tiktok", "pinterest"]);
 
@@ -201,8 +203,12 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
     () => workspaces.find((workspace) => workspace.id === workspaceId),
     [workspaceId, workspaces]
   );
-  const activeAccounts = useMemo(
-    () => socialAccounts.filter((account) => account.status === "active"),
+  const activeAccounts = useMemo<ComposerSocialAccount[]>(
+    () =>
+      socialAccounts.filter(
+        (account): account is ComposerSocialAccount =>
+          account.status === "active" && isComposerPlatform(account.platform)
+      ),
     [socialAccounts]
   );
   const selectedAccounts = useMemo(() => {

@@ -1,14 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import type { ComposerPlatform, MediaAsset, SocialAccount } from "../../lib/api";
+import type { ComposerPlatform, MediaAsset } from "../../lib/api";
 import { appendWebsiteToText } from "./contentUtils";
 import type { PinterestPinSettingsValue } from "./PinterestPinSettings";
-import { platformLimits } from "./platformConfig";
+import { platformLimits, type ComposerSocialAccount } from "./platformConfig";
 import { useLanguage } from "../LanguageProvider";
 
 type PostPreviewProps = {
-  accounts: SocialAccount[];
+  accounts: ComposerSocialAccount[];
   texts: Record<ComposerPlatform, string>;
   websites: Record<ComposerPlatform, string>;
   baseText: string;
@@ -30,7 +30,7 @@ export function PostPreview({
 }: PostPreviewProps) {
   const { t } = useLanguage();
   const [previewPlatform, setPreviewPlatform] = useState<ComposerPlatform | null>(null);
-  const groups = new Map<ComposerPlatform, SocialAccount[]>();
+  const groups = new Map<ComposerPlatform, ComposerSocialAccount[]>();
   const selectedPlatforms = Array.from(new Set(accounts.map((account) => account.platform)));
   const totalMediaCount = selectedPlatforms.reduce(
     (count, platform) => count + mediaByPlatform[platform].length,

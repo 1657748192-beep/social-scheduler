@@ -1,4 +1,4 @@
-import type { ComposerPlatform, PlatformLimit } from "../../lib/api";
+import type { ComposerPlatform, PlatformLimit, SocialAccount } from "../../lib/api";
 
 export const platformLimits: Record<ComposerPlatform, PlatformLimit> = {
   instagram: {
@@ -6,12 +6,6 @@ export const platformLimits: Record<ComposerPlatform, PlatformLimit> = {
     label: "Instagram",
     maxTextLength: 2200,
     maxImages: 10
-  },
-  linkedin: {
-    platform: "linkedin",
-    label: "LinkedIn",
-    maxTextLength: 3000,
-    maxImages: 9
   },
   facebook: {
     platform: "facebook",
@@ -36,13 +30,13 @@ export const platformLimits: Record<ComposerPlatform, PlatformLimit> = {
     label: "Pinterest",
     maxTextLength: 500,
     maxImages: 1
-  },
-  x: {
-    platform: "x",
-    label: "Twitter / X",
-    maxTextLength: 280,
-    maxImages: 4
   }
 };
 
 export const composerPlatforms = Object.values(platformLimits);
+
+export type ComposerSocialAccount = SocialAccount & { platform: ComposerPlatform };
+
+export function isComposerPlatform(platform: SocialAccount["platform"]): platform is ComposerPlatform {
+  return platform in platformLimits;
+}

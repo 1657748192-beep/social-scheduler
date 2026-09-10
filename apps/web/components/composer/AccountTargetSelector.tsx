@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import type { ComposerPlatform, SocialAccount } from "../../lib/api";
-import { composerPlatforms } from "./platformConfig";
+import type { ComposerPlatform } from "../../lib/api";
+import { composerPlatforms, type ComposerSocialAccount } from "./platformConfig";
 import { useLanguage } from "../LanguageProvider";
 
 type AccountTargetSelectorProps = {
-  accounts: SocialAccount[];
+  accounts: ComposerSocialAccount[];
   selectedAccountIds: string[];
   loading: boolean;
   onToggleAccount: (accountId: string) => void;

@@ -288,12 +288,10 @@ export type OAuthProviderStatus = {
 
 export type ComposerPlatform =
   | "instagram"
-  | "linkedin"
   | "facebook"
   | "youtube"
   | "tiktok"
-  | "pinterest"
-  | "x";
+  | "pinterest";
 
 export type PlatformLimit = {
   platform: ComposerPlatform;

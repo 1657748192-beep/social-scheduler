@@ -11,6 +11,7 @@ import {
   type Workspace
 } from "../lib/api";
 import { getActiveWorkspaceChangeEvent, getActiveWorkspaceId } from "../lib/activeWorkspace";
+import { countConnectedSupportedPlatforms } from "../lib/platformCounts";
 import { LanguageToggle, useLanguage, type AppLocale } from "./LanguageProvider";
 
 type AppShellProps = {
@@ -43,13 +44,6 @@ const defaultChannelProviders: SidebarProvider[] = [
     requiredEnv: ["INSTAGRAM_CLIENT_ID", "INSTAGRAM_CLIENT_SECRET"]
   },
   {
-    platform: "linkedin",
-    platformParam: "linkedin",
-    displayName: "LinkedIn",
-    configured: false,
-    requiredEnv: ["LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET"]
-  },
-  {
     platform: "facebook",
     platformParam: "facebook",
     displayName: "Facebook",
@@ -76,17 +70,10 @@ const defaultChannelProviders: SidebarProvider[] = [
     displayName: "Pinterest",
     configured: false,
     requiredEnv: ["PINTEREST_CLIENT_ID", "PINTEREST_CLIENT_SECRET"]
-  },
-  {
-    platform: "x",
-    platformParam: "twitter",
-    displayName: "Twitter / X",
-    configured: false,
-    requiredEnv: ["X_CLIENT_ID", "X_CLIENT_SECRET"]
   }
 ];
 
-const sidebarChannelOrder: SidebarProvider["platform"][] = ["instagram", "facebook", "x"];
+const sidebarChannelOrder: SidebarProvider["platform"][] = ["instagram", "facebook"];
 
 function channelInitial(platform: SidebarProvider["platform"]) {
   const initials: Record<SidebarProvider["platform"], string> = {
@@ -240,11 +227,10 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
   const sidebarProviders = channelProviders.filter((provider) =>
     sidebarChannelOrder.includes(provider.platform)
   );
-  const connectedPlatformCount = new Set(
-    channels
-      .filter((account) => account.status === "active")
-      .map((account) => account.platform)
-  ).size;
+  const connectedPlatformCount = countConnectedSupportedPlatforms(
+    channels,
+    channelProviders.map((provider) => provider.platform)
+  );
   const totalChannelCount = channelProviders.length;
   const channelItems = useMemo(
     () =>

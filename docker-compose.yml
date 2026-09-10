@@ -52,8 +52,6 @@ services:
       CORS_ORIGIN: http://localhost:3000
       WEB_APP_URL: http://localhost:3000
       TOKEN_ENCRYPTION_KEY: dev-token-encryption-key-change-me
-      X_CLIENT_ID: ""
-      X_CLIENT_SECRET: ""
       FACEBOOK_CLIENT_ID: ""
       FACEBOOK_CLIENT_SECRET: ""
       FACEBOOK_LOGIN_CONFIG_ID: ""
@@ -61,8 +59,6 @@ services:
       INSTAGRAM_CLIENT_ID: ""
       INSTAGRAM_CLIENT_SECRET: ""
       INSTAGRAM_OAUTH_SCOPES: "instagram_business_basic,instagram_business_content_publish"
-      LINKEDIN_CLIENT_ID: ""
-      LINKEDIN_CLIENT_SECRET: ""
       YOUTUBE_CLIENT_ID: ""
       YOUTUBE_CLIENT_SECRET: ""
       TIKTOK_CLIENT_ID: ""
@@ -105,8 +101,6 @@ services:
       CORS_ORIGIN: http://localhost:3000
       WEB_APP_URL: http://localhost:3000
       TOKEN_ENCRYPTION_KEY: dev-token-encryption-key-change-me
-      X_CLIENT_ID: ""
-      X_CLIENT_SECRET: ""
       FACEBOOK_CLIENT_ID: ""
       FACEBOOK_CLIENT_SECRET: ""
       FACEBOOK_LOGIN_CONFIG_ID: ""
@@ -114,8 +108,6 @@ services:
       INSTAGRAM_CLIENT_ID: ""
       INSTAGRAM_CLIENT_SECRET: ""
       INSTAGRAM_OAUTH_SCOPES: "instagram_business_basic,instagram_business_content_publish"
-      LINKEDIN_CLIENT_ID: ""
-      LINKEDIN_CLIENT_SECRET: ""
       YOUTUBE_CLIENT_ID: ""
       YOUTUBE_CLIENT_SECRET: ""
       TIKTOK_CLIENT_ID: ""
