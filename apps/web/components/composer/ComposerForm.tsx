@@ -1144,7 +1144,7 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
           {publishMode === "draft" ? <p className="muted">{t("稍后可从内容日历继续安排发布时间。", "You can schedule it later from the content calendar.")}</p> : null}
           {publishingLocked ? (
             <p className="error">
-              {t("测试权限已到期：可以登录、查看和保存草稿，但不能上传素材、立即发布或定时发布。", "Test access has expired: you can sign in, view, and save drafts, but cannot upload media, publish now, or schedule posts.")}
+              {t("会员权限已到期：可以登录、查看和保存草稿，但不能上传素材、立即发布或定时发布。", "Membership access has expired: you can sign in, view, and save drafts, but cannot upload media, publish now, or schedule posts.")}
             </p>
           ) : null}
           {requiresDraftOnly ? (

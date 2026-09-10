@@ -233,7 +233,7 @@ export function ScheduleDetailPanel({
                     : t("删除任务", "Delete task")}
               </button>
               {publishingLocked && schedule.status === "scheduled" ? (
-                <p className="muted">{t("测试权限已到期，不能修改排程或发布内容。", "Test access has expired. Scheduling and publishing cannot be changed.")}</p>
+                <p className="muted">{t("会员权限已到期，不能修改排程或发布内容。", "Membership access has expired. Scheduling and publishing cannot be changed.")}</p>
               ) : null}
             </div>
           ) : (

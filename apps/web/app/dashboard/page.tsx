@@ -33,10 +33,10 @@ function publishingAccessLabel(status: Workspace["publishingAccessStatus"] | und
   }
 
   if (status === "expired") {
-    return t("测试发布权限已到期", "Publishing access expired");
+    return t("会员发布权限已到期", "Membership publishing access expired");
   }
 
-  return t("测试发布权限生效中", "Publishing access active");
+  return t("会员发布权限生效中", "Membership publishing access active");
 }
 
 function formatBeijingDateTime(value?: string | null) {
@@ -64,8 +64,8 @@ function publishingAccessDescription(
 
   if (status === "expired") {
     return t(
-      "测试期限已结束。你仍可登录、查看后台和保存草稿，但不能上传素材、立即发布或创建排程。",
-      "Your test publishing access has expired. You can still sign in, view the dashboard, and save drafts, but cannot upload media, publish immediately, or create schedules."
+      "会员期限已结束。你仍可登录、查看后台和保存草稿，但不能上传素材、立即发布或创建排程。",
+      "Your membership publishing access has expired. You can still sign in, view the dashboard, and save drafts, but cannot upload media, publish immediately, or create schedules."
     );
   }
 
@@ -411,7 +411,7 @@ export default function DashboardPage() {
             }`}
           >
             <div>
-            <p className="section-kicker">{t("测试人员发布权限", "Tester publishing access")}</p>
+            <p className="section-kicker">{t("会员发布权限", "Membership publishing access")}</p>
               <h2>{publishingAccessLabel(selectedWorkspace?.publishingAccessStatus, t)}</h2>
               <p className="muted">
                 {publishingAccessDescription(

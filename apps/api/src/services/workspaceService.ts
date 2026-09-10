@@ -82,7 +82,7 @@ export async function requireWorkspacePublishingAccess(userId: string, workspace
   ) {
     throw new HttpError(
       403,
-      "测试人员发布权限已停用或到期。仍可登录查看后台，但无法上传素材、发布或创建排程。"
+      "会员发布权限已停用或到期。仍可登录查看后台，但无法上传素材、发布或创建排程。"
     );
   }
 

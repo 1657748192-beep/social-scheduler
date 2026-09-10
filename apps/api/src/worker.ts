@@ -70,7 +70,7 @@ const worker = new Worker<PublishQueuePayload, unknown, typeof publishQueueJobNa
           where: { id: publishJob.id },
           data: {
             status: "failed",
-            lastError: "创建人的测试发布权限已停用或到期，此排程未发布。"
+            lastError: "创建人的会员发布权限已停用或到期，此排程未发布。"
           }
         }),
         prisma.schedule.update({

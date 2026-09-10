@@ -94,7 +94,7 @@ export function ContentCalendar({ token, workspaces }: ContentCalendarProps) {
 
   async function reschedule(scheduleId: string, targetDate: Date, mode: "day" | "hour") {
     if (publishingLocked) {
-      setError(t("测试权限已到期，不能修改排程或发布内容。", "Test access has expired. Scheduling and publishing cannot be changed."));
+      setError(t("会员权限已到期，不能修改排程或发布内容。", "Membership access has expired. Scheduling and publishing cannot be changed."));
       return;
     }
 

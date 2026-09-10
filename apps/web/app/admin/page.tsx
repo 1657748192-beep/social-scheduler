@@ -58,7 +58,7 @@ function dateTimeLocalValue(value?: string | null) {
 
 function accessStatusLabel(accessStatus: "active" | "disabled" | "expired", t: Translate) {
   if (accessStatus === "expired") {
-    return t("测试已到期", "Expired");
+    return t("会员已到期", "Membership expired");
   }
 
   if (accessStatus === "disabled") {
@@ -138,7 +138,7 @@ export default function AdminPage() {
     await updatePublishingAccess(
       userId,
       { publishingAccessExpiresAt: value ? new Date(value).toISOString() : null },
-      value ? "测试截止时间已保存。" : "已取消测试截止时间。"
+      value ? "会员截止时间已保存。" : "已取消会员截止时间。"
     );
   }
 
@@ -246,7 +246,7 @@ export default function AdminPage() {
             <div>
               <h2>用户列表</h2>
               <p className="muted">
-                可查看用户登录状态、最近登录时间、内容与素材概览，并管理其测试发布权限。
+                可查看用户登录状态、最近登录时间、内容与素材概览，并管理其会员发布权限。
               </p>
             </div>
             <input
@@ -306,7 +306,7 @@ export default function AdminPage() {
                 ) : (
                 <section className="admin-tester-access">
                   <div>
-                    <strong>测试人员发布权限</strong>
+                    <strong>会员发布权限</strong>
                     <p className="muted">
                       {user.publishingAccessExpiresAt
                         ? `当前截止：${formatDate(user.publishingAccessExpiresAt)}（北京时间）`
@@ -316,7 +316,7 @@ export default function AdminPage() {
 
                   <form className="admin-expiry-form" onSubmit={(event) => saveExpiry(event, user.id)}>
                     <label>
-                      <span>测试截止时间（北京时间）</span>
+                      <span>会员截止时间（北京时间）</span>
                       <input
                         defaultValue={dateTimeLocalValue(user.publishingAccessExpiresAt)}
                         name="expiresAt"
@@ -342,7 +342,7 @@ export default function AdminPage() {
                             void updatePublishingAccess(
                               user.id,
                               { publishingAccessDisabled: true },
-                              "该测试人员已停用发布权限，仍可登录查看后台。"
+                              "该会员已停用发布权限，仍可登录查看后台。"
                             );
                           }
                         }}
@@ -358,7 +358,7 @@ export default function AdminPage() {
                           void updatePublishingAccess(
                             user.id,
                             { publishingAccessDisabled: false, publishingAccessExpiresAt: null },
-                            "该测试人员已恢复发布权限，截止时间已取消。"
+                            "该会员已恢复发布权限，截止时间已取消。"
                           )
                         }
                         type="button"
@@ -373,7 +373,7 @@ export default function AdminPage() {
                           void updatePublishingAccess(
                             user.id,
                             { publishingAccessDisabled: false },
-                            "该测试人员已恢复发布权限。"
+                            "该会员已恢复发布权限。"
                           )
                         }
                         type="button"

@@ -49,7 +49,7 @@ test("publishing access states provide English labels in dashboard and admin vie
   const admin = readFileSync("apps/web/app/admin/page.tsx", "utf8");
 
   assert.match(dashboard, /t\("发布权限已停用", "Publishing access disabled"\)/);
-  assert.match(dashboard, /t\("测试发布权限已到期", "Publishing access expired"\)/);
+  assert.match(dashboard, /t\("会员发布权限已到期", "Membership publishing access expired"\)/);
   assert.match(dashboard, /t\("截止：", "Ends: "\)/);
   assert.match(admin, /import \{ useLanguage \} from "\.\.\/\.\.\/components\/LanguageProvider"/);
   assert.match(admin, /t\("使用中", "Active"\)/);
@@ -57,4 +57,14 @@ test("publishing access states provide English labels in dashboard and admin vie
   assert.match(admin, /roleLabel\(workspace\.role, locale\)/);
   assert.match(admin, /memberStatusLabel\(workspace\.status, locale\)/);
   assert.match(admin, /accountStatusLabel\(account\.status, locale\)/);
+});
+
+test("publishing access calls users members in dashboard and admin views", () => {
+  const dashboard = readFileSync("apps/web/app/dashboard/page.tsx", "utf8");
+  const admin = readFileSync("apps/web/app/admin/page.tsx", "utf8");
+
+  assert.match(dashboard, /t\("会员发布权限已到期", "Membership publishing access expired"\)/);
+  assert.match(dashboard, /t\("会员发布权限生效中", "Membership publishing access active"\)/);
+  assert.match(admin, /<strong>会员发布权限<\/strong>/);
+  assert.match(admin, /<span>会员截止时间（北京时间）<\/span>/);
 });
