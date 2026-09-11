@@ -78,6 +78,7 @@ export default function AdminPage() {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
 
   async function loadAdminUsers(authToken: string) {
     const result = await apiRequest<AdminUsersResponse>("/admin/users", { token: authToken });
@@ -262,166 +263,180 @@ export default function AdminPage() {
           <section className="admin-user-list">
             {filteredUsers.map((user) => (
               <article className="admin-user-card" key={user.id}>
-                <header>
-                  <div>
-                    <h3>{user.name}</h3>
-                    <p>{user.email}</p>
-                  </div>
-                  <span
-                    className={`status-pill ${
-                      user.publishingAccessStatus === "active" ? "ready" : "warning"
-                    }`}
-                  >
-                    {t("发布权限：", "Publishing access: ")}{accessStatusLabel(user.publishingAccessStatus, t)}
+                <button
+                  aria-controls={`admin-user-${user.id}-details`}
+                  aria-expanded={expandedUserId === user.id}
+                  className="admin-user-summary"
+                  onClick={() => setExpandedUserId((current) => (current === user.id ? null : user.id))}
+                  type="button"
+                >
+                  <span className="admin-user-identity">
+                    <span className="admin-user-name">{user.name}</span>
+                    <span className="admin-user-email">{user.email}</span>
                   </span>
-                </header>
-
-                <dl className="admin-user-facts">
-                  <div>
-                    <dt>注册时间</dt>
-                    <dd>{formatDate(user.createdAt)}</dd>
-                  </div>
-                  <div>
-                    <dt>登录有效期</dt>
-                    <dd>{sessionStatus(user, t)}</dd>
-                  </div>
-                  <div>
-                    <dt>最近登录</dt>
-                    <dd>
-                      {user.sessionSummary.latestSessionCreatedAt
-                        ? formatDate(user.sessionSummary.latestSessionCreatedAt)
-                        : "从未登录"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>内容/素材</dt>
-                    <dd>
-                      {user.stats.authoredPosts} 条内容 / {user.stats.uploadedMedia} 个素材
-                    </dd>
-                  </div>
-                </dl>
-
-                {user.isSystemAdmin ? (
-                  <p className="muted admin-system-account-note">系统管理员账号受保护，不能在这里停用或删除。</p>
-                ) : (
-                <section className="admin-tester-access">
-                  <div>
-                    <strong>会员发布权限</strong>
-                    <p className="muted">
-                      {user.publishingAccessExpiresAt
-                        ? `当前截止：${formatDate(user.publishingAccessExpiresAt)}（北京时间）`
-                        : "未设置截止时间，可长期发布。"}
-                    </p>
-                  </div>
-
-                  <form className="admin-expiry-form" onSubmit={(event) => saveExpiry(event, user.id)}>
-                    <label>
-                      <span>会员截止时间（北京时间）</span>
-                      <input
-                        defaultValue={dateTimeLocalValue(user.publishingAccessExpiresAt)}
-                        name="expiresAt"
-                        type="datetime-local"
-                      />
-                    </label>
-                    <button
-                      className="button secondary"
-                      disabled={updatingUserId === user.id || deletingUserId === user.id}
-                      type="submit"
+                  <span className="admin-user-summary-meta">
+                    <span
+                      className={`status-pill ${
+                        user.publishingAccessStatus === "active" ? "ready" : "warning"
+                      }`}
                     >
-                      保存时间
-                    </button>
-                  </form>
+                      {t("发布权限：", "Publishing access: ")}{accessStatusLabel(user.publishingAccessStatus, t)}
+                    </span>
+                    <span className="admin-user-expand-label">
+                      {expandedUserId === user.id ? t("收起详情", "Collapse details") : t("展开详情", "Expand details")}
+                    </span>
+                  </span>
+                </button>
 
-                  <div className="admin-access-actions">
-                    {user.publishingAccessStatus === "active" ? (
-                      <button
-                        className="button danger"
-                        disabled={updatingUserId === user.id || deletingUserId === user.id}
-                        onClick={() => {
-                          if (window.confirm(`确定停用 ${user.email} 的发帖和排程权限吗？`)) {
-                            void updatePublishingAccess(
-                              user.id,
-                              { publishingAccessDisabled: true },
-                              "该会员已停用发布权限，仍可登录查看后台。"
-                            );
-                          }
-                        }}
-                        type="button"
-                      >
-                        立即停用发布
-                      </button>
-                    ) : user.publishingAccessStatus === "expired" ? (
-                      <button
-                        className="button"
-                        disabled={updatingUserId === user.id || deletingUserId === user.id}
-                        onClick={() =>
-                          void updatePublishingAccess(
-                            user.id,
-                            { publishingAccessDisabled: false, publishingAccessExpiresAt: null },
-                            "该会员已恢复发布权限，截止时间已取消。"
-                          )
-                        }
-                        type="button"
-                      >
-                        恢复并取消到期
-                      </button>
+                {expandedUserId === user.id ? (
+                  <div className="admin-user-details" id={`admin-user-${user.id}-details`}>
+                    <dl className="admin-user-facts">
+                      <div>
+                        <dt>注册时间</dt>
+                        <dd>{formatDate(user.createdAt)}</dd>
+                      </div>
+                      <div>
+                        <dt>登录有效期</dt>
+                        <dd>{sessionStatus(user, t)}</dd>
+                      </div>
+                      <div>
+                        <dt>最近登录</dt>
+                        <dd>
+                          {user.sessionSummary.latestSessionCreatedAt
+                            ? formatDate(user.sessionSummary.latestSessionCreatedAt)
+                            : "从未登录"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>内容/素材</dt>
+                        <dd>
+                          {user.stats.authoredPosts} 条内容 / {user.stats.uploadedMedia} 个素材
+                        </dd>
+                      </div>
+                    </dl>
+
+                    {user.isSystemAdmin ? (
+                      <p className="muted admin-system-account-note">系统管理员账号受保护，不能在这里停用或删除。</p>
                     ) : (
-                      <button
-                        className="button"
-                        disabled={updatingUserId === user.id || deletingUserId === user.id}
-                        onClick={() =>
-                          void updatePublishingAccess(
-                            user.id,
-                            { publishingAccessDisabled: false },
-                            "该会员已恢复发布权限。"
-                          )
-                        }
-                        type="button"
-                      >
-                        恢复发布
-                      </button>
+                      <section className="admin-tester-access">
+                        <div>
+                          <strong>会员发布权限</strong>
+                          <p className="muted">
+                            {user.publishingAccessExpiresAt
+                              ? `当前截止：${formatDate(user.publishingAccessExpiresAt)}（北京时间）`
+                              : "未设置截止时间，可长期发布。"}
+                          </p>
+                        </div>
+
+                        <form className="admin-expiry-form" onSubmit={(event) => saveExpiry(event, user.id)}>
+                          <label>
+                            <span>会员截止时间（北京时间）</span>
+                            <input
+                              defaultValue={dateTimeLocalValue(user.publishingAccessExpiresAt)}
+                              name="expiresAt"
+                              type="datetime-local"
+                            />
+                          </label>
+                          <button
+                            className="button secondary"
+                            disabled={updatingUserId === user.id || deletingUserId === user.id}
+                            type="submit"
+                          >
+                            保存时间
+                          </button>
+                        </form>
+
+                        <div className="admin-access-actions">
+                          {user.publishingAccessStatus === "active" ? (
+                            <button
+                              className="button danger"
+                              disabled={updatingUserId === user.id || deletingUserId === user.id}
+                              onClick={() => {
+                                if (window.confirm(`确定停用 ${user.email} 的发帖和排程权限吗？`)) {
+                                  void updatePublishingAccess(
+                                    user.id,
+                                    { publishingAccessDisabled: true },
+                                    "该会员已停用发布权限，仍可登录查看后台。"
+                                  );
+                                }
+                              }}
+                              type="button"
+                            >
+                              立即停用发布
+                            </button>
+                          ) : user.publishingAccessStatus === "expired" ? (
+                            <button
+                              className="button"
+                              disabled={updatingUserId === user.id || deletingUserId === user.id}
+                              onClick={() =>
+                                void updatePublishingAccess(
+                                  user.id,
+                                  { publishingAccessDisabled: false, publishingAccessExpiresAt: null },
+                                  "该会员已恢复发布权限，截止时间已取消。"
+                                )
+                              }
+                              type="button"
+                            >
+                              恢复并取消到期
+                            </button>
+                          ) : (
+                            <button
+                              className="button"
+                              disabled={updatingUserId === user.id || deletingUserId === user.id}
+                              onClick={() =>
+                                void updatePublishingAccess(
+                                  user.id,
+                                  { publishingAccessDisabled: false },
+                                  "该会员已恢复发布权限。"
+                                )
+                              }
+                              type="button"
+                            >
+                              恢复发布
+                            </button>
+                          )}
+                          <button
+                            className="button danger-button"
+                            disabled={updatingUserId === user.id || deletingUserId === user.id}
+                            onClick={() => void deleteUser(user)}
+                            type="button"
+                          >
+                            {deletingUserId === user.id ? "正在删除…" : "删除账号"}
+                          </button>
+                        </div>
+                      </section>
                     )}
-                    <button
-                      className="button danger-button"
-                      disabled={updatingUserId === user.id || deletingUserId === user.id}
-                      onClick={() => void deleteUser(user)}
-                      type="button"
-                    >
-                      {deletingUserId === user.id ? "正在删除…" : "删除账号"}
-                    </button>
-                  </div>
-                </section>
-                )}
 
-                <div className="admin-workspace-list">
-                  {user.workspaces.map((workspace) => (
-                    <section className="admin-workspace" key={workspace.id}>
-                      <div className="row">
-                        <strong>{workspace.name}</strong>
-                        <span>
-                          {roleLabel(workspace.role, locale)} · {memberStatusLabel(workspace.status, locale)}
-                        </span>
-                      </div>
-                      <p className="muted">
-                        {workspace.postCount} 条内容 · {workspace.memberCount} 名成员 ·{" "}
-                        {workspace.socialAccountCount} 个绑定账号
-                      </p>
-                      <div className="admin-channel-chips">
-                        {workspace.socialAccounts.length ? (
-                          workspace.socialAccounts.map((account) => (
-                            <span key={account.id}>
-                              {platformLabel(account.platform)} · {account.displayName} ·{" "}
-                              {accountStatusLabel(account.status, locale)}
+                    <div className="admin-workspace-list">
+                      {user.workspaces.map((workspace) => (
+                        <section className="admin-workspace" key={workspace.id}>
+                          <div className="row">
+                            <strong>{workspace.name}</strong>
+                            <span>
+                              {roleLabel(workspace.role, locale)} · {memberStatusLabel(workspace.status, locale)}
                             </span>
-                          ))
-                        ) : (
-                          <em>暂无绑定渠道</em>
-                        )}
-                      </div>
-
-                    </section>
-                  ))}
-                </div>
+                          </div>
+                          <p className="muted">
+                            {workspace.postCount} 条内容 · {workspace.memberCount} 名成员 ·{" "}
+                            {workspace.socialAccountCount} 个绑定账号
+                          </p>
+                          <div className="admin-channel-chips">
+                            {workspace.socialAccounts.length ? (
+                              workspace.socialAccounts.map((account) => (
+                                <span key={account.id}>
+                                  {platformLabel(account.platform)} · {account.displayName} ·{" "}
+                                  {accountStatusLabel(account.status, locale)}
+                                </span>
+                              ))
+                            ) : (
+                              <em>暂无绑定渠道</em>
+                            )}
+                          </div>
+                        </section>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </article>
             ))}
 

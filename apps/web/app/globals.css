@@ -3670,26 +3670,75 @@ textarea {
 
 .admin-user-card {
   display: grid;
-  gap: 16px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
-  padding: 18px;
+  overflow: hidden;
 }
 
-.admin-user-card header {
+.admin-user-summary {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  padding: 16px 18px;
+  text-align: left;
 }
 
-.admin-user-card h3 {
-  margin: 0 0 4px;
+.admin-user-summary:hover {
+  background: #f7fafc;
+}
+
+.admin-user-summary:focus-visible {
+  outline: 3px solid rgba(36, 160, 190, 0.35);
+  outline-offset: -3px;
+}
+
+.admin-user-identity {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.admin-user-name {
   font-size: 18px;
+  font-weight: 800;
 }
 
-.admin-user-card p {
+.admin-user-email {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-user-summary-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.admin-user-expand-label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.admin-user-details {
+  display: grid;
+  gap: 16px;
+  border-top: 1px solid #e3eaf1;
+  padding: 16px 18px 18px;
+}
+
+.admin-user-details p {
   margin: 0;
 }
 
@@ -3766,7 +3815,7 @@ textarea {
 .admin-tester-access {
   display: grid;
   grid-template-columns: minmax(180px, 1fr) minmax(280px, 1.3fr) auto;
-  align-items: end;
+  align-items: flex-end;
   gap: 12px;
   border-top: 1px solid #e3eaf1;
   margin-top: 4px;
@@ -3783,7 +3832,7 @@ textarea {
 
 .admin-expiry-form {
   display: flex;
-  align-items: end;
+  align-items: flex-end;
   gap: 8px;
 }
 
