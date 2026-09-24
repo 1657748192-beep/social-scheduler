@@ -24,7 +24,11 @@ export async function markYouTubeAccountStatus(
   });
 }
 
-export async function getYouTubeAccountAccessToken(accountId: string, requiredScope?: string): Promise<string> {
+export async function getYouTubeAccountAccessToken(
+  accountId: string,
+  requiredScope?: string,
+  refreshWithinMs?: number
+): Promise<string> {
   const result = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM social_accounts WHERE id = ${accountId}::uuid FOR UPDATE`;
     const account = await tx.socialAccount.findUnique({ where: { id: accountId }, include: { credential: true } });
@@ -41,6 +45,7 @@ export async function getYouTubeAccountAccessToken(accountId: string, requiredSc
         scopes: credential.scopes
       } : null,
       requiredScope,
+      refreshWithinMs,
       save: async (update) => {
         if (!credential) return;
         await tx.oauthCredential.update({ where: { id: credential.id }, data: {
@@ -92,7 +97,7 @@ export async function refreshDueYouTubeAccounts() {
   });
   for (const account of accounts) {
     try {
-      await getYouTubeAccountAccessToken(account.id);
+      await getYouTubeAccountAccessToken(account.id, undefined, refreshWindowMs);
     } catch (error) {
       console.error(`YouTube token check failed for account ${account.id}`, error instanceof Error ? error.message : "unknown error");
     }

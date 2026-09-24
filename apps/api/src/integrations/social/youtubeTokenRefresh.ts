@@ -83,6 +83,7 @@ export async function resolveYouTubeAccessToken(input: {
   } | null;
   requiredScope?: string;
   now?: number;
+  refreshWithinMs?: number;
   save: (update: { accessToken: string; expiresAt: Date; refreshToken?: string; refreshTokenExpiresAt?: Date | null }) => Promise<void>;
   setStatus: (status: "authorization_invalid" | "permission_missing" | "token_expired") => Promise<void>;
   refresh: (refreshToken: string) => Promise<YouTubeRefreshResult>;
@@ -97,7 +98,7 @@ export async function resolveYouTubeAccessToken(input: {
     await input.setStatus("permission_missing");
     return { kind: "permission_missing" };
   }
-  if (credential.expiresAt && credential.expiresAt.getTime() > now + 60_000) {
+  if (credential.expiresAt && credential.expiresAt.getTime() > now + (input.refreshWithinMs ?? 60_000)) {
     return { kind: "success", accessToken: credential.accessToken };
   }
   if (!credential.refreshToken) {

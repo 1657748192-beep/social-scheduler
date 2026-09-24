@@ -3,6 +3,7 @@ import { prisma } from "../../prisma";
 import type { PublishInput, PublishMediaAsset, PublishResult, SocialPublisher } from "./socialPublisher";
 import { getYouTubeAccountAccessToken, markYouTubeAccountStatus } from "./youtubeCredentialService";
 import { classifyYouTubeFailure } from "./youtubeTokenRefresh";
+import { PublishOutcomeUnknownError } from "./publishOutcomeError";
 
 type YouTubeVideoResponse = {
   id?: string;
@@ -147,18 +148,26 @@ export class YouTubePublisher implements SocialPublisher {
   }
 
   private async uploadVideo(accountId: string, accessToken: string, uploadUrl: string, media: PublishMediaAsset, videoStream: ReadableStream<Uint8Array>) {
-    const response = await fetch(uploadUrl, {
-      method: "PUT",
-      headers: {
-        "Content-Type": media.mimeType,
-        "Content-Length": String(media.sizeBytes)
-      },
-      body: videoStream,
-      duplex: "half"
-    } as RequestInit & { duplex: "half" });
+    let response: Response;
+    try {
+      response = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": media.mimeType,
+          "Content-Length": String(media.sizeBytes)
+        },
+        body: videoStream,
+        duplex: "half"
+      } as RequestInit & { duplex: "half" });
+    } catch {
+      throw new PublishOutcomeUnknownError("YouTube");
+    }
     const payload = (await response.json().catch(() => null)) as YouTubeVideoResponse | null;
 
     if (!response.ok || !payload?.id) {
+      if (response.status >= 500 || !payload?.error?.errors?.[0]?.reason) {
+        throw new PublishOutcomeUnknownError("YouTube");
+      }
       const failure = classifyYouTubeFailure(response.status, payload?.error?.errors?.[0]?.reason);
       if (failure === "authorization_invalid" || failure === "permission_missing") {
         await markYouTubeAccountStatus(accountId, failure, accessToken);

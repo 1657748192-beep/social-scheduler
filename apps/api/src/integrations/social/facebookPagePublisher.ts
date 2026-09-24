@@ -3,6 +3,7 @@ import { prisma } from "../../prisma";
 import type { PublishInput, PublishMediaAsset, PublishResult, SocialPublisher } from "./socialPublisher";
 import { getFacebookPageAccessToken, markFacebookPageAccountStatus } from "./facebookPageCredentialService";
 import { classifyFacebookPageFailure } from "./facebookPageValidation";
+import { PublishOutcomeUnknownError } from "./publishOutcomeError";
 
 type FacebookPostResponse = {
   id?: string;
@@ -259,13 +260,18 @@ export class FacebookPagePublisher implements SocialPublisher {
     body: URLSearchParams,
     errorPrefix: string
   ): Promise<FacebookPostResponse> {
-    const response = await fetch(url, {
-      method: "POST",
-      body
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, { method: "POST", body });
+    } catch {
+      throw new PublishOutcomeUnknownError("Facebook");
+    }
     const payload = (await response.json().catch(() => null)) as FacebookPostResponse | null;
 
     if (!response.ok || !payload?.id) {
+      if (response.status >= 500 || !payload?.error?.code) {
+        throw new PublishOutcomeUnknownError("Facebook");
+      }
       const kind = classifyFacebookPageFailure(response.status, payload?.error?.code);
       if (kind === "authorization_invalid" || kind === "permission_missing") {
         await markFacebookPageAccountStatus(accountId, kind, pageAccessToken);

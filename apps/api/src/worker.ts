@@ -1,7 +1,8 @@
+import { randomUUID } from "node:crypto";
 import { Worker } from "bullmq";
 import { getSocialPublisher } from "./integrations/social/registry";
 import { prisma } from "./prisma";
-import { redisConnection } from "./redis";
+import { redis, redisConnection } from "./redis";
 import { publishQueueJobName, publishQueueName, type PublishQueuePayload } from "./queues/publishQueue";
 import { config } from "./config";
 import { cleanUpExpiredMedia, withResolvedMediaUrl } from "./services/mediaStorageService";
@@ -9,6 +10,11 @@ import { cleanUpExpiredDrafts } from "./services/composerService";
 import { recoverPendingPublishJobs, repairSimulatedInstagramPublishJobs } from "./services/scheduleService";
 import { refreshDuePinterestAccounts } from "./integrations/social/pinterestCredentialService";
 import { refreshDueInstagramAccounts } from "./integrations/social/instagramCredentialService";
+import { refreshDueYouTubeAccounts } from "./integrations/social/youtubeCredentialService";
+import { refreshDueTikTokAccounts } from "./integrations/social/tiktokCredentialService";
+import { checkDueFacebookPages } from "./integrations/social/facebookPageCredentialService";
+import { authorizationRefreshIntervalsMs, runAuthorizationChecks, type AuthorizationProvider } from "./integrations/social/authorizationRefreshWorker";
+import { hasRemainingPublishAttempts, persistConfirmedPublishResult } from "./integrations/social/publishOutcomeError";
 
 const retryableJobStatuses = ["waiting", "retrying"] as const;
 const runnableScheduleStatuses = ["scheduled", "locked"] as const;
@@ -139,7 +145,7 @@ const worker = new Worker<PublishQueuePayload, unknown, typeof publishQueueJobNa
       idempotencyKey: publishJob.idempotencyKey
     });
 
-    await prisma.$transaction([
+    await persistConfirmedPublishResult(() => prisma.$transaction([
       prisma.publishJob.update({
         where: { id: publishJob.id },
         data: {
@@ -162,7 +168,7 @@ const worker = new Worker<PublishQueuePayload, unknown, typeof publishQueueJobNa
           publishStatus: "published"
         }
       })
-    ]);
+    ]), publishJob.schedule.postVariant.platform);
 
     return {
       providerPostId: publishResult.providerPostId,
@@ -233,6 +239,37 @@ async function runInstagramRefresh() {
 void runInstagramRefresh();
 const instagramRefreshTimer = setInterval(() => void runInstagramRefresh(), 6 * 60 * 60 * 1000);
 
+const authorizationChecks = {
+  youtube: refreshDueYouTubeAccounts,
+  tiktok: refreshDueTikTokAccounts,
+  facebook: checkDueFacebookPages
+};
+
+async function withAuthorizationLease(provider: AuthorizationProvider, check: () => Promise<number>) {
+  const key = `auth-refresh:${provider}`;
+  const owner = randomUUID();
+  const acquired = await redis.set(key, owner, "PX", 30 * 60_000, "NX");
+  if (acquired !== "OK") return null;
+  try {
+    return await check();
+  } finally {
+    await redis.eval(
+      'if redis.call("GET", KEYS[1]) == ARGV[1] then return redis.call("DEL", KEYS[1]) else return 0 end',
+      1,
+      key,
+      owner
+    );
+  }
+}
+
+void runAuthorizationChecks(authorizationChecks, withAuthorizationLease);
+const authorizationTimers = (Object.keys(authorizationRefreshIntervalsMs) as AuthorizationProvider[]).map((provider) =>
+  setInterval(
+    () => void runAuthorizationChecks(authorizationChecks, withAuthorizationLease, console.log, [provider]),
+    authorizationRefreshIntervalsMs[provider]
+  )
+);
+
 worker.on("completed", (job) => {
   console.log(`Publish job completed: ${job.id}`);
 });
@@ -245,7 +282,7 @@ worker.on("failed", async (job, error) => {
   }
 
   const maxAttempts = job.opts.attempts ?? 1;
-  const hasRemainingAttempts = job.attemptsMade < maxAttempts;
+  const hasRemainingAttempts = hasRemainingPublishAttempts(error, job.attemptsMade, maxAttempts);
   const nextStatus = hasRemainingAttempts ? "retrying" : "dead";
 
   const publishJob = await prisma.publishJob.findUnique({
@@ -311,6 +348,7 @@ async function shutdown() {
   clearInterval(cleanupTimer);
   clearInterval(pinterestRefreshTimer);
   clearInterval(instagramRefreshTimer);
+  authorizationTimers.forEach(clearInterval);
   await worker.close();
   await prisma.$disconnect();
   process.exit(0);

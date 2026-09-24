@@ -4,6 +4,7 @@ import { prisma } from "../../prisma";
 import type { PublishInput, PublishMediaAsset, PublishResult, SocialPublisher } from "./socialPublisher";
 import { getTikTokAccountAccessToken, markTikTokAccountStatus } from "./tiktokCredentialService";
 import { classifyTikTokApiFailure } from "./tiktokTokenRefresh";
+import { PublishOutcomeUnknownError } from "./publishOutcomeError";
 
 const tiktokApiBaseUrl = "https://open.tiktokapis.com";
 const publishStatusPollIntervalMs = 2_000;
@@ -282,31 +283,39 @@ export class TikTokPublisher implements SocialPublisher {
       throw new Error("TikTok needs an HTTPS media URL. Use the production site to publish TikTok videos.");
     }
 
-    const response = await fetch(`${tiktokApiBaseUrl}/v2/post/publish/video/init/`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json; charset=UTF-8"
-      },
-      body: JSON.stringify({
-        post_info: {
-          title: text.trim().slice(0, 2200),
-          privacy_level: settings.privacyLevel,
-          disable_comment: creatorInfo.commentDisabled || !settings.allowComment,
-          disable_duet: creatorInfo.duetDisabled || !settings.allowDuet,
-          disable_stitch: creatorInfo.stitchDisabled || !settings.allowStitch,
-          brand_organic_toggle: settings.brandOrganic,
-          is_aigc: settings.isAigc
+    let response: Response;
+    try {
+      response = await fetch(`${tiktokApiBaseUrl}/v2/post/publish/video/init/`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json; charset=UTF-8"
         },
-        source_info: {
-          source: "PULL_FROM_URL",
-          video_url: media.fileUrl
-        }
-      })
-    });
+        body: JSON.stringify({
+          post_info: {
+            title: text.trim().slice(0, 2200),
+            privacy_level: settings.privacyLevel,
+            disable_comment: creatorInfo.commentDisabled || !settings.allowComment,
+            disable_duet: creatorInfo.duetDisabled || !settings.allowDuet,
+            disable_stitch: creatorInfo.stitchDisabled || !settings.allowStitch,
+            brand_organic_toggle: settings.brandOrganic,
+            is_aigc: settings.isAigc
+          },
+          source_info: {
+            source: "PULL_FROM_URL",
+            video_url: media.fileUrl
+          }
+        })
+      });
+    } catch {
+      throw new PublishOutcomeUnknownError("TikTok");
+    }
     const payload = (await response.json().catch(() => null)) as TikTokInitPublishResponse | null;
 
     if (!response.ok || !payload || payload.error?.code !== "ok" || !payload.data?.publish_id) {
+      if (response.status >= 500 || !payload?.error?.code || payload.error.code === "ok") {
+        throw new PublishOutcomeUnknownError("TikTok");
+      }
       if (classifyTikTokApiFailure(response.status, payload?.error?.code) === "permission_missing") {
         await markTikTokAccountStatus(accountId, "permission_missing", accessToken);
       }
@@ -318,17 +327,25 @@ export class TikTokPublisher implements SocialPublisher {
 
   private async waitForPublishCompletion(accessToken: string, publishId: string) {
     for (let attempt = 0; attempt < maxPublishStatusChecks; attempt += 1) {
-      const response = await fetch(`${tiktokApiBaseUrl}/v2/post/publish/status/fetch/`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json; charset=UTF-8"
-        },
-        body: JSON.stringify({ publish_id: publishId })
-      });
+      let response: Response;
+      try {
+        response = await fetch(`${tiktokApiBaseUrl}/v2/post/publish/status/fetch/`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json; charset=UTF-8"
+          },
+          body: JSON.stringify({ publish_id: publishId })
+        });
+      } catch {
+        throw new PublishOutcomeUnknownError("TikTok");
+      }
       const payload = (await response.json().catch(() => null)) as TikTokPublishStatusResponse | null;
 
       if (!response.ok || !payload || payload.error?.code !== "ok" || !payload.data) {
+        if (response.status >= 500 || !payload?.error?.code || payload.error.code === "ok") {
+          throw new PublishOutcomeUnknownError("TikTok");
+        }
         throw new Error(`TikTok publish status request failed: ${describeTikTokError(payload?.error, response.statusText)}`);
       }
 
@@ -343,6 +360,6 @@ export class TikTokPublisher implements SocialPublisher {
       await wait(publishStatusPollIntervalMs);
     }
 
-    throw new Error("TikTok video is still processing. Check the TikTok account shortly before retrying.");
+    throw new PublishOutcomeUnknownError("TikTok");
   }
 }

@@ -109,3 +109,16 @@ test("a rotated Google refresh token without a stated deadline clears the old de
   assert.equal(saved?.refreshToken, "new-refresh");
   assert.equal(saved?.refreshTokenExpiresAt, null);
 });
+
+test("background YouTube checks renew within their wider safety window", async () => {
+  let refreshCalls = 0;
+  const base = {
+    credential: { accessToken: "old", refreshToken: "refresh", expiresAt: new Date(1_000 + 20 * 60_000), scopes: [] },
+    now: 1_000,
+    save: async () => {}, setStatus: async () => {},
+    refresh: async () => { refreshCalls += 1; return { kind: "success" as const, accessToken: "new", expiresIn: 3600 }; }
+  };
+  assert.deepEqual(await resolveYouTubeAccessToken(base), { kind: "success", accessToken: "old" });
+  assert.deepEqual(await resolveYouTubeAccessToken({ ...base, refreshWithinMs: 40 * 60_000 }), { kind: "success", accessToken: "new" });
+  assert.equal(refreshCalls, 1);
+});
