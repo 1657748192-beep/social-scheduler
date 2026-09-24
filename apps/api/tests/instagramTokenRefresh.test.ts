@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { HttpError } from "../src/utils/errors";
 import {
   classifyInstagramApiFailure,
   exchangeInstagramLongLivedToken,
@@ -45,7 +46,8 @@ test("failed long-lived exchange rejects instead of saving a short-lived token",
       clientSecret: "secret",
       fetcher: async () => Response.json({ error: { code: 190 } }, { status: 400 })
     }),
-    /long-lived token exchange failed/i
+    (error: unknown) => error instanceof HttpError && error.statusCode === 400 &&
+      /long-lived token exchange failed/i.test(error.message)
   );
 });
 

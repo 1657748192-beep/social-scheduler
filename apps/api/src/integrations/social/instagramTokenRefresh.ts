@@ -1,3 +1,5 @@
+import { HttpError } from "../../utils/errors";
+
 type InstagramTokenPayload = {
   access_token?: string;
   token_type?: string;
@@ -40,7 +42,10 @@ export async function exchangeInstagramLongLivedToken(input: {
   const response = await (input.fetcher ?? fetch)(url, { signal: AbortSignal.timeout(10000) });
   const payload = (await response.json().catch(() => null)) as InstagramTokenPayload | null;
   if (!response.ok || !payload?.access_token || typeof payload.expires_in !== "number" || !Number.isFinite(payload.expires_in) || payload.expires_in < 86400) {
-    throw new Error("Instagram long-lived token exchange failed. Please authorize the account again.");
+    throw new HttpError(
+      response.status >= 500 ? 502 : 400,
+      "Instagram long-lived token exchange failed. Please authorize the account again."
+    );
   }
   return {
     access_token: payload.access_token,
