@@ -23,6 +23,7 @@ import {
 } from "../../lib/labels";
 import { getActiveWorkspaceId, setActiveWorkspaceId } from "../../lib/activeWorkspace";
 import { filterSupportedPlatforms } from "../../lib/platformCounts";
+import { authorizationWarning } from "../../lib/authorizationWarning";
 import { useLanguage } from "../../components/LanguageProvider";
 
 type Translate = (chinese: string, english: string) => string;
@@ -37,6 +38,19 @@ function publishingAccessLabel(status: Workspace["publishingAccessStatus"] | und
   }
 
   return t("会员发布权限生效中", "Membership publishing access active");
+}
+
+function renewalWarningLabel(warning: ReturnType<typeof authorizationWarning>, t: Translate) {
+  if (warning === "expired") {
+    return t("续期凭证已到期，请重新连接账号", "Renewal credential expired. Reconnect this account.");
+  }
+  if (warning === "urgent") {
+    return t("续期凭证将在 7 天内到期，请重新连接账号", "Renewal credential expires within 7 days. Reconnect this account.");
+  }
+  if (warning === "soon") {
+    return t("续期凭证即将到期，请重新连接账号", "Renewal credential expires soon. Reconnect this account.");
+  }
+  return null;
 }
 
 function formatBeijingDateTime(value?: string | null) {
@@ -663,7 +677,14 @@ export default function DashboardPage() {
               <div className="connected-table-row" key={account.id}>
                 <span>{platformLabel(account.platform)}</span>
                 <strong>{account.displayName}</strong>
-                <span>{accountStatusLabel(account.status, locale)}</span>
+                <span>
+                  {accountStatusLabel(account.status, locale)}
+                  {authorizationWarning(account) ? (
+                    <small className="status-pill warning">
+                      {renewalWarningLabel(authorizationWarning(account), t)}
+                    </small>
+                  ) : null}
+                </span>
                 <span>
                   {canManageMembers ? (
                     <button
@@ -757,6 +778,11 @@ export default function DashboardPage() {
                             <small className="muted">
                               {account.accountType ?? "account"} · {accountStatusLabel(account.status, locale)}
                             </small>
+                            {authorizationWarning(account) ? (
+                              <small className="status-pill warning">
+                                {renewalWarningLabel(authorizationWarning(account), t)}
+                              </small>
+                            ) : null}
                           </div>
                           <button
                             className="text-button danger-text"

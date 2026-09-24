@@ -230,6 +230,7 @@ export type SocialAccount = {
   credential?: {
     scopes: string[];
     expiresAt?: string;
+    refreshTokenExpiresAt?: string | null;
     updatedAt: string;
   };
 };
