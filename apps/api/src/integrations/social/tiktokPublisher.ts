@@ -141,6 +141,8 @@ export function readTikTokPublishSettings(value: Prisma.JsonValue): TikTokPublis
 export class TikTokPublisher implements SocialPublisher {
   platform: Platform = "tiktok";
 
+  constructor(private readonly accessTokenForAccount = getTikTokAccountAccessToken) {}
+
   async validate(input: PublishInput) {
     const videos = input.media.filter((asset) => asset.mimeType.startsWith("video/"));
 
@@ -169,7 +171,7 @@ export class TikTokPublisher implements SocialPublisher {
       throw new Error("The selected TikTok account is unavailable. Reconnect it and select it again before publishing.");
     }
 
-    const accessToken = await getTikTokAccountAccessToken(account.id, "video.publish");
+    const accessToken = await this.accessTokenForAccount(account.id, "video.publish");
     return this.queryCreatorPublishInfo(account.id, accessToken);
   }
 
@@ -182,8 +184,9 @@ export class TikTokPublisher implements SocialPublisher {
     }
 
     const settings = readTikTokPublishSettings(input.platformPayload)!;
-    const accessToken = await getTikTokAccountAccessToken(account.id, "video.publish");
+    const accessToken = await this.accessTokenForAccount(account.id, "video.publish");
     const creatorInfo = await this.queryCreatorPublishInfo(account.id, accessToken);
+    const publishingToken = await this.accessTokenForAccount(account.id, "video.publish");
 
     if (!creatorInfo.privacyLevelOptions.includes(settings.privacyLevel)) {
       throw new Error("TikTok privacy options changed. Open the TikTok platform settings and choose a privacy option again.");
@@ -194,8 +197,8 @@ export class TikTokPublisher implements SocialPublisher {
     }
 
     const video = input.media[0];
-    const publishId = await this.initializeDirectPost(account.id, accessToken, input.text, video, creatorInfo, settings);
-    const status = await this.waitForPublishCompletion(accessToken, publishId);
+    const publishId = await this.initializeDirectPost(account.id, publishingToken, input.text, video, creatorInfo, settings);
+    const status = await this.waitForPublishCompletion(publishingToken, publishId, account.id);
     const providerPostId = status.publicaly_available_post_id?.[0]?.toString() ?? publishId;
     const providerPermalink = tiktokPublicPostPermalink(
       creatorInfo.creatorUsername,
@@ -235,7 +238,11 @@ export class TikTokPublisher implements SocialPublisher {
     });
   }
 
-  private async queryCreatorPublishInfo(accountId: string, accessToken: string): Promise<TikTokCreatorPublishInfo> {
+  private async queryCreatorPublishInfo(
+    accountId: string,
+    accessToken: string,
+    canRetryInvalidToken = true
+  ): Promise<TikTokCreatorPublishInfo> {
     const response = await fetch(`${tiktokApiBaseUrl}/v2/post/publish/creator_info/query/`, {
       method: "POST",
       headers: {
@@ -246,6 +253,14 @@ export class TikTokPublisher implements SocialPublisher {
     const payload = (await response.json().catch(() => null)) as TikTokCreatorInfoResponse | null;
 
     if (!response.ok || !payload || payload.error?.code !== "ok" || !payload.data) {
+      if (canRetryInvalidToken && payload?.error?.code === "access_token_invalid") {
+        const renewedToken = await this.accessTokenForAccount(
+          accountId, "video.publish", Number.POSITIVE_INFINITY, accessToken
+        );
+        if (renewedToken !== accessToken) {
+          return this.queryCreatorPublishInfo(accountId, renewedToken, false);
+        }
+      }
       if (classifyTikTokApiFailure(response.status, payload?.error?.code) === "permission_missing") {
         await markTikTokAccountStatus(accountId, "permission_missing", accessToken);
       }
@@ -325,7 +340,7 @@ export class TikTokPublisher implements SocialPublisher {
     return payload.data.publish_id;
   }
 
-  private async waitForPublishCompletion(accessToken: string, publishId: string) {
+  private async waitForPublishCompletion(accessToken: string, publishId: string, accountId?: string) {
     for (let attempt = 0; attempt < maxPublishStatusChecks; attempt += 1) {
       let response: Response;
       try {
@@ -343,10 +358,13 @@ export class TikTokPublisher implements SocialPublisher {
       const payload = (await response.json().catch(() => null)) as TikTokPublishStatusResponse | null;
 
       if (!response.ok || !payload || payload.error?.code !== "ok" || !payload.data) {
-        if (response.status >= 500 || !payload?.error?.code || payload.error.code === "ok") {
-          throw new PublishOutcomeUnknownError("TikTok");
+        if (accountId && payload?.error?.code === "scope_not_authorized") {
+          await markTikTokAccountStatus(accountId, "permission_missing", accessToken);
         }
-        throw new Error(`TikTok publish status request failed: ${describeTikTokError(payload?.error, response.statusText)}`);
+        if (accountId && payload?.error?.code === "auth_removed") {
+          await markTikTokAccountStatus(accountId, "authorization_invalid", accessToken);
+        }
+        throw new PublishOutcomeUnknownError("TikTok");
       }
 
       if (payload.data.status === "PUBLISH_COMPLETE") {

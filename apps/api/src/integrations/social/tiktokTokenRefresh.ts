@@ -3,6 +3,7 @@ import { expiryFromSeconds } from "./oauthExpiry";
 export type TikTokRefreshResult =
   | { kind: "success"; accessToken: string; refreshToken?: string; expiresIn: number; refreshExpiresIn?: number }
   | { kind: "authorization_invalid" }
+  | { kind: "token_expired" }
   | { kind: "temporary_failure"; message: string };
 
 export type TikTokResolution =
@@ -32,7 +33,8 @@ export type TikTokLockedCredential = {
 
 export function classifyTikTokTokenFailure(status: number, error?: string) {
   if (status === 429 || status >= 500) return "temporary_failure" as const;
-  if (error === "invalid_grant" || error === "token_revoked" || error === "refresh_token_expired") {
+  if (error === "refresh_token_expired") return "token_expired" as const;
+  if (error === "invalid_grant" || error === "token_revoked") {
     return "authorization_invalid" as const;
   }
   return "request_failed" as const;
@@ -74,8 +76,9 @@ export async function refreshTikTokToken(input: {
     error?: string;
   } | null;
   if (!response.ok) {
-    return classifyTikTokTokenFailure(response.status, payload?.error) === "authorization_invalid"
-      ? { kind: "authorization_invalid" }
+    const kind = classifyTikTokTokenFailure(response.status, payload?.error);
+    return kind === "authorization_invalid" || kind === "token_expired"
+      ? { kind }
       : { kind: "temporary_failure", message: `TikTok token refresh failed (${response.status}).` };
   }
   if (typeof payload?.access_token !== "string" || !payload.access_token ||
@@ -97,6 +100,7 @@ export async function resolveTikTokAccessToken(input: {
   requiredScope?: string;
   now?: number;
   refreshWithinMs?: number;
+  rejectedAccessToken?: string;
   withLock: (id: string, work: (locked: TikTokLockedCredential) => Promise<TikTokResolution>) => Promise<TikTokResolution>;
   exchange: (refreshToken: string) => Promise<TikTokRefreshResult>;
 }): Promise<TikTokResolution> {
@@ -110,6 +114,11 @@ export async function resolveTikTokAccessToken(input: {
     if (input.requiredScope && !credential.scopes.includes(input.requiredScope)) {
       await locked.setStatus("permission_missing");
       return { kind: "permission_missing" };
+    }
+    if (input.rejectedAccessToken && locked.status === "active" &&
+        credential.accessToken !== input.rejectedAccessToken &&
+        credential.expiresAt && credential.expiresAt.getTime() > now + 60_000) {
+      return { kind: "success", accessToken: credential.accessToken };
     }
     if (locked.status === "active" && credential.expiresAt && credential.expiresAt.getTime() > now + (input.refreshWithinMs ?? 60_000)) {
       return { kind: "success", accessToken: credential.accessToken };
@@ -125,6 +134,10 @@ export async function resolveTikTokAccessToken(input: {
     const result = await input.exchange(credential.refreshToken);
     if (result.kind === "authorization_invalid") {
       await locked.setStatus("authorization_invalid");
+      return result;
+    }
+    if (result.kind === "token_expired") {
+      await locked.setStatus("token_expired");
       return result;
     }
     if (result.kind === "temporary_failure") {

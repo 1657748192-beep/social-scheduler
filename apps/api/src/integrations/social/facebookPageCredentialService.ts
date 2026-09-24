@@ -2,6 +2,7 @@ import { config } from "../../config";
 import { prisma } from "../../prisma";
 import { decryptToken } from "../../utils/tokenCrypto";
 import { checkFacebookPageCredential } from "./facebookPageValidation";
+import { scanDueSocialAccountIds } from "./socialAccountBatch";
 
 export { classifyFacebookPageFailure, normalizeFacebookPageExpiry } from "./facebookPageValidation";
 
@@ -55,18 +56,15 @@ export async function getFacebookPageAccessToken(accountId: string): Promise<str
 }
 
 export async function checkDueFacebookPages() {
-  const accounts = await prisma.socialAccount.findMany({
-    where: { platform: "facebook", accountType: "page", status: "active" },
-    select: { id: true },
-    orderBy: { id: "asc" },
-    take: 100
-  });
-  for (const account of accounts) {
+  const accountIds = await scanDueSocialAccountIds("facebook", {
+    platform: "facebook", accountType: "page", status: "active"
+  }, 80);
+  for (const accountId of accountIds) {
     try {
-      await getFacebookPageAccessToken(account.id);
+      await getFacebookPageAccessToken(accountId);
     } catch (error) {
-      console.error(`Facebook Page authorization check failed for account ${account.id}`, error instanceof Error ? error.message : "unknown error");
+      console.error(`Facebook Page authorization check failed for account ${accountId}`, error instanceof Error ? error.message : "unknown error");
     }
   }
-  return accounts.length;
+  return accountIds.length;
 }

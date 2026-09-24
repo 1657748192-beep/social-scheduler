@@ -66,3 +66,16 @@ test("permission target and transient Meta errors do not masquerade as expiry", 
   const outage = await checkFacebookPageCredential({ ...base, fetcher: async () => Response.json({ error: { code: 190 } }, { status: 503 }) });
   assert.equal(outage.kind, "temporary_failure");
 });
+
+test("an incomplete successful debugger response preserves the existing connection", async () => {
+  const base = { pageId: "123", pageToken: "page-token", appId: "app", appSecret: "secret" };
+  for (const data of [
+    { type: "PAGE", app_id: "app", scopes: ["pages_manage_posts", "pages_read_engagement"] },
+    { is_valid: true, app_id: "app", scopes: ["pages_manage_posts", "pages_read_engagement"] },
+    { is_valid: true, type: "PAGE", scopes: ["pages_manage_posts", "pages_read_engagement"] },
+    { is_valid: true, type: "PAGE", app_id: "app" }
+  ]) {
+    const result = await checkFacebookPageCredential({ ...base, fetcher: async () => Response.json({ data }) });
+    assert.equal(result.kind, "temporary_failure");
+  }
+});

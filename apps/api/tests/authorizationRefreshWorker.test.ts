@@ -102,3 +102,35 @@ test("a persistence failure after provider confirmation cannot retry the create"
     PublishOutcomeUnknownError
   );
 });
+
+test("TikTok status lookup errors after accepted init cannot repeat initialization", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => Response.json({ error: { code: "access_token_invalid", message: "expired" } }, { status: 401 });
+  try {
+    const tiktok = new TikTokPublisher() as any;
+    await assert.rejects(tiktok.waitForPublishCompletion("token", "publish-id"), PublishOutcomeUnknownError);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("TikTok read-only creator check renews once after early token invalidation", async () => {
+  const originalFetch = globalThis.fetch;
+  const seen: string[] = [];
+  let renewals = 0;
+  globalThis.fetch = async (_url, init) => {
+    seen.push(String((init?.headers as Record<string, string>)?.Authorization));
+    return seen.length === 1
+      ? Response.json({ error: { code: "access_token_invalid" } }, { status: 401 })
+      : Response.json({ data: { creator_username: "creator", privacy_level_options: ["SELF_ONLY"] }, error: { code: "ok" } });
+  };
+  try {
+    const tiktok = new TikTokPublisher(async () => { renewals += 1; return "renewed-token"; }) as any;
+    const info = await tiktok.queryCreatorPublishInfo("account", "old-token");
+    assert.equal(info.creatorUsername, "creator");
+    assert.deepEqual(seen, ["Bearer old-token", "Bearer renewed-token"]);
+    assert.equal(renewals, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

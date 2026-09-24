@@ -11,7 +11,7 @@ cd /opt/social-scheduler
 bash scripts/deploy-server.sh
 ```
 
-The script pulls `origin/main`, preserves `.env`, builds Docker images, restarts services, and checks:
+The script pulls `origin/main`, preserves `.env`, builds Docker images, applies database migrations before starting the new Worker, restarts services, and checks:
 
 ```text
 https://app.bufferhelp.com/api/v1/health

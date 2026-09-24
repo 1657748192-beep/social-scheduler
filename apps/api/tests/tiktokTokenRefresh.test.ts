@@ -13,6 +13,7 @@ test("classifies only definite invalid grants as revoked", () => {
   assert.equal(classifyTikTokTokenFailure(429, "rate_limit_exceeded"), "temporary_failure");
   assert.equal(classifyTikTokTokenFailure(503), "temporary_failure");
   assert.equal(classifyTikTokTokenFailure(400, "invalid_request"), "request_failed");
+  assert.equal(classifyTikTokTokenFailure(400, "refresh_token_expired"), "token_expired");
 });
 
 test("TikTok publish API separates OAuth scope from creator restrictions", () => {
@@ -52,6 +53,10 @@ test("invalid grant differs from a temporary network failure", async () => {
     fetcher: async () => Response.json({ access_token: "a", expires_in: 0 })
   });
   assert.equal(incomplete.kind, "temporary_failure");
+  assert.deepEqual(await refreshTikTokToken({
+    refreshToken: "r", clientKey: "k", clientSecret: "s",
+    fetcher: async () => Response.json({ error: "refresh_token_expired" }, { status: 400 })
+  }), { kind: "token_expired" });
 });
 
 test("resolver updates both tokens and restores a falsely expired account", async () => {
@@ -107,6 +112,21 @@ test("background checks renew before expiry while publishing can use a valid tok
   assert.equal(calls, 1);
 });
 
+test("an unexpectedly invalid access token can force one serialized renewal", async () => {
+  let exchanges = 0;
+  const result = await resolveTikTokAccessToken({
+    accountId: "account", now: 1000, refreshWithinMs: Number.POSITIVE_INFINITY,
+    withLock: async (_id, work) => work({
+      status: "active",
+      credential: { accessToken: "old", refreshToken: "refresh", expiresAt: new Date(999999999), refreshTokenExpiresAt: null, scopes: ["video.publish"] },
+      save: async () => {}, setStatus: async () => {}
+    }),
+    exchange: async () => { exchanges += 1; return { kind: "success", accessToken: "new", expiresIn: 86400 }; }
+  });
+  assert.deepEqual(result, { kind: "success", accessToken: "new" });
+  assert.equal(exchanges, 1);
+});
+
 test("missing access expiry triggers renewal; missing refresh token requires reconnection", async () => {
   let refreshCalls = 0;
   const statuses: string[] = [];
@@ -123,6 +143,21 @@ test("missing access expiry triggers renewal; missing refresh token requires rec
   assert.deepEqual(await withCredential(null), { kind: "authorization_invalid" });
   assert.equal(refreshCalls, 1);
   assert.deepEqual(statuses, ["authorization_invalid"]);
+});
+
+test("provider-confirmed refresh expiry is labelled expired, not revoked", async () => {
+  const statuses: string[] = [];
+  const result = await resolveTikTokAccessToken({
+    accountId: "account", now: 1000,
+    withLock: async (_id, work) => work({
+      status: "active",
+      credential: { accessToken: "old", refreshToken: "refresh", expiresAt: new Date(500), refreshTokenExpiresAt: null, scopes: [] },
+      save: async () => {}, setStatus: async (status) => { statuses.push(status); }
+    }),
+    exchange: async () => ({ kind: "token_expired" })
+  });
+  assert.deepEqual(result, { kind: "token_expired" });
+  assert.deepEqual(statuses, ["token_expired"]);
 });
 
 test("temporary renewal failures do not revoke an active account", async () => {

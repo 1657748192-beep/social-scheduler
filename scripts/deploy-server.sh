@@ -241,6 +241,9 @@ deploy() {
   log "Building application images"
   compose build api worker web
 
+  log "Applying database migrations before starting the new Worker"
+  compose run --rm --no-deps api npx prisma migrate deploy
+
   log "Starting services"
   compose up -d postgres redis api worker web reverse-proxy
 

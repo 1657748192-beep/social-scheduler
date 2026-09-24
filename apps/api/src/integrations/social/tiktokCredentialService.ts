@@ -2,6 +2,7 @@ import { config } from "../../config";
 import { prisma } from "../../prisma";
 import { decryptToken, encryptToken } from "../../utils/tokenCrypto";
 import { refreshTikTokToken, resolveTikTokAccessToken } from "./tiktokTokenRefresh";
+import { scanDueSocialAccountIds } from "./socialAccountBatch";
 
 const refreshWindowMs = 8 * 60 * 60_000;
 
@@ -27,12 +28,14 @@ export async function markTikTokAccountStatus(
 export async function getTikTokAccountAccessToken(
   accountId: string,
   requiredScope?: string,
-  refreshWithinMs?: number
+  refreshWithinMs?: number,
+  rejectedAccessToken?: string
 ): Promise<string> {
   const result = await resolveTikTokAccessToken({
     accountId,
     requiredScope,
     refreshWithinMs,
+    rejectedAccessToken,
     withLock: (id, work) => prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM social_accounts WHERE id = ${id}::uuid FOR UPDATE`;
       const account = await tx.socialAccount.findUnique({ where: { id }, include: { credential: true } });
@@ -86,28 +89,23 @@ export async function getTikTokAccountAccessToken(
 }
 
 export async function refreshDueTikTokAccounts() {
-  const accounts = await prisma.socialAccount.findMany({
-    where: {
-      platform: "tiktok",
-      status: { in: ["active", "token_expired"] },
-      OR: [
-        { status: "token_expired" },
-        { credential: { is: { OR: [
-          { expiresAt: { lte: new Date(Date.now() + refreshWindowMs) } },
-          { expiresAt: null }
-        ] } } }
-      ]
-    },
-    select: { id: true },
-    orderBy: { id: "asc" },
-    take: 100
+  const accountIds = await scanDueSocialAccountIds("tiktok", {
+    platform: "tiktok",
+    status: { in: ["active", "token_expired"] },
+    OR: [
+      { status: "token_expired" },
+      { credential: { is: { OR: [
+        { expiresAt: { lte: new Date(Date.now() + refreshWindowMs) } },
+        { expiresAt: null }
+      ] } } }
+    ]
   });
-  for (const account of accounts) {
+  for (const accountId of accountIds) {
     try {
-      await getTikTokAccountAccessToken(account.id, undefined, refreshWindowMs);
+      await getTikTokAccountAccessToken(accountId, undefined, refreshWindowMs);
     } catch (error) {
-      console.error(`TikTok token check failed for account ${account.id}`, error instanceof Error ? error.message : "unknown error");
+      console.error(`TikTok token check failed for account ${accountId}`, error instanceof Error ? error.message : "unknown error");
     }
   }
-  return accounts.length;
+  return accountIds.length;
 }

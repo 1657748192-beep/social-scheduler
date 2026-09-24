@@ -2,6 +2,7 @@ import { config } from "../../config";
 import { prisma } from "../../prisma";
 import { decryptToken, encryptToken } from "../../utils/tokenCrypto";
 import { refreshYouTubeToken, resolveYouTubeAccessToken } from "./youtubeTokenRefresh";
+import { scanDueSocialAccountIds } from "./socialAccountBatch";
 
 const refreshWindowMs = 40 * 60_000;
 
@@ -82,25 +83,20 @@ export async function getYouTubeAccountAccessToken(
 }
 
 export async function refreshDueYouTubeAccounts() {
-  const accounts = await prisma.socialAccount.findMany({
-    where: {
-      platform: "youtube",
-      status: "active",
-      credential: { is: { OR: [
-        { expiresAt: { lte: new Date(Date.now() + refreshWindowMs) } },
-        { expiresAt: null }
-      ] } }
-    },
-    select: { id: true },
-    orderBy: { id: "asc" },
-    take: 100
+  const accountIds = await scanDueSocialAccountIds("youtube", {
+    platform: "youtube",
+    status: "active",
+    credential: { is: { OR: [
+      { expiresAt: { lte: new Date(Date.now() + refreshWindowMs) } },
+      { expiresAt: null }
+    ] } }
   });
-  for (const account of accounts) {
+  for (const accountId of accountIds) {
     try {
-      await getYouTubeAccountAccessToken(account.id, undefined, refreshWindowMs);
+      await getYouTubeAccountAccessToken(accountId, undefined, refreshWindowMs);
     } catch (error) {
-      console.error(`YouTube token check failed for account ${account.id}`, error instanceof Error ? error.message : "unknown error");
+      console.error(`YouTube token check failed for account ${accountId}`, error instanceof Error ? error.message : "unknown error");
     }
   }
-  return accounts.length;
+  return accountIds.length;
 }

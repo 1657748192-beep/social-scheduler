@@ -13,6 +13,8 @@ test("separates invalid grant, permission errors, and temporary Google failures"
   assert.equal(classifyYouTubeFailure(429), "temporary_failure");
   assert.equal(classifyYouTubeFailure(503), "temporary_failure");
   assert.equal(classifyYouTubeFailure(403, "quotaExceeded"), "request_failed");
+  assert.equal(classifyYouTubeFailure(401), "request_failed");
+  assert.equal(classifyYouTubeFailure(401, "invalid_client"), "request_failed");
 });
 
 test("refreshes through Google and validates the reported lifetime", async () => {
@@ -42,6 +44,11 @@ test("invalid grant requires reconnection; timeout does not revoke authorization
     fetcher: async () => { throw new Error("network down"); }
   });
   assert.equal(timeout.kind, "temporary_failure");
+  const misconfiguredClient = await refreshYouTubeToken({
+    refreshToken: "r", clientId: "c", clientSecret: "s",
+    fetcher: async () => Response.json({ error: "invalid_client" }, { status: 401 })
+  });
+  assert.equal(misconfiguredClient.kind, "temporary_failure");
 });
 
 test("resolver refreshes unknown expiry and preserves active status on temporary failures", async () => {

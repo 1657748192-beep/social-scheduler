@@ -12,7 +12,7 @@ export type YouTubeResolution =
 
 export function classifyYouTubeFailure(status: number, reason?: string) {
   if (status === 429 || status >= 500) return "temporary_failure" as const;
-  if (reason === "invalid_grant" || reason === "authError" || reason === "invalidCredentials" || status === 401) {
+  if (reason === "invalid_grant") {
     return "authorization_invalid" as const;
   }
   if (reason === "insufficientPermissions" || reason === "forbiddenForNonOwner") {
