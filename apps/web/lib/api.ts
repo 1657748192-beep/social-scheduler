@@ -175,7 +175,7 @@ export type AdminUser = {
       platform: "x" | "facebook" | "instagram" | "tiktok" | "linkedin" | "youtube" | "pinterest";
       displayName: string;
       accountType?: string | null;
-      status: "active" | "disconnected" | "token_expired";
+      status: "active" | "disconnected" | "token_expired" | "authorization_invalid" | "permission_missing";
       createdAt: string;
     }>;
   }>;
@@ -220,7 +220,7 @@ export type SocialAccount = {
   displayName: string;
   avatarUrl?: string;
   accountType?: string;
-  status: "active" | "disconnected" | "token_expired";
+  status: "active" | "disconnected" | "token_expired" | "authorization_invalid" | "permission_missing";
   capabilities: {
     oauth2?: boolean;
     scopes?: string[];

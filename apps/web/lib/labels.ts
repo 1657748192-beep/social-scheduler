@@ -26,7 +26,9 @@ export function accountStatusLabel(status: string, locale: LabelLocale = "zh-CN"
     {
       active: ["已连接", "Connected"],
       disconnected: ["已断开", "Disconnected"],
-      token_expired: ["授权已过期", "Authorization expired"]
+      token_expired: ["授权已过期", "Authorization expired"],
+      authorization_invalid: ["需要重新授权", "Reconnect required"],
+      permission_missing: ["权限不足", "Permission missing"]
     },
     locale
   );

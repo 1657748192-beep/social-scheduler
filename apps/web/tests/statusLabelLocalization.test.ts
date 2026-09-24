@@ -15,6 +15,8 @@ test("shared status labels use English text in English mode", () => {
   assert.equal(roleLabel("admin", "en"), "Administrator");
   assert.equal(accountStatusLabel("active", "en"), "Connected");
   assert.equal(accountStatusLabel("token_expired", "en"), "Authorization expired");
+  assert.equal(accountStatusLabel("authorization_invalid", "en"), "Reconnect required");
+  assert.equal(accountStatusLabel("permission_missing", "en"), "Permission missing");
   assert.equal(memberStatusLabel("disabled", "en"), "Disabled");
   assert.equal(invitationStatusLabel("accepted", "en"), "Accepted");
   assert.equal(scheduleStatusLabel("scheduled", "en"), "Scheduled");
@@ -26,6 +28,8 @@ test("shared status labels use English text in English mode", () => {
 
 test("shared status labels keep Chinese as the default and preserve unknown values", () => {
   assert.equal(scheduleStatusLabel("published"), "已发布");
+  assert.equal(accountStatusLabel("authorization_invalid"), "需要重新授权");
+  assert.equal(accountStatusLabel("permission_missing"), "权限不足");
   assert.equal(publishJobStatusLabel("succeeded"), "成功");
   assert.equal(scheduleStatusLabel("future-status", "en"), "future-status");
 });

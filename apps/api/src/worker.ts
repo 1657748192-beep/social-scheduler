@@ -7,6 +7,7 @@ import { config } from "./config";
 import { cleanUpExpiredMedia, withResolvedMediaUrl } from "./services/mediaStorageService";
 import { cleanUpExpiredDrafts } from "./services/composerService";
 import { recoverPendingPublishJobs, repairSimulatedInstagramPublishJobs } from "./services/scheduleService";
+import { refreshDuePinterestAccounts } from "./integrations/social/pinterestCredentialService";
 
 const retryableJobStatuses = ["waiting", "retrying"] as const;
 const runnableScheduleStatuses = ["scheduled", "locked"] as const;
@@ -207,6 +208,18 @@ const cleanupTimer = setInterval(
   config.MEDIA_CLEANUP_INTERVAL_HOURS * 60 * 60 * 1000
 );
 
+async function runPinterestRefresh() {
+  try {
+    const dueCount = await refreshDuePinterestAccounts();
+    if (dueCount) console.log(`Checked ${dueCount} Pinterest account(s) for token renewal`);
+  } catch (error) {
+    console.error("Pinterest token renewal scan failed", error);
+  }
+}
+
+void runPinterestRefresh();
+const pinterestRefreshTimer = setInterval(() => void runPinterestRefresh(), 6 * 60 * 60 * 1000);
+
 worker.on("completed", (job) => {
   console.log(`Publish job completed: ${job.id}`);
 });
@@ -283,6 +296,7 @@ worker.on("failed", async (job, error) => {
 async function shutdown() {
   console.log("Shutting down worker");
   clearInterval(cleanupTimer);
+  clearInterval(pinterestRefreshTimer);
   await worker.close();
   await prisma.$disconnect();
   process.exit(0);

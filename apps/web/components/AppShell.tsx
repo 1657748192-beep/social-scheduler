@@ -120,6 +120,14 @@ function channelStatusText(
     return t("授权已过期", "Authorization expired");
   }
 
+  if (account?.status === "authorization_invalid") {
+    return t("需要重新授权", "Reconnect required");
+  }
+
+  if (account?.status === "permission_missing") {
+    return t("权限不足", "Permission missing");
+  }
+
   if (account?.status === "disconnected") {
     return t("已断开", "Disconnected");
   }

@@ -49,6 +49,8 @@ enum SocialAccountStatus {
   active
   disconnected
   token_expired
+  authorization_invalid
+  permission_missing
 
   @@map("social_account_status")
 }
