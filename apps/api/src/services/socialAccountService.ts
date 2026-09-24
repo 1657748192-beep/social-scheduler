@@ -10,6 +10,7 @@ import {
 } from "../integrations/oauth/oauthProviders";
 import { PinterestPublisher } from "../integrations/social/pinterestPublisher";
 import { exchangeInstagramLongLivedToken } from "../integrations/social/instagramTokenRefresh";
+import { refreshDeadline } from "../integrations/social/oauthExpiry";
 import { TikTokPublisher } from "../integrations/social/tiktokPublisher";
 import { prisma } from "../prisma";
 import { encryptToken } from "../utils/tokenCrypto";
@@ -34,6 +35,8 @@ type TokenResponse = {
   refresh_token?: string;
   token_type?: string;
   expires_in?: number;
+  refresh_expires_in?: number;
+  refresh_token_expires_in?: number;
   scope?: string;
 };
 
@@ -509,6 +512,7 @@ export async function completeOAuth(platformParam: string, code: string, state: 
   const expiresAt = credentialTokenResponse.expires_in
     ? new Date(Date.now() + credentialTokenResponse.expires_in * 1000)
     : null;
+  const refreshTokenExpiresAt = refreshDeadline(provider.platform, credentialTokenResponse);
   const capabilities = {
     oauth2: true,
     scopes,
@@ -566,13 +570,15 @@ export async function completeOAuth(platformParam: string, code: string, state: 
             accessTokenEncrypted: encryptToken(page.accessToken),
             tokenType: "Bearer",
             scopes,
-            expiresAt
+            expiresAt: null,
+            refreshTokenExpiresAt: null
           },
           update: {
             accessTokenEncrypted: encryptToken(page.accessToken),
             tokenType: "Bearer",
             scopes,
-            expiresAt
+            expiresAt: null,
+            refreshTokenExpiresAt: null
           }
         });
 
@@ -623,7 +629,8 @@ export async function completeOAuth(platformParam: string, code: string, state: 
           : undefined,
         tokenType: credentialTokenResponse.token_type ?? "Bearer",
         scopes,
-        expiresAt
+        expiresAt,
+        refreshTokenExpiresAt
       },
       update: {
         accessTokenEncrypted: encryptToken(credentialTokenResponse.access_token),
@@ -632,7 +639,8 @@ export async function completeOAuth(platformParam: string, code: string, state: 
           : undefined,
         tokenType: credentialTokenResponse.token_type ?? "Bearer",
         scopes,
-        expiresAt
+        expiresAt,
+        refreshTokenExpiresAt
       }
     });
 
@@ -681,6 +689,7 @@ export async function listSocialAccounts(userId: string, workspaceId: string) {
         select: {
           scopes: true,
           expiresAt: true,
+          refreshTokenExpiresAt: true,
           updatedAt: true
         }
       }
