@@ -1,6 +1,7 @@
 import type { OauthCredential, Platform, Prisma, SocialAccount } from "@prisma/client";
 import { prisma } from "../../prisma";
-import { decryptToken } from "../../utils/tokenCrypto";
+import { getInstagramAccountAccessToken, markInstagramAccountStatus } from "./instagramCredentialService";
+import { classifyInstagramApiFailure } from "./instagramTokenRefresh";
 import type { PublishInput, PublishMediaAsset, PublishResult, SocialPublisher } from "./socialPublisher";
 
 const instagramApiBaseUrl = "https://graph.instagram.com/v20.0";
@@ -82,25 +83,10 @@ export class InstagramPublisher implements SocialPublisher {
     await this.validate(input);
 
     const account = await this.findInstagramAccount(input.workspaceId, input.socialAccountId);
-    if (!account?.credential) {
+    if (!account) {
       throw new Error("The selected Instagram account is unavailable. Reconnect it and select it again before publishing.");
     }
-
-    if (!account.credential.scopes.includes("instagram_business_content_publish")) {
-      throw new Error(
-        "Instagram publishing permission is missing. Reconnect the account and approve instagram_business_content_publish."
-      );
-    }
-
-    if (account.credential.expiresAt && account.credential.expiresAt.getTime() <= Date.now()) {
-      await prisma.socialAccount.update({
-        where: { id: account.id },
-        data: { status: "token_expired" }
-      });
-      throw new Error("Instagram authorization has expired. Reconnect the account before publishing.");
-    }
-
-    const accessToken = decryptToken(account.credential.accessTokenEncrypted);
+    const accessToken = await getInstagramAccountAccessToken(account.id, "instagram_business_content_publish");
     const imageAssets = input.media.filter((asset) => asset.mimeType.startsWith("image/"));
     const videoAsset = input.media.find((asset) => asset.mimeType.startsWith("video/"));
     const containerId = videoAsset
@@ -193,7 +179,8 @@ export class InstagramPublisher implements SocialPublisher {
       `/${account.providerAccountId}/media`,
       accessToken,
       values,
-      "Instagram media container creation failed"
+      "Instagram media container creation failed",
+      account.id
     );
 
     if (!payload.id) {
@@ -208,7 +195,8 @@ export class InstagramPublisher implements SocialPublisher {
       const payload = await this.getJson(
         `/${containerId}?fields=status_code,status`,
         accessToken,
-        "Instagram media processing status check failed"
+        "Instagram media processing status check failed",
+        account.id
       );
       const status = (payload.status_code || payload.status || "").toUpperCase();
 
@@ -233,7 +221,8 @@ export class InstagramPublisher implements SocialPublisher {
       `/${account.providerAccountId}/media_publish`,
       accessToken,
       { creation_id: containerId },
-      "Instagram publish failed"
+      "Instagram publish failed",
+      account.id
     );
 
     if (!payload.id) {
@@ -248,7 +237,8 @@ export class InstagramPublisher implements SocialPublisher {
       const payload = await this.getJson(
         `/${mediaId}?fields=id,permalink`,
         accessToken,
-        "Instagram permalink lookup failed"
+        "Instagram permalink lookup failed",
+        account.id
       );
       return payload.permalink || null;
     } catch {
@@ -260,7 +250,8 @@ export class InstagramPublisher implements SocialPublisher {
     path: string,
     accessToken: string,
     values: Record<string, string>,
-    errorPrefix: string
+    errorPrefix: string,
+    accountId: string
   ) {
     const response = await fetch(`${instagramApiBaseUrl}${path}`, {
       method: "POST",
@@ -273,13 +264,14 @@ export class InstagramPublisher implements SocialPublisher {
     const payload = (await response.json().catch(() => null)) as InstagramApiResponse | null;
 
     if (!response.ok || !payload) {
+      if (!response.ok) await this.markAuthorizationFailure(accountId, response.status, accessToken, payload?.error);
       throw new Error(`${errorPrefix}: ${describeInstagramError(payload?.error, response.statusText)}`);
     }
 
     return payload;
   }
 
-  private async getJson(path: string, accessToken: string, errorPrefix: string) {
+  private async getJson(path: string, accessToken: string, errorPrefix: string, accountId: string) {
     const response = await fetch(`${instagramApiBaseUrl}${path}`, {
       headers: {
         Authorization: `Bearer ${accessToken}`
@@ -288,9 +280,17 @@ export class InstagramPublisher implements SocialPublisher {
     const payload = (await response.json().catch(() => null)) as InstagramApiResponse | null;
 
     if (!response.ok || !payload) {
+      if (!response.ok) await this.markAuthorizationFailure(accountId, response.status, accessToken, payload?.error);
       throw new Error(`${errorPrefix}: ${describeInstagramError(payload?.error, response.statusText)}`);
     }
 
     return payload;
+  }
+
+  private async markAuthorizationFailure(accountId: string, status: number, accessToken: string, error?: InstagramApiError) {
+    const classification = classifyInstagramApiFailure(status, error ?? {});
+    if (classification === "authorization_invalid" || classification === "permission_missing") {
+      await markInstagramAccountStatus(accountId, classification, accessToken);
+    }
   }
 }

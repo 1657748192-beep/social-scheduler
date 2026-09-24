@@ -9,6 +9,7 @@ import {
   type OAuthProviderConfig
 } from "../integrations/oauth/oauthProviders";
 import { PinterestPublisher } from "../integrations/social/pinterestPublisher";
+import { exchangeInstagramLongLivedToken } from "../integrations/social/instagramTokenRefresh";
 import { TikTokPublisher } from "../integrations/social/tiktokPublisher";
 import { prisma } from "../prisma";
 import { encryptToken } from "../utils/tokenCrypto";
@@ -243,23 +244,17 @@ async function exchangeFacebookLongLivedToken(provider: OAuthProviderConfig, tok
   };
 }
 
-async function exchangeInstagramLongLivedToken(provider: OAuthProviderConfig, tokenResponse: TokenResponse) {
-  if (provider.platform !== "instagram" || !provider.clientSecret) {
+async function exchangeInstagramCredential(provider: OAuthProviderConfig, tokenResponse: TokenResponse) {
+  if (provider.platform !== "instagram") {
     return tokenResponse;
   }
-
-  const url = new URL("https://graph.instagram.com/access_token");
-  url.searchParams.set("grant_type", "ig_exchange_token");
-  url.searchParams.set("client_secret", provider.clientSecret);
-  url.searchParams.set("access_token", tokenResponse.access_token);
-
-  const response = await fetch(url);
-  const payload = (await response.json().catch(() => null)) as TokenResponse | null;
-
-  if (!response.ok || !payload?.access_token) {
-    return tokenResponse;
+  if (!provider.clientSecret) {
+    throw new HttpError(500, "Instagram client secret is not configured");
   }
-
+  const payload = await exchangeInstagramLongLivedToken({
+    shortLivedToken: tokenResponse.access_token,
+    clientSecret: provider.clientSecret
+  });
   return {
     ...tokenResponse,
     ...payload
@@ -268,7 +263,7 @@ async function exchangeInstagramLongLivedToken(provider: OAuthProviderConfig, to
 
 async function exchangeLongLivedToken(provider: OAuthProviderConfig, tokenResponse: TokenResponse) {
   const facebookTokenResponse = await exchangeFacebookLongLivedToken(provider, tokenResponse);
-  return exchangeInstagramLongLivedToken(provider, facebookTokenResponse);
+  return exchangeInstagramCredential(provider, facebookTokenResponse);
 }
 
 async function fetchFacebookPages(accessToken: string): Promise<FacebookPageProfile[]> {

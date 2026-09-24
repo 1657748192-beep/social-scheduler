@@ -8,6 +8,7 @@ import { cleanUpExpiredMedia, withResolvedMediaUrl } from "./services/mediaStora
 import { cleanUpExpiredDrafts } from "./services/composerService";
 import { recoverPendingPublishJobs, repairSimulatedInstagramPublishJobs } from "./services/scheduleService";
 import { refreshDuePinterestAccounts } from "./integrations/social/pinterestCredentialService";
+import { refreshDueInstagramAccounts } from "./integrations/social/instagramCredentialService";
 
 const retryableJobStatuses = ["waiting", "retrying"] as const;
 const runnableScheduleStatuses = ["scheduled", "locked"] as const;
@@ -220,6 +221,18 @@ async function runPinterestRefresh() {
 void runPinterestRefresh();
 const pinterestRefreshTimer = setInterval(() => void runPinterestRefresh(), 6 * 60 * 60 * 1000);
 
+async function runInstagramRefresh() {
+  try {
+    const dueCount = await refreshDueInstagramAccounts();
+    if (dueCount) console.log(`Checked ${dueCount} Instagram account(s) for token renewal`);
+  } catch (error) {
+    console.error("Instagram token renewal scan failed", error);
+  }
+}
+
+void runInstagramRefresh();
+const instagramRefreshTimer = setInterval(() => void runInstagramRefresh(), 6 * 60 * 60 * 1000);
+
 worker.on("completed", (job) => {
   console.log(`Publish job completed: ${job.id}`);
 });
@@ -297,6 +310,7 @@ async function shutdown() {
   console.log("Shutting down worker");
   clearInterval(cleanupTimer);
   clearInterval(pinterestRefreshTimer);
+  clearInterval(instagramRefreshTimer);
   await worker.close();
   await prisma.$disconnect();
   process.exit(0);
