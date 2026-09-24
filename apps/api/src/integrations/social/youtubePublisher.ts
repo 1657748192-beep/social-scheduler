@@ -1,21 +1,8 @@
-import type { OauthCredential, Platform, Prisma, SocialAccount } from "@prisma/client";
-import { config } from "../../config";
+import type { Platform, Prisma } from "@prisma/client";
 import { prisma } from "../../prisma";
-import { decryptToken, encryptToken } from "../../utils/tokenCrypto";
 import type { PublishInput, PublishMediaAsset, PublishResult, SocialPublisher } from "./socialPublisher";
-
-type YouTubeAccount = SocialAccount & {
-  credential: OauthCredential | null;
-};
-
-type YouTubeTokenResponse = {
-  access_token?: string;
-  expires_in?: number;
-  token_type?: string;
-  scope?: string;
-  error?: string;
-  error_description?: string;
-};
+import { getYouTubeAccountAccessToken, markYouTubeAccountStatus } from "./youtubeCredentialService";
+import { classifyYouTubeFailure } from "./youtubeTokenRefresh";
 
 type YouTubeVideoResponse = {
   id?: string;
@@ -52,12 +39,12 @@ export class YouTubePublisher implements SocialPublisher {
       throw new Error("The selected YouTube channel is unavailable. Reconnect that channel and select it again before publishing.");
     }
 
-    const accessToken = await this.getAccessToken(account);
+    const accessToken = await getYouTubeAccountAccessToken(account.id, "https://www.googleapis.com/auth/youtube.upload");
     const videoAsset = input.media.find((asset) => asset.mimeType.startsWith("video/"))!;
     const videoStream = await this.fetchMediaStream(videoAsset);
     const metadata = this.buildVideoMetadata(input);
-    const uploadUrl = await this.createUploadSession(accessToken, videoAsset, videoAsset.sizeBytes, metadata);
-    const payload = await this.uploadVideo(uploadUrl, videoAsset, videoStream);
+    const uploadUrl = await this.createUploadSession(account.id, accessToken, videoAsset, videoAsset.sizeBytes, metadata);
+    const payload = await this.uploadVideo(account.id, accessToken, uploadUrl, videoAsset, videoStream);
 
     return {
       providerPostId: payload.id!,
@@ -86,68 +73,6 @@ export class YouTubePublisher implements SocialPublisher {
         credential: true
       }
     });
-  }
-
-  private async getAccessToken(account: YouTubeAccount) {
-    const credential = account.credential;
-
-    if (!credential) {
-      throw new Error("YouTube credential is missing");
-    }
-
-    const expiresSoon = credential.expiresAt
-      ? credential.expiresAt.getTime() <= Date.now() + 60 * 1000
-      : false;
-
-    if (!expiresSoon) {
-      return decryptToken(credential.accessTokenEncrypted);
-    }
-
-    if (!credential.refreshTokenEncrypted) {
-      throw new Error("YouTube access token expired. Reconnect YouTube to refresh permissions.");
-    }
-
-    const refreshToken = decryptToken(credential.refreshTokenEncrypted);
-    const tokenResponse = await this.refreshAccessToken(refreshToken);
-
-    if (!tokenResponse.access_token) {
-      throw new Error(
-        `YouTube token refresh failed: ${tokenResponse.error_description ?? tokenResponse.error ?? "unknown error"}`
-      );
-    }
-
-    await prisma.oauthCredential.update({
-      where: {
-        id: credential.id
-      },
-      data: {
-        accessTokenEncrypted: encryptToken(tokenResponse.access_token),
-        tokenType: tokenResponse.token_type ?? credential.tokenType,
-        scopes: tokenResponse.scope ? tokenResponse.scope.split(/[ ,]+/).filter(Boolean) : credential.scopes,
-        expiresAt: tokenResponse.expires_in
-          ? new Date(Date.now() + tokenResponse.expires_in * 1000)
-          : credential.expiresAt
-      }
-    });
-
-    return tokenResponse.access_token;
-  }
-
-  private async refreshAccessToken(refreshToken: string) {
-    const response = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded"
-      },
-      body: new URLSearchParams({
-        client_id: config.YOUTUBE_CLIENT_ID,
-        client_secret: config.YOUTUBE_CLIENT_SECRET,
-        refresh_token: refreshToken,
-        grant_type: "refresh_token"
-      })
-    });
-
-    return (await response.json().catch(() => ({}))) as YouTubeTokenResponse;
   }
 
   private buildVideoMetadata(input: PublishInput): Prisma.InputJsonObject {
@@ -186,6 +111,7 @@ export class YouTubePublisher implements SocialPublisher {
   }
 
   private async createUploadSession(
+    accountId: string,
     accessToken: string,
     media: PublishMediaAsset,
     contentLength: number,
@@ -209,6 +135,10 @@ export class YouTubePublisher implements SocialPublisher {
 
     if (!response.ok || !location) {
       const payload = (await response.json().catch(() => null)) as YouTubeVideoResponse | null;
+      const failure = classifyYouTubeFailure(response.status, payload?.error?.errors?.[0]?.reason);
+      if (failure === "authorization_invalid" || failure === "permission_missing") {
+        await markYouTubeAccountStatus(accountId, failure, accessToken);
+      }
       const message = payload?.error?.message ?? response.statusText;
       throw new Error(`YouTube upload session failed: ${message}`);
     }
@@ -216,7 +146,7 @@ export class YouTubePublisher implements SocialPublisher {
     return location;
   }
 
-  private async uploadVideo(uploadUrl: string, media: PublishMediaAsset, videoStream: ReadableStream<Uint8Array>) {
+  private async uploadVideo(accountId: string, accessToken: string, uploadUrl: string, media: PublishMediaAsset, videoStream: ReadableStream<Uint8Array>) {
     const response = await fetch(uploadUrl, {
       method: "PUT",
       headers: {
@@ -229,6 +159,10 @@ export class YouTubePublisher implements SocialPublisher {
     const payload = (await response.json().catch(() => null)) as YouTubeVideoResponse | null;
 
     if (!response.ok || !payload?.id) {
+      const failure = classifyYouTubeFailure(response.status, payload?.error?.errors?.[0]?.reason);
+      if (failure === "authorization_invalid" || failure === "permission_missing") {
+        await markYouTubeAccountStatus(accountId, failure, accessToken);
+      }
       const message = payload?.error?.message ?? response.statusText;
       throw new Error(`YouTube video upload failed: ${message}`);
     }
