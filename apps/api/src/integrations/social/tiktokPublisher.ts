@@ -1,8 +1,9 @@
-import type { OauthCredential, Platform, Prisma, SocialAccount } from "@prisma/client";
+import type { Platform, Prisma } from "@prisma/client";
 import { config } from "../../config";
 import { prisma } from "../../prisma";
-import { decryptToken, encryptToken } from "../../utils/tokenCrypto";
 import type { PublishInput, PublishMediaAsset, PublishResult, SocialPublisher } from "./socialPublisher";
+import { getTikTokAccountAccessToken, markTikTokAccountStatus } from "./tiktokCredentialService";
+import { classifyTikTokApiFailure } from "./tiktokTokenRefresh";
 
 const tiktokApiBaseUrl = "https://open.tiktokapis.com";
 const publishStatusPollIntervalMs = 2_000;
@@ -37,20 +38,6 @@ export type TikTokPublishSettings = {
   consentConfirmed: boolean;
   brandOrganic: boolean;
   isAigc: boolean;
-};
-
-type TikTokAccount = SocialAccount & {
-  credential: OauthCredential | null;
-};
-
-type TikTokTokenResponse = {
-  access_token?: string;
-  refresh_token?: string;
-  expires_in?: number;
-  token_type?: string;
-  scope?: string;
-  error?: string;
-  error_description?: string;
 };
 
 type TikTokApiError = {
@@ -181,9 +168,8 @@ export class TikTokPublisher implements SocialPublisher {
       throw new Error("The selected TikTok account is unavailable. Reconnect it and select it again before publishing.");
     }
 
-    this.assertPublishingScope(account);
-    const accessToken = await this.getAccessToken(account);
-    return this.queryCreatorPublishInfo(accessToken);
+    const accessToken = await getTikTokAccountAccessToken(account.id, "video.publish");
+    return this.queryCreatorPublishInfo(account.id, accessToken);
   }
 
   async publish(input: PublishInput): Promise<PublishResult> {
@@ -194,10 +180,9 @@ export class TikTokPublisher implements SocialPublisher {
       throw new Error("The selected TikTok account is unavailable. Reconnect it and select it again before publishing.");
     }
 
-    this.assertPublishingScope(account);
     const settings = readTikTokPublishSettings(input.platformPayload)!;
-    const accessToken = await this.getAccessToken(account);
-    const creatorInfo = await this.queryCreatorPublishInfo(accessToken);
+    const accessToken = await getTikTokAccountAccessToken(account.id, "video.publish");
+    const creatorInfo = await this.queryCreatorPublishInfo(account.id, accessToken);
 
     if (!creatorInfo.privacyLevelOptions.includes(settings.privacyLevel)) {
       throw new Error("TikTok privacy options changed. Open the TikTok platform settings and choose a privacy option again.");
@@ -208,7 +193,7 @@ export class TikTokPublisher implements SocialPublisher {
     }
 
     const video = input.media[0];
-    const publishId = await this.initializeDirectPost(accessToken, input.text, video, creatorInfo, settings);
+    const publishId = await this.initializeDirectPost(account.id, accessToken, input.text, video, creatorInfo, settings);
     const status = await this.waitForPublishCompletion(accessToken, publishId);
     const providerPostId = status.publicaly_available_post_id?.[0]?.toString() ?? publishId;
     const providerPermalink = tiktokPublicPostPermalink(
@@ -240,7 +225,7 @@ export class TikTokPublisher implements SocialPublisher {
         id: socialAccountId,
         workspaceId,
         platform: "tiktok",
-        status: "active",
+        status: { in: ["active", "token_expired"] },
         accountType: "profile"
       },
       include: {
@@ -249,77 +234,7 @@ export class TikTokPublisher implements SocialPublisher {
     });
   }
 
-  private assertPublishingScope(account: TikTokAccount) {
-    if (!account.credential?.scopes.includes("video.publish")) {
-      throw new Error("TikTok video publishing permission is missing. Enable video.publish and reconnect the TikTok account.");
-    }
-  }
-
-  private async getAccessToken(account: TikTokAccount) {
-    const credential = account.credential;
-    if (!credential) {
-      throw new Error("TikTok credential is missing");
-    }
-
-    const expiresSoon = credential.expiresAt
-      ? credential.expiresAt.getTime() <= Date.now() + 60 * 1000
-      : false;
-
-    if (!expiresSoon) {
-      return decryptToken(credential.accessTokenEncrypted);
-    }
-
-    if (!credential.refreshTokenEncrypted) {
-      await prisma.socialAccount.update({ where: { id: account.id }, data: { status: "token_expired" } });
-      throw new Error("TikTok authorization expired. Reconnect the TikTok account before publishing.");
-    }
-
-    const refreshToken = decryptToken(credential.refreshTokenEncrypted);
-    const tokenResponse = await this.refreshAccessToken(refreshToken);
-
-    if (!tokenResponse.access_token) {
-      await prisma.socialAccount.update({ where: { id: account.id }, data: { status: "token_expired" } });
-      throw new Error(
-        `TikTok token refresh failed: ${tokenResponse.error_description ?? tokenResponse.error ?? "unknown error"}`
-      );
-    }
-
-    await prisma.oauthCredential.update({
-      where: { id: credential.id },
-      data: {
-        accessTokenEncrypted: encryptToken(tokenResponse.access_token),
-        refreshTokenEncrypted: tokenResponse.refresh_token
-          ? encryptToken(tokenResponse.refresh_token)
-          : credential.refreshTokenEncrypted,
-        tokenType: tokenResponse.token_type ?? credential.tokenType,
-        scopes: tokenResponse.scope ? tokenResponse.scope.split(/[ ,]+/).filter(Boolean) : credential.scopes,
-        expiresAt: tokenResponse.expires_in
-          ? new Date(Date.now() + tokenResponse.expires_in * 1000)
-          : credential.expiresAt
-      }
-    });
-
-    return tokenResponse.access_token;
-  }
-
-  private async refreshAccessToken(refreshToken: string) {
-    const response = await fetch(`${tiktokApiBaseUrl}/v2/oauth/token/`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded"
-      },
-      body: new URLSearchParams({
-        client_key: config.TIKTOK_CLIENT_ID,
-        client_secret: config.TIKTOK_CLIENT_SECRET,
-        grant_type: "refresh_token",
-        refresh_token: refreshToken
-      })
-    });
-
-    return (await response.json().catch(() => ({}))) as TikTokTokenResponse;
-  }
-
-  private async queryCreatorPublishInfo(accessToken: string): Promise<TikTokCreatorPublishInfo> {
+  private async queryCreatorPublishInfo(accountId: string, accessToken: string): Promise<TikTokCreatorPublishInfo> {
     const response = await fetch(`${tiktokApiBaseUrl}/v2/post/publish/creator_info/query/`, {
       method: "POST",
       headers: {
@@ -330,6 +245,9 @@ export class TikTokPublisher implements SocialPublisher {
     const payload = (await response.json().catch(() => null)) as TikTokCreatorInfoResponse | null;
 
     if (!response.ok || !payload || payload.error?.code !== "ok" || !payload.data) {
+      if (classifyTikTokApiFailure(response.status, payload?.error?.code) === "permission_missing") {
+        await markTikTokAccountStatus(accountId, "permission_missing", accessToken);
+      }
       throw new Error(`TikTok creator information request failed: ${describeTikTokError(payload?.error, response.statusText)}`);
     }
 
@@ -352,6 +270,7 @@ export class TikTokPublisher implements SocialPublisher {
   }
 
   private async initializeDirectPost(
+    accountId: string,
     accessToken: string,
     text: string,
     media: PublishMediaAsset,
@@ -388,6 +307,9 @@ export class TikTokPublisher implements SocialPublisher {
     const payload = (await response.json().catch(() => null)) as TikTokInitPublishResponse | null;
 
     if (!response.ok || !payload || payload.error?.code !== "ok" || !payload.data?.publish_id) {
+      if (classifyTikTokApiFailure(response.status, payload?.error?.code) === "permission_missing") {
+        await markTikTokAccountStatus(accountId, "permission_missing", accessToken);
+      }
       throw new Error(`TikTok video publish initialization failed: ${describeTikTokError(payload?.error, response.statusText)}`);
     }
 
