@@ -134,3 +134,32 @@ test("TikTok read-only creator check renews once after early token invalidation"
     globalThis.fetch = originalFetch;
   }
 });
+
+test("YouTube renews once during safe upload-session setup, never during video upload", async () => {
+  const originalFetch = globalThis.fetch;
+  const seen: string[] = [];
+  globalThis.fetch = async (_url, init) => {
+    seen.push(String((init?.headers as Record<string, string>)?.Authorization));
+    return seen.length === 1
+      ? Response.json({ error: { errors: [{ reason: "invalidCredentials" }] } }, { status: 401 })
+      : new Response(null, { status: 200, headers: { location: "https://example.com/upload" } });
+  };
+  try {
+    const publisher = new YouTubePublisher(async () => "renewed-token") as any;
+    const session = await publisher.createUploadSession("account", "old-token", { mimeType: "video/mp4" }, 1, {});
+    assert.deepEqual(session, { uploadUrl: "https://example.com/upload", accessToken: "renewed-token" });
+    assert.deepEqual(seen, ["Bearer old-token", "Bearer renewed-token"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  globalThis.fetch = async () => Response.json({ error: { errors: [{ reason: "invalidCredentials" }] } }, { status: 401 });
+  try {
+    const publisher = new YouTubePublisher() as any;
+    await assert.rejects(
+      publisher.uploadVideo("account", "old-token", "https://example.com/upload", { mimeType: "video/mp4", sizeBytes: 1 }, new ReadableStream<Uint8Array>()),
+      PublishOutcomeUnknownError
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

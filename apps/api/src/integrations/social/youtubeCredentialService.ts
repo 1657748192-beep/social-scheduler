@@ -28,7 +28,8 @@ export async function markYouTubeAccountStatus(
 export async function getYouTubeAccountAccessToken(
   accountId: string,
   requiredScope?: string,
-  refreshWithinMs?: number
+  refreshWithinMs?: number,
+  rejectedAccessToken?: string
 ): Promise<string> {
   const result = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM social_accounts WHERE id = ${accountId}::uuid FOR UPDATE`;
@@ -47,6 +48,7 @@ export async function getYouTubeAccountAccessToken(
       } : null,
       requiredScope,
       refreshWithinMs,
+      rejectedAccessToken,
       save: async (update) => {
         if (!credential) return;
         await tx.oauthCredential.update({ where: { id: credential.id }, data: {

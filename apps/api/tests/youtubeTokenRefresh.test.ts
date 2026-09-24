@@ -129,3 +129,17 @@ test("background YouTube checks renew within their wider safety window", async (
   assert.deepEqual(await resolveYouTubeAccessToken({ ...base, refreshWithinMs: 40 * 60_000 }), { kind: "success", accessToken: "new" });
   assert.equal(refreshCalls, 1);
 });
+
+test("a concurrent YouTube renewal makes a rejected older access token harmless", async () => {
+  let refreshes = 0;
+  const result = await resolveYouTubeAccessToken({
+    credential: { accessToken: "already-new", refreshToken: "rotated-refresh", expiresAt: new Date(999999999), scopes: [] },
+    rejectedAccessToken: "old",
+    refreshWithinMs: Number.POSITIVE_INFINITY,
+    now: 1000,
+    save: async () => {}, setStatus: async () => {},
+    refresh: async () => { refreshes += 1; return { kind: "success", accessToken: "unneeded", expiresIn: 3600 }; }
+  });
+  assert.deepEqual(result, { kind: "success", accessToken: "already-new" });
+  assert.equal(refreshes, 0);
+});

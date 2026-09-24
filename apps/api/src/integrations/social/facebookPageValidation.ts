@@ -55,6 +55,7 @@ export async function checkFacebookPageCredential(input: {
   if (!debugResponse.ok) return failure(debugResponse.status, debugPayload?.error?.code);
   const data = debugPayload?.data;
   if (!data) return { kind: "temporary_failure", message: "Meta did not return Page authorization details." };
+  if (data.is_valid === false) return { kind: "authorization_invalid" };
   if (typeof data.is_valid !== "boolean" || typeof data.app_id !== "string" ||
       typeof data.type !== "string" || !Array.isArray(data.scopes)) {
     return { kind: "temporary_failure", message: "Meta returned incomplete Page authorization details." };

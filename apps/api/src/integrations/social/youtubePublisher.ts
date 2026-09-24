@@ -17,6 +17,8 @@ type YouTubeVideoResponse = {
 export class YouTubePublisher implements SocialPublisher {
   platform: Platform = "youtube";
 
+  constructor(private readonly accessTokenForAccount = getYouTubeAccountAccessToken) {}
+
   async validate(input: PublishInput) {
     const videoAssets = input.media.filter((asset) => asset.mimeType.startsWith("video/"));
 
@@ -40,12 +42,12 @@ export class YouTubePublisher implements SocialPublisher {
       throw new Error("The selected YouTube channel is unavailable. Reconnect that channel and select it again before publishing.");
     }
 
-    const accessToken = await getYouTubeAccountAccessToken(account.id, "https://www.googleapis.com/auth/youtube.upload");
+    const accessToken = await this.accessTokenForAccount(account.id, "https://www.googleapis.com/auth/youtube.upload");
     const videoAsset = input.media.find((asset) => asset.mimeType.startsWith("video/"))!;
     const videoStream = await this.fetchMediaStream(videoAsset);
     const metadata = this.buildVideoMetadata(input);
-    const uploadUrl = await this.createUploadSession(account.id, accessToken, videoAsset, videoAsset.sizeBytes, metadata);
-    const payload = await this.uploadVideo(account.id, accessToken, uploadUrl, videoAsset, videoStream);
+    const session = await this.createUploadSession(account.id, accessToken, videoAsset, videoAsset.sizeBytes, metadata);
+    const payload = await this.uploadVideo(account.id, session.accessToken, session.uploadUrl, videoAsset, videoStream);
 
     return {
       providerPostId: payload.id!,
@@ -116,8 +118,9 @@ export class YouTubePublisher implements SocialPublisher {
     accessToken: string,
     media: PublishMediaAsset,
     contentLength: number,
-    metadata: Prisma.InputJsonObject
-  ) {
+    metadata: Prisma.InputJsonObject,
+    canRetryInvalidToken = true
+  ): Promise<{ uploadUrl: string; accessToken: string }> {
     const response = await fetch(
       "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",
       {
@@ -136,6 +139,17 @@ export class YouTubePublisher implements SocialPublisher {
 
     if (!response.ok || !location) {
       const payload = (await response.json().catch(() => null)) as YouTubeVideoResponse | null;
+      if (canRetryInvalidToken && response.status === 401) {
+        const renewedToken = await this.accessTokenForAccount(
+          accountId,
+          "https://www.googleapis.com/auth/youtube.upload",
+          Number.POSITIVE_INFINITY,
+          accessToken
+        );
+        if (renewedToken !== accessToken) {
+          return this.createUploadSession(accountId, renewedToken, media, contentLength, metadata, false);
+        }
+      }
       const failure = classifyYouTubeFailure(response.status, payload?.error?.errors?.[0]?.reason);
       if (failure === "authorization_invalid" || failure === "permission_missing") {
         await markYouTubeAccountStatus(accountId, failure, accessToken);
@@ -144,7 +158,7 @@ export class YouTubePublisher implements SocialPublisher {
       throw new Error(`YouTube upload session failed: ${message}`);
     }
 
-    return location;
+    return { uploadUrl: location, accessToken };
   }
 
   private async uploadVideo(accountId: string, accessToken: string, uploadUrl: string, media: PublishMediaAsset, videoStream: ReadableStream<Uint8Array>) {
@@ -165,7 +179,7 @@ export class YouTubePublisher implements SocialPublisher {
     const payload = (await response.json().catch(() => null)) as YouTubeVideoResponse | null;
 
     if (!response.ok || !payload?.id) {
-      if (response.status >= 500 || !payload?.error?.errors?.[0]?.reason) {
+      if (response.status === 401 || response.status >= 500 || !payload?.error?.errors?.[0]?.reason) {
         throw new PublishOutcomeUnknownError("YouTube");
       }
       const failure = classifyYouTubeFailure(response.status, payload?.error?.errors?.[0]?.reason);

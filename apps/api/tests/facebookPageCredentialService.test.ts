@@ -79,3 +79,11 @@ test("an incomplete successful debugger response preserves the existing connecti
     assert.equal(result.kind, "temporary_failure");
   }
 });
+
+test("explicit Meta invalidity remains definitive even when optional debug fields are absent", async () => {
+  const result = await checkFacebookPageCredential({
+    pageId: "123", pageToken: "page-token", appId: "app", appSecret: "secret",
+    fetcher: async () => Response.json({ data: { is_valid: false } })
+  });
+  assert.deepEqual(result, { kind: "authorization_invalid" });
+});
