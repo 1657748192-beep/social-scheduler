@@ -1,7 +1,8 @@
 import type { Platform } from "@prisma/client";
 import { prisma } from "../../prisma";
-import { decryptToken } from "../../utils/tokenCrypto";
 import type { PublishInput, PublishMediaAsset, PublishResult, SocialPublisher } from "./socialPublisher";
+import { getFacebookPageAccessToken, markFacebookPageAccountStatus } from "./facebookPageCredentialService";
+import { classifyFacebookPageFailure } from "./facebookPageValidation";
 
 type FacebookPostResponse = {
   id?: string;
@@ -70,7 +71,7 @@ export class FacebookPagePublisher implements SocialPublisher {
       );
     }
 
-    const pageAccessToken = decryptToken(account.credential.accessTokenEncrypted);
+    const pageAccessToken = await getFacebookPageAccessToken(account.id);
     const imageAssets = input.media.filter((asset) => asset.mimeType.startsWith("image/"));
     const videoAsset = input.media.find((asset) => asset.mimeType.startsWith("video/"));
 
@@ -99,22 +100,16 @@ export class FacebookPagePublisher implements SocialPublisher {
       access_token: pageAccessToken
     });
 
-    const response = await fetch(
+    const payload = await this.postToFacebook(
+      account.id,
+      pageAccessToken,
       `https://graph.facebook.com/v20.0/${account.providerAccountId}/feed`,
-      {
-        method: "POST",
-        body
-      }
+      body,
+      "Facebook publish failed"
     );
-    const payload = (await response.json().catch(() => null)) as FacebookPostResponse | null;
-
-    if (!response.ok || !payload?.id) {
-      const message = payload?.error?.message ?? response.statusText;
-      throw new Error(`Facebook publish failed: ${message}`);
-    }
 
     return {
-      providerPostId: payload.id,
+      providerPostId: payload.id!,
       providerPermalink: `https://www.facebook.com/${payload.id}`,
       rawResponse: {
         platform: "facebook",
@@ -141,6 +136,8 @@ export class FacebookPagePublisher implements SocialPublisher {
     }
 
     const payload = await this.postToFacebook(
+      account.id,
+      pageAccessToken,
       `https://graph.facebook.com/v20.0/${account.providerAccountId}/photos`,
       body,
       "Facebook photo publish failed"
@@ -176,6 +173,8 @@ export class FacebookPagePublisher implements SocialPublisher {
       });
 
       const photoPayload = await this.postToFacebook(
+        account.id,
+        pageAccessToken,
         `https://graph.facebook.com/v20.0/${account.providerAccountId}/photos`,
         photoBody,
         "Facebook photo upload failed"
@@ -194,6 +193,8 @@ export class FacebookPagePublisher implements SocialPublisher {
     });
 
     const feedPayload = await this.postToFacebook(
+      account.id,
+      pageAccessToken,
       `https://graph.facebook.com/v20.0/${account.providerAccountId}/feed`,
       feedBody,
       "Facebook multi-photo publish failed"
@@ -230,6 +231,8 @@ export class FacebookPagePublisher implements SocialPublisher {
     }
 
     const payload = await this.postToFacebook(
+      account.id,
+      pageAccessToken,
       `https://graph.facebook.com/v20.0/${account.providerAccountId}/videos`,
       body,
       "Facebook video publish failed"
@@ -250,6 +253,8 @@ export class FacebookPagePublisher implements SocialPublisher {
   }
 
   private async postToFacebook(
+    accountId: string,
+    pageAccessToken: string,
     url: string,
     body: URLSearchParams,
     errorPrefix: string
@@ -261,8 +266,11 @@ export class FacebookPagePublisher implements SocialPublisher {
     const payload = (await response.json().catch(() => null)) as FacebookPostResponse | null;
 
     if (!response.ok || !payload?.id) {
-      const message = payload?.error?.message ?? response.statusText;
-      throw new Error(`${errorPrefix}: ${message}`);
+      const kind = classifyFacebookPageFailure(response.status, payload?.error?.code);
+      if (kind === "authorization_invalid" || kind === "permission_missing") {
+        await markFacebookPageAccountStatus(accountId, kind, pageAccessToken);
+      }
+      throw new Error(`${errorPrefix}: Graph API returned ${payload?.error?.code ?? response.status} (${kind}).`);
     }
 
     return payload;
