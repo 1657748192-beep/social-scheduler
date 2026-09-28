@@ -24,7 +24,7 @@ export type ProductPostContent = {
   variantWebsiteModes: Record<ComposerPlatform, WebsiteMode>;
 };
 
-export function buildProductPostTemplate(input: ProductPostTemplateInput, locale: AppLocale): ProductPostTemplate {
+export function buildProductPostTemplate(input: ProductPostTemplateInput, _locale: AppLocale): ProductPostTemplate {
   const name = input.name.trim().replace(/\s+/g, " ");
   const price = input.price.trim();
   const highlights = input.highlights.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
@@ -46,14 +46,14 @@ export function buildProductPostTemplate(input: ProductPostTemplateInput, locale
 
   const baseText = [
     name,
-    price ? `${locale === "en" ? "Price: " : "价格："}${price}` : "",
+    price ? `Price: ${price}` : "",
     ...highlights.map((highlight) => `• ${highlight}`)
   ].filter(Boolean).join("\n");
 
   return {
     baseText,
-    instagramText: `${baseText}\n\n${locale === "en" ? "Visit the link in our profile to shop." : "查看主页链接购买。"}`,
-    facebookText: productUrl ? `${baseText}\n\n${locale === "en" ? "Open the product link below for details." : "点击下方商品链接查看详情。"}` : baseText,
+    instagramText: `${baseText}\n\nVisit the link in our profile to shop.`,
+    facebookText: productUrl ? `${baseText}\n\nOpen the product link below for details.` : baseText,
     productUrl
   };
 }

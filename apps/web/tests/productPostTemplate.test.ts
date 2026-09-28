@@ -38,9 +38,9 @@ const product = {
 test("builds simple product copy without adding a fake Instagram shopping link", () => {
   const result = buildProductPostTemplate(product, "zh-CN");
 
-  assert.equal(result.baseText, "轻便通勤包\n价格：$39.90\n• 轻量\n• 防泼水");
-  assert.equal(result.instagramText, "轻便通勤包\n价格：$39.90\n• 轻量\n• 防泼水\n\n查看主页链接购买。");
-  assert.equal(result.facebookText, "轻便通勤包\n价格：$39.90\n• 轻量\n• 防泼水\n\n点击下方商品链接查看详情。");
+  assert.equal(result.baseText, "轻便通勤包\nPrice: $39.90\n• 轻量\n• 防泼水");
+  assert.equal(result.instagramText, "轻便通勤包\nPrice: $39.90\n• 轻量\n• 防泼水\n\nVisit the link in our profile to shop.");
+  assert.equal(result.facebookText, "轻便通勤包\nPrice: $39.90\n• 轻量\n• 防泼水\n\nOpen the product link below for details.");
   assert.equal(result.productUrl, "https://shop.example.com/products/city-bag");
   assert.doesNotMatch(result.instagramText, /shop\.example\.com/);
 });
@@ -51,6 +51,20 @@ test("uses English template labels in the English editor", () => {
   assert.match(result.instagramText, /Price: \$39\.90/);
   assert.match(result.instagramText, /Visit the link in our profile to shop\./);
   assert.match(result.facebookText, /Open the product link below for details\./);
+});
+
+test("uses English-generated copy in the Chinese editor", () => {
+  const result = buildProductPostTemplate({
+    name: "MO OYAM BEE VENOM ANTI-WRINKLE EYE CREAM",
+    price: "$0.43",
+    highlights: "1.20g\nInfused with natural bee venom",
+    productUrl: "https://shop.example.com/products/eye-cream"
+  }, "zh-CN");
+
+  assert.equal(result.baseText, "MO OYAM BEE VENOM ANTI-WRINKLE EYE CREAM\nPrice: $0.43\n• 1.20g\n• Infused with natural bee venom");
+  assert.equal(result.instagramText, `${result.baseText}\n\nVisit the link in our profile to shop.`);
+  assert.equal(result.facebookText, `${result.baseText}\n\nOpen the product link below for details.`);
+  assert.doesNotMatch(result.instagramText + result.facebookText, /[\u3400-\u9fff]/);
 });
 
 test("allows a product post without a store URL and omits the Facebook link prompt", () => {
