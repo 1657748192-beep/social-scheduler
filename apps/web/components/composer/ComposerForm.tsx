@@ -26,6 +26,8 @@ import {
 import { PlatformTabs } from "./PlatformTabs";
 import { PinterestPinSettings, type PinterestPinSettingsValue } from "./PinterestPinSettings";
 import { PostPreview } from "./PostPreview";
+import { ProductPostTemplatePicker } from "./ProductPostTemplatePicker";
+import { applyProductPostTemplate, wouldOverwriteProductContent, type ProductPostTemplate } from "./productPostTemplate";
 import { SchedulePicker } from "./SchedulePicker";
 import { TextInsertToolbar } from "./TextInsertToolbar";
 import { TikTokPublishSettings, type TikTokPublishSettingsValue } from "./TikTokPublishSettings";
@@ -132,7 +134,7 @@ function isReusableMediaAsset(asset: MediaAsset) {
 }
 
 export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initialWorkspaceId }: ComposerFormProps) {
-  const { t } = useLanguage();
+  const { locale, t } = useLanguage();
   const [workspaceId, setWorkspaceId] = useState("");
   const [title, setTitle] = useState("");
   const [baseText, setBaseText] = useState("");
@@ -663,6 +665,22 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
     });
   }
 
+  function applySelectedProductTemplate(template: ProductPostTemplate) {
+    const current = { baseText, baseWebsite, variantTexts, variantWebsites, variantWebsiteModes };
+    if (wouldOverwriteProductContent(current, selectedPlatforms) && !window.confirm(t(
+      "套用商品模板会覆盖当前基础文案和已选平台的文案或链接，确定继续吗？",
+      "Applying the product template will replace base copy and selected platform copy or links. Continue?"
+    ))) return;
+
+    const next = applyProductPostTemplate(current, template, selectedPlatforms);
+    setBaseText(next.baseText);
+    setVariantTexts(next.variantTexts);
+    setVariantWebsites(next.variantWebsites);
+    setVariantWebsiteModes(next.variantWebsiteModes);
+    setError(null);
+    setCopyNotice(t("商品图文模板已套用，请检查图片、文案和主页链接后再发布。", "Product copy applied. Check the image, copy, and profile link before publishing."));
+  }
+
   function customizePlatformMedia() {
     setPlatformMediaByPlatform((current) => ({
       ...current,
@@ -908,6 +926,12 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
           onToggleAccount={toggleAccount}
           onToggleAll={toggleAllAccounts}
           selectedAccountIds={selectedAccountIds}
+        />
+
+        <ProductPostTemplatePicker
+          locale={locale}
+          onApply={applySelectedProductTemplate}
+          selectedPlatforms={selectedPlatforms}
         />
 
         <section className="composer-panel composer-head content-editor-panel">
