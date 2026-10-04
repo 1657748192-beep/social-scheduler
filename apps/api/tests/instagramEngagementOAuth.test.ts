@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   buildInstagramEngagementScopes,
+  parseInstagramGrantedScopes,
   validateInstagramEngagementReauthorization
 } from "../src/integrations/oauth/instagramEngagementOAuth";
 
@@ -66,6 +67,21 @@ test("accepts reauthorization only for the same Instagram account and when prior
     }),
     { accepted: false, reason: "publishing_scope_missing" }
   );
+});
+
+test("reads Meta's actual granted Instagram permissions instead of assuming every requested scope was accepted", () => {
+  assert.deepEqual(parseInstagramGrantedScopes({
+    access_token: "short-token",
+    permissions: "instagram_business_basic,instagram_business_content_publish,instagram_business_manage_comments"
+  }), [
+    "instagram_business_basic",
+    "instagram_business_content_publish",
+    "instagram_business_manage_comments"
+  ]);
+  assert.deepEqual(parseInstagramGrantedScopes({
+    permissions: ["instagram_business_basic", "instagram_business_manage_messages"]
+  }), ["instagram_business_basic", "instagram_business_manage_messages"]);
+  assert.equal(parseInstagramGrantedScopes({ access_token: "token" }), null);
 });
 
 test("deployment preserves configured Instagram scopes and does not modify Facebook scopes", () => {

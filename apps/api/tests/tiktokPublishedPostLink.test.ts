@@ -17,7 +17,7 @@ test("uses the creator username for a safe TikTok profile fallback", () => {
 });
 
 test("passes the TikTok profile fallback through to both publishing history views", () => {
-  const scheduleService = readFileSync("src/services/scheduleService.ts", "utf8");
+  const scheduleService = readFileSync("apps/api/src/services/scheduleService.ts", "utf8");
   const calendarDetail = readFileSync("../../apps/web/components/calendar/ScheduleDetailPanel.tsx", "utf8");
   const postManager = readFileSync("../../apps/web/components/posts/PublishedPostManager.tsx", "utf8");
 

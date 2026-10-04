@@ -10,6 +10,7 @@ import {
 } from "../integrations/oauth/oauthProviders";
 import {
   buildInstagramEngagementScopes,
+  parseInstagramGrantedScopes,
   validateInstagramEngagementReauthorization
 } from "../integrations/oauth/instagramEngagementOAuth";
 import { PinterestPublisher } from "../integrations/social/pinterestPublisher";
@@ -38,6 +39,7 @@ type TokenResponse = {
   access_token: string;
   refresh_token?: string;
   token_type?: string;
+  permissions?: string | string[];
   expires_in?: number;
   refresh_expires_in?: number;
   refresh_token_expires_in?: number;
@@ -545,7 +547,10 @@ export async function completeOAuth(platformParam: string, code: string, state: 
       "Facebook Page was not returned. Confirm the user is a Page admin, allow pages_show_list/pages_read_engagement/pages_manage_posts/pages_manage_metadata, then authorize again."
     );
   }
-  const scopes = parseScopes(credentialTokenResponse, oauthState.scopes);
+  const actualInstagramScopes = provider.platform === "instagram"
+    ? parseInstagramGrantedScopes(tokenResponse)
+    : null;
+  const scopes = actualInstagramScopes ?? parseScopes(credentialTokenResponse, oauthState.scopes);
   const engagementAccountId = oauthState.instagramEngagementSocialAccountId;
   const engagementAccount = engagementAccountId
     ? await prisma.socialAccount.findFirst({
@@ -554,6 +559,10 @@ export async function completeOAuth(platformParam: string, code: string, state: 
       })
     : null;
   if (engagementAccountId) {
+    if (!actualInstagramScopes) {
+      await prisma.oauthState.delete({ where: { id: oauthState.id } }).catch(() => null);
+      throw new HttpError(400, "Instagram did not return the granted permissions; the existing connection was not changed.");
+    }
     const validation = engagementAccount?.credential
       ? validateInstagramEngagementReauthorization({
           expectedProviderAccountId: engagementAccount.providerAccountId,
