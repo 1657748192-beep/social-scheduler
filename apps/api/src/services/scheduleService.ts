@@ -79,7 +79,8 @@ const publishedPostInclude = {
           id: true,
           displayName: true,
           platform: true,
-          avatarUrl: true
+          avatarUrl: true,
+          credential: { select: { scopes: true } }
         }
       },
       media: {
@@ -340,6 +341,9 @@ export async function listPublishedPosts(userId: string, workspaceId: string) {
 
   return schedules.map((schedule) => {
     const publishJob = schedule.publishJobs[0];
+    const connectedAccount = schedule.postVariant.socialAccount;
+    const scopes = connectedAccount?.credential?.scopes ?? [];
+    const providerPostId = publishJob?.providerPostId ?? null;
     const publishedAt = publishJob?.updatedAt ?? schedule.updatedAt;
     const mediaReuseExpiresAt = schedule.postVariant.media.length
       ? new Date(
@@ -357,7 +361,21 @@ export async function listPublishedPosts(userId: string, workspaceId: string) {
       mediaReuseExpiresAt,
       platform: schedule.postVariant.platform,
       text: schedule.postVariant.text,
-      socialAccount: schedule.postVariant.socialAccount,
+      socialAccount: connectedAccount ? {
+        id: connectedAccount.id,
+        displayName: connectedAccount.displayName,
+        platform: connectedAccount.platform,
+        avatarUrl: connectedAccount.avatarUrl
+      } : null,
+      providerPostId: schedule.postVariant.platform === "instagram" ? providerPostId : null,
+      instagramEngagement: schedule.postVariant.platform === "instagram" ? {
+        readPostActivity: scopes.includes("instagram_business_basic"),
+        readComments: scopes.includes("instagram_business_basic") && scopes.includes("instagram_business_manage_comments"),
+        replyToComments: scopes.includes("instagram_business_manage_comments"),
+        privateReply: scopes.includes("instagram_business_manage_comments") && scopes.includes("instagram_business_manage_messages"),
+        inbox: scopes.includes("instagram_business_manage_messages"),
+        webhookConfigured: Boolean(config.INSTAGRAM_WEBHOOK_VERIFY_TOKEN && config.INSTAGRAM_CLIENT_SECRET)
+      } : null,
       media: schedule.postVariant.media.map((item) => ({
         ...item,
         mediaAsset: withResolvedMediaUrl(item.mediaAsset)

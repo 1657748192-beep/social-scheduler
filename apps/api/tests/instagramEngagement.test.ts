@@ -68,6 +68,33 @@ test("sends public comment replies as form data and private replies or DMs as ex
   });
 });
 
+test("fetches comment ownership and conversation participants from Meta before accepting caller-supplied IDs", async () => {
+  const calls: URL[] = [];
+  const client = createInstagramEngagementClient({
+    accessToken: "secret-token",
+    instagramAccountId: "ig-account",
+    apiVersion: "v26.0",
+    fetcher: async (input) => {
+      const url = new URL(String(input));
+      calls.push(url);
+      return calls.length === 1
+        ? response({ id: "comment-1", media: { id: "media-1" }, timestamp: "2026-10-01T00:00:00Z" })
+        : response({ id: "conversation-1", participants: { data: [{ id: "ig-account" }, { id: "user-1" }] } });
+    }
+  });
+
+  assert.deepEqual(await client.getComment("comment-1"), {
+    id: "comment-1", mediaId: "media-1", timestamp: "2026-10-01T00:00:00Z"
+  });
+  assert.deepEqual(await client.getConversation("conversation-1"), {
+    id: "conversation-1", participantIds: ["ig-account", "user-1"]
+  });
+  assert.equal(calls[0].pathname, "/v26.0/comment-1");
+  assert.equal(calls[0].searchParams.get("fields"), "id,media,timestamp");
+  assert.equal(calls[1].pathname, "/v26.0/conversation-1");
+  assert.equal(calls[1].searchParams.get("fields"), "id,participants");
+});
+
 test("reads conversations and messages without persisting or rewriting Meta payload text", async () => {
   const calls: URL[] = [];
   const client = createInstagramEngagementClient({

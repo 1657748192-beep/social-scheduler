@@ -10,6 +10,7 @@ import { authRoutes } from "./routes/authRoutes";
 import { composerRoutes } from "./routes/composerRoutes";
 import { healthRoutes } from "./routes/healthRoutes";
 import { createInstagramWebhookRouter } from "./routes/instagramWebhookRoutes";
+import { instagramEngagementRoutes } from "./routes/instagramEngagementRoutes";
 import { scheduleRoutes } from "./routes/scheduleRoutes";
 import { socialAccountRoutes } from "./routes/socialAccountRoutes";
 import { workspaceRoutes } from "./routes/workspaceRoutes";
@@ -42,6 +43,7 @@ export function createApp() {
   app.use("/api/v1", socialAccountRoutes);
   app.use("/api/v1", composerRoutes);
   app.use("/api/v1", scheduleRoutes);
+  app.use("/api/v1", instagramEngagementRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

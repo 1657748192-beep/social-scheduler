@@ -178,6 +178,23 @@ export function createInstagramEngagementClient(input: {
       return connection(payload);
     },
 
+    async getComment(commentId: string) {
+      const payload = await request<{ id?: string; media?: string | { id?: string }; timestamp?: string }>(
+        requiredId(commentId, "commentId"),
+        { query: { fields: "id,media,timestamp" } }
+      );
+      const mediaId = typeof payload.media === "string"
+        ? payload.media
+        : payload.media && typeof payload.media.id === "string"
+          ? payload.media.id
+          : undefined;
+      return {
+        id: requiredId(payload.id, "id"),
+        mediaId: requiredId(mediaId, "mediaId"),
+        timestamp: typeof payload.timestamp === "string" ? payload.timestamp : ""
+      };
+    },
+
     async replyToComment(commentId: string, message: string) {
       const payload = await request<{ id?: string }>(
         `${requiredId(commentId, "commentId")}/replies`,
@@ -199,6 +216,22 @@ export function createInstagramEngagementClient(input: {
         query: { platform: "instagram", fields: "id,updated_time,participants", ...pageQuery(options) }
       });
       return connection(payload);
+    },
+
+    async getConversation(conversationId: string) {
+      const payload = await request<{ id?: string; participants?: { data?: Array<{ id?: string }> } | Array<{ id?: string }> }>(
+        requiredId(conversationId, "conversationId"),
+        { query: { fields: "id,participants" } }
+      );
+      const participants = Array.isArray(payload.participants)
+        ? payload.participants
+        : payload.participants?.data ?? [];
+      return {
+        id: requiredId(payload.id, "id"),
+        participantIds: participants
+          .map((participant) => participant.id)
+          .filter((id): id is string => typeof id === "string" && Boolean(id))
+      };
     },
 
     async listMessages(conversationId: string, options?: { after?: string; limit?: number }) {
