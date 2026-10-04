@@ -100,7 +100,7 @@ function safeProviderError(error: unknown): never {
   if (error && typeof error === "object" && "kind" in error) {
     const kind = (error as { kind?: string }).kind;
     if (kind === "permission_missing") throw new HttpError(403, "Instagram permission is missing.");
-    if (kind === "authorization_invalid") throw new HttpError(401, "Instagram authorization is invalid. Reconnect this account.");
+    if (kind === "authorization_invalid") throw new HttpError(409, "Instagram authorization is invalid. Reconnect this account.");
     if (kind === "window_expired") throw new HttpError(400, "The Instagram reply window has expired.");
     if (kind === "rate_limited") throw new HttpError(429, "Instagram is rate limiting requests. Try again later.");
     throw new HttpError(502, "Instagram is temporarily unavailable. Try again later.");

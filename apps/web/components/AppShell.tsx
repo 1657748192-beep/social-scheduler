@@ -27,7 +27,8 @@ const navItems = [
   { href: "/composer", label: ["内容编辑", "Content editor"], helper: ["文案与素材", "Copy and media"] },
   { href: "/drafts", label: ["草稿箱", "Drafts"], helper: ["72 小时自动清理", "Auto-cleared after 72 hours"] },
   { href: "/calendar", label: ["排程日历", "Content calendar"], helper: ["周/月计划", "Weekly and monthly planning"] },
-  { href: "/posts", label: ["帖子管理", "Post manager"], helper: ["已发布与复用", "Published posts and reuse"] }
+  { href: "/posts", label: ["帖子管理", "Post manager"], helper: ["已发布与复用", "Published posts and reuse"] },
+  { href: "/inbox", label: ["Instagram 收件箱", "Instagram inbox"], helper: ["查看消息并手动回复", "Review messages and reply manually"] }
 ] as const;
 
 type SidebarProvider = Pick<

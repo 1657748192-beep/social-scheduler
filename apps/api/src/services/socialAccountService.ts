@@ -762,7 +762,7 @@ export async function completeOAuth(platformParam: string, code: string, state: 
 export async function listSocialAccounts(userId: string, workspaceId: string) {
   await requireWorkspaceMembership(userId, workspaceId);
 
-  return prisma.socialAccount.findMany({
+  const accounts = await prisma.socialAccount.findMany({
     where: {
       workspaceId
     },
@@ -788,6 +788,27 @@ export async function listSocialAccounts(userId: string, workspaceId: string) {
     orderBy: {
       createdAt: "desc"
     }
+  });
+
+  return accounts.map((account) => {
+    const currentCapabilities =
+      typeof account.capabilities === "object" && account.capabilities !== null && !Array.isArray(account.capabilities)
+        ? account.capabilities as Record<string, unknown>
+        : {};
+    const scopes = account.credential?.scopes ?? [];
+    return {
+      ...account,
+      capabilities: {
+        ...currentCapabilities,
+        ...(account.platform === "instagram" ? {
+          instagramEngagement: {
+            manageComments: scopes.includes("instagram_business_manage_comments"),
+            manageMessages: scopes.includes("instagram_business_manage_messages"),
+            webhookConfigured: Boolean(config.INSTAGRAM_WEBHOOK_VERIFY_TOKEN && config.INSTAGRAM_CLIENT_SECRET)
+          }
+        } : {})
+      }
+    };
   });
 }
 

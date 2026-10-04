@@ -1,0 +1,73 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+import * as React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+
+const manager = readFileSync(new URL("../components/posts/PublishedPostManager.tsx", import.meta.url), "utf8");
+const types = readFileSync(new URL("../lib/api.ts", import.meta.url), "utf8");
+
+test("published-post interaction UI is limited to Social Scheduler's own Instagram publication records", () => {
+  assert.match(manager, /post\.platform\s*===\s*"instagram"/);
+  assert.match(manager, /post\.providerPostId/);
+  assert.match(manager, /instagram\/posts/);
+  assert.doesNotMatch(manager, /facebook.*comments|comments.*facebook/i);
+});
+
+test("post interaction UI loads on expansion, paginates, refreshes, and requires explicit manual sends", () => {
+  assert.match(manager, /查看互动|View activity/);
+  assert.match(manager, /postPath}\/metrics/);
+  assert.match(manager, /postPath}\/comments/);
+  assert.match(manager, /private-replies/);
+  assert.match(manager, /window\.confirm/);
+  assert.match(manager, /nextCursor/);
+  assert.match(manager, /onClick=[\s\S]*(?:send|reply)|onClick=/);
+  assert.doesNotMatch(manager, /localStorage\.(?:setItem|getItem)[\s\S]*?(?:comment|message)/i);
+  assert.match(manager, /需要重新授权|Reauthorize/);
+  assert.match(manager, /Webhook.*(?:未配置|not configured)/i);
+  assert.match(manager, /24 小时|24-hour/);
+});
+
+test("published-post API types expose scoped engagement capability metadata without leaking scope arrays", () => {
+  assert.match(types, /instagramEngagement\??:/);
+  assert.match(types, /replyToComments/);
+  assert.match(types, /privateReply/);
+  assert.match(types, /providerPostId\??:/);
+});
+
+test("Instagram interaction panel starts collapsed and does not fetch or render private comment data until opened", async () => {
+  (globalThis as typeof globalThis & { React?: typeof React }).React = React;
+  const { LanguageProvider } = await import("../components/LanguageProvider");
+  const { InstagramPostEngagementPanel } = await import("../components/posts/PublishedPostManager");
+  const html = renderToStaticMarkup(
+    React.createElement(LanguageProvider, null,
+      React.createElement(InstagramPostEngagementPanel, {
+        token: "test-token",
+        workspaceId: "workspace-1",
+        role: "viewer",
+        post: {
+          id: "schedule-1",
+          postId: "post-1",
+          baseText: "Published text",
+          scheduledAt: "2026-10-01T00:00:00Z",
+          publishedAt: "2026-10-01T00:00:00Z",
+          platform: "instagram",
+          text: "Published text",
+          providerPostId: "provider-media-1",
+          instagramEngagement: {
+            readPostActivity: true,
+            readComments: true,
+            replyToComments: true,
+            privateReply: true,
+            inbox: true,
+            webhookConfigured: true
+          },
+          media: []
+        }
+      })
+    )
+  );
+  assert.match(html, /查看互动/);
+  assert.match(html, /aria-expanded="false"/);
+  assert.doesNotMatch(html, /Published comment body|private reply/);
+});

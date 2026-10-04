@@ -5,6 +5,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   apiRequest,
   type ComposerPlatform,
+  type InstagramComment,
+  type InstagramConnection,
+  type InstagramPostMetrics,
   type PublishedPost,
   type Workspace
 } from "../../lib/api";
@@ -26,6 +29,197 @@ const platformLabels: Record<string, string> = {
   pinterest: "Pinterest",
   x: "Twitter / X"
 };
+
+function instagramErrorMessage(error: unknown, t: (chinese: string, english: string) => string) {
+  const message = error instanceof Error ? error.message : "";
+  if (/permission is missing|permission_missing/i.test(message)) return t("互动权限未开通，请重新授权 Instagram。", "Instagram interaction permissions are missing. Reauthorize Instagram.");
+  if (/authorization is invalid|authorization_invalid/i.test(message)) return t("Instagram 授权已失效，请重新连接账号。", "Instagram authorization is invalid. Reconnect the account.");
+  if (/window has expired|window.*expired|24-hour/i.test(message)) return t("回复窗口已过期，无法发送。", "The reply window has expired. This message cannot be sent.");
+  if (/already attempted/i.test(message)) return t("此评论已尝试过私密回复，不能重复发送。", "A private reply was already attempted for this comment and cannot be sent again.");
+  if (/rate limit/i.test(message)) return t("Instagram 请求过于频繁，请稍后重试。", "Instagram is rate limiting requests. Try again later.");
+  if (message) return message;
+  return t("Instagram 暂时不可用，请稍后重试。", "Instagram is temporarily unavailable. Try again later.");
+}
+
+type InstagramPostEngagementPanelProps = {
+  token: string;
+  workspaceId: string;
+  post: PublishedPost;
+  role: Workspace["role"];
+};
+
+export function InstagramPostEngagementPanel({ token, workspaceId, post, role }: InstagramPostEngagementPanelProps) {
+  const { t } = useLanguage();
+  const [expanded, setExpanded] = useState(false);
+  const [metrics, setMetrics] = useState<InstagramPostMetrics | null>(null);
+  const [comments, setComments] = useState<InstagramComment[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [replyTarget, setReplyTarget] = useState<{ commentId: string; mode: "public" | "private" } | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [sending, setSending] = useState(false);
+  const permissions = post.instagramEngagement;
+  const canReply = role !== "viewer";
+  const canReauthorize = role === "owner" || role === "admin";
+  const postPath = `/workspaces/${encodeURIComponent(workspaceId)}/instagram/posts/${encodeURIComponent(post.id)}`;
+
+  async function loadInitial() {
+    setLoading(true);
+    setError(null);
+    try {
+      const metricsRequest = permissions?.readPostActivity
+        ? apiRequest<InstagramPostMetrics>(`${postPath}/metrics`, { token })
+        : Promise.resolve(null);
+      const commentsRequest = permissions?.readComments
+        ? apiRequest<InstagramConnection<InstagramComment>>(`${postPath}/comments?limit=25`, { token })
+        : Promise.resolve(null);
+      const [metricsResult, commentsResult] = await Promise.all([metricsRequest, commentsRequest]);
+      setMetrics(metricsResult);
+      setComments(commentsResult?.items ?? []);
+      setNextCursor(commentsResult?.nextCursor ?? null);
+      if (!permissions?.readPostActivity || !permissions.readComments) {
+        setError(t("查看评论的权限尚未开通；帖子发布仍可正常使用。", "Comment access is not enabled yet; publishing remains available."));
+      }
+    } catch (requestError) {
+      setError(instagramErrorMessage(requestError, t));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadMore() {
+    if (!nextCursor) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const query = new URLSearchParams({ after: nextCursor, limit: "25" });
+      const result = await apiRequest<InstagramConnection<InstagramComment>>(`${postPath}/comments?${query}`, { token });
+      setComments((current) => [...current, ...result.items]);
+      setNextCursor(result.nextCursor);
+    } catch (requestError) {
+      setError(instagramErrorMessage(requestError, t));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function sendReply() {
+    if (!replyTarget || !replyText.trim() || !canReply) return;
+    if (replyTarget.mode === "private" && !window.confirm(t(
+      "确认向该评论作者发送一次私密回复吗？它会发送到对方的 Instagram 收件箱，且每条评论只能尝试一次。",
+      "Send one private reply to this commenter? It will go to their Instagram inbox, and only one attempt is allowed per comment."
+    ))) return;
+    setSending(true);
+    setError(null);
+    try {
+      await apiRequest(`${postPath}/comments/${replyTarget.mode === "private" ? "private-replies" : "replies"}`, {
+        method: "POST",
+        token,
+        body: { commentId: replyTarget.commentId, message: replyText.trim() }
+      });
+      setReplyText("");
+      setReplyTarget(null);
+      await loadInitial();
+    } catch (requestError) {
+      setError(instagramErrorMessage(requestError, t));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function reauthorize() {
+    if (!post.socialAccount?.id || !canReauthorize) return;
+    try {
+      const response = await apiRequest<{ authorizationUrl: string }>(
+        `/workspaces/${encodeURIComponent(workspaceId)}/social-accounts/${encodeURIComponent(post.socialAccount.id)}/instagram-engagement/oauth/start`,
+        { method: "POST", token }
+      );
+      window.location.assign(response.authorizationUrl);
+    } catch (requestError) {
+      setError(instagramErrorMessage(requestError, t));
+    }
+  }
+
+  return (
+    <section className="instagram-engagement-panel">
+      <button
+        aria-expanded={expanded}
+        className="button secondary instagram-engagement-toggle"
+        onClick={() => {
+          const next = !expanded;
+          setExpanded(next);
+          if (next && !metrics && !comments.length) void loadInitial();
+        }}
+        type="button"
+      >
+        {expanded ? t("收起互动", "Hide activity") : t("查看互动", "View activity")}
+      </button>
+      {expanded ? (
+        <div className="instagram-engagement-content">
+          <div className="instagram-engagement-heading">
+            <strong>{t("Instagram 帖子互动", "Instagram post activity")}</strong>
+            <button className="button secondary" disabled={loading} onClick={() => void loadInitial()} type="button">
+              {loading ? t("正在刷新…", "Refreshing...") : t("刷新", "Refresh")}
+            </button>
+          </div>
+          {permissions?.webhookConfigured === false ? (
+            <p className="instagram-notice">{t("Webhook 未配置：实时通知暂不可用；仍可手动刷新查看。", "Webhook is not configured: live notifications are unavailable. You can still refresh manually.")}</p>
+          ) : null}
+          {!permissions?.readComments || !permissions?.readPostActivity ? (
+            <div className="instagram-notice">
+              <span>{t("互动权限待开通或需要重新授权；这不会影响原有帖子发布。", "Interaction permissions are pending or need reauthorization; existing publishing is unaffected.")}</span>
+              {canReauthorize ? <button className="button secondary" onClick={() => void reauthorize()} type="button">{t("重新授权 Instagram", "Reauthorize Instagram")}</button> : null}
+            </div>
+          ) : null}
+          {metrics ? (
+            <div className="instagram-metrics" aria-label={t("基础帖子数据", "Basic post metrics")}>
+              <span>♥ {metrics.likeCount} {t("赞", "likes")}</span>
+              <span>▢ {metrics.commentCount} {t("条评论", "comments")}</span>
+            </div>
+          ) : null}
+          {error ? <p className="error" role="alert">{error}</p> : null}
+          {loading && !comments.length ? <p className="muted">{t("正在读取评论…", "Loading comments...")}</p> : null}
+          <div className="instagram-comments-list">
+            {comments.map((comment) => (
+              <article className="instagram-comment" key={comment.id}>
+                <div className="instagram-comment-body">
+                  <strong>{comment.username || comment.from?.username || t("Instagram 用户", "Instagram user")}</strong>
+                  <p>{comment.text}</p>
+                  {comment.timestamp ? <time dateTime={comment.timestamp}>{new Date(comment.timestamp).toLocaleString()}</time> : null}
+                </div>
+                {canReply ? (
+                  <div className="instagram-comment-actions">
+                    {permissions?.replyToComments ? (
+                      <button className="button secondary" onClick={() => { setReplyTarget({ commentId: comment.id, mode: "public" }); setReplyText(""); }} type="button">{t("公开回复", "Public reply")}</button>
+                    ) : null}
+                    {permissions?.privateReply ? (
+                      <button className="button secondary" onClick={() => { setReplyTarget({ commentId: comment.id, mode: "private" }); setReplyText(""); }} type="button">{t("私密回复", "Private reply")}</button>
+                    ) : null}
+                  </div>
+                ) : <span className="muted">{t("仅可查看", "Read only")}</span>}
+                {replyTarget?.commentId === comment.id ? (
+                  <div className="instagram-reply-form">
+                    <label className="field">
+                      <span>{replyTarget.mode === "private" ? t("私密回复内容", "Private reply") : t("公开回复内容", "Public reply")}</span>
+                      <textarea maxLength={2000} onChange={(event) => setReplyText(event.target.value)} value={replyText} />
+                    </label>
+                    {replyTarget.mode === "private" ? <p className="muted">{t("将发送到对方收件箱；每条评论只能尝试一次，且须在 7 天内发送。", "Sent to the recipient's inbox; one attempt per comment, within 7 days.")}</p> : null}
+                    <button className="button" disabled={sending || !replyText.trim()} onClick={() => void sendReply()} type="button">
+                      {sending ? t("正在发送…", "Sending...") : t("发送回复", "Send reply")}
+                    </button>
+                  </div>
+                ) : null}
+              </article>
+            ))}
+          </div>
+          {nextCursor ? <button className="button secondary" disabled={loading} onClick={() => void loadMore()} type="button">{t("加载更多评论", "Load more comments")}</button> : null}
+          {!loading && permissions?.readComments && !comments.length ? <p className="muted">{t("暂无评论。", "No comments yet.")}</p> : null}
+        </div>
+      ) : null}
+    </section>
+  );
+}
 
 function getPostLabel(post: PublishedPost) {
   const value = post.title?.trim() || post.text.trim() || post.baseText.trim();
@@ -147,6 +341,7 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
     () => new Set(posts.map((post) => post.platform)).size,
     [posts]
   );
+  const workspaceRole = workspaces.find((workspace) => workspace.id === workspaceId)?.role ?? "viewer";
 
   return (
     <div className="post-manager-layout">
@@ -296,6 +491,9 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
                     </Link>
                   </div>
                 </div>
+                {post.platform === "instagram" && post.providerPostId && post.instagramEngagement ? (
+                  <InstagramPostEngagementPanel token={token} workspaceId={workspaceId} post={post} role={workspaceRole} />
+                ) : null}
               </div>
             </article>
           );

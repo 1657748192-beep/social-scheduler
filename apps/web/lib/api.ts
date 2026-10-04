@@ -225,6 +225,11 @@ export type SocialAccount = {
     oauth2?: boolean;
     scopes?: string[];
     pinterestApiEnvironment?: "production" | "sandbox";
+    instagramEngagement?: {
+      manageComments: boolean;
+      manageMessages: boolean;
+      webhookConfigured: boolean;
+    };
   };
   createdAt: string;
   credential?: {
@@ -380,6 +385,15 @@ export type PublishedPost = {
   mediaReuseExpiresAt?: string | null;
   platform: ComposerPlatform;
   text: string;
+  providerPostId?: string | null;
+  instagramEngagement?: {
+    readPostActivity: boolean;
+    readComments: boolean;
+    replyToComments: boolean;
+    privateReply: boolean;
+    inbox: boolean;
+    webhookConfigured: boolean;
+  } | null;
   socialAccount?: {
     id: string;
     displayName: string;
@@ -393,6 +407,37 @@ export type PublishedPost = {
   }>;
   providerPermalink?: string | null;
   providerProfilePermalink?: string | null;
+};
+
+export type InstagramPostMetrics = {
+  likeCount: number;
+  commentCount: number;
+};
+
+export type InstagramComment = {
+  id: string;
+  text: string;
+  username?: string;
+  timestamp?: string;
+  from?: { id?: string; username?: string };
+};
+
+export type InstagramConversation = {
+  id: string;
+  updated_time?: string;
+  participants?: { data?: Array<{ id?: string; username?: string }> };
+};
+
+export type InstagramMessage = {
+  id: string;
+  message?: string;
+  created_time?: string;
+  from?: { id?: string; username?: string };
+};
+
+export type InstagramConnection<T> = {
+  items: T[];
+  nextCursor: string | null;
 };
 
 export type CosUploadIntent = {
