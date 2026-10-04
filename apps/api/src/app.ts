@@ -9,6 +9,7 @@ import { adminRoutes } from "./routes/adminRoutes";
 import { authRoutes } from "./routes/authRoutes";
 import { composerRoutes } from "./routes/composerRoutes";
 import { healthRoutes } from "./routes/healthRoutes";
+import { createInstagramWebhookRouter } from "./routes/instagramWebhookRoutes";
 import { scheduleRoutes } from "./routes/scheduleRoutes";
 import { socialAccountRoutes } from "./routes/socialAccountRoutes";
 import { workspaceRoutes } from "./routes/workspaceRoutes";
@@ -21,6 +22,13 @@ export function createApp() {
     cors({
       origin: config.CORS_ORIGIN,
       credentials: true
+    })
+  );
+  app.use(
+    "/api/v1/webhooks/instagram",
+    createInstagramWebhookRouter({
+      verifyToken: config.INSTAGRAM_WEBHOOK_VERIFY_TOKEN,
+      appSecret: config.INSTAGRAM_CLIENT_SECRET
     })
   );
   app.use(express.json({ limit: "1mb" }));
