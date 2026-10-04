@@ -353,6 +353,7 @@ model PostVariant {
   id               String        @id @default(uuid()) @db.Uuid
   postId           String        @map("post_id") @db.Uuid
   socialAccountId  String?       @map("social_account_id") @db.Uuid
+  instagramProviderAccountId String? @map("instagram_provider_account_id")
   platform         Platform
   text             String
   linkUrl          String?       @map("link_url")

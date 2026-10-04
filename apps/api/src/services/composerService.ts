@@ -20,6 +20,7 @@ import {
 } from "./mediaStorageService";
 import { enqueuePublishJobs } from "./scheduleService";
 import { requireWorkspaceMembership, requireWorkspacePublishingAccess } from "./workspaceService";
+import { instagramProviderAccountSnapshot } from "./instagramPostAccountIdentity";
 
 const writableRoles: WorkspaceRole[] = ["owner", "admin", "editor"];
 const maxPostTargets = 50;
@@ -142,7 +143,7 @@ async function getReadyWorkspaceMediaById(workspaceId: string, mediaAssetIds: st
 async function assertVariantsTargetActiveWorkspaceAccounts(
   workspaceId: string,
   variants: z.infer<typeof variantSchema>[]
-) {
+): Promise<Map<string, { platform: string; providerAccountId: string }>> {
   const socialAccountIds = variants.map((variant) => variant.socialAccountId);
 
   if (new Set(socialAccountIds).size !== socialAccountIds.length) {
@@ -157,7 +158,8 @@ async function assertVariantsTargetActiveWorkspaceAccounts(
     },
     select: {
       id: true,
-      platform: true
+      platform: true,
+      providerAccountId: true
     }
   });
 
@@ -173,6 +175,8 @@ async function assertVariantsTargetActiveWorkspaceAccounts(
   if (mismatchedVariant) {
     throw new HttpError(400, "Selected social account does not match its post platform");
   }
+
+  return new Map(accounts.map((account) => [account.id, account]));
 }
 
 function assertVariantsSupportRealPublishing(variants: z.infer<typeof variantSchema>[]) {
@@ -241,7 +245,7 @@ export async function createComposerPost(
   ensureCanWrite(membership.role);
 
   const allMediaIds = input.variants.flatMap((variant) => variant.mediaAssetIds);
-  const [mediaById] = await Promise.all([
+  const [mediaById, accountsById] = await Promise.all([
     getReadyWorkspaceMediaById(workspaceId, allMediaIds),
     assertVariantsTargetActiveWorkspaceAccounts(workspaceId, input.variants)
   ]);
@@ -292,6 +296,10 @@ export async function createComposerPost(
         data: {
           postId: createdPost.id,
           socialAccountId: variant.socialAccountId,
+          instagramProviderAccountId: instagramProviderAccountSnapshot(
+            variant.platform,
+            accountsById.get(variant.socialAccountId)?.providerAccountId
+          ),
           platform: variant.platform,
           text: variant.text,
           platformPayload: variant.platformPayload as Prisma.InputJsonValue,
