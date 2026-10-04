@@ -55,6 +55,7 @@ const envSchema = z.object({
   FACEBOOK_OAUTH_SCOPES: z.string().optional().default("public_profile"),
   INSTAGRAM_CLIENT_ID: z.string().optional().default(""),
   INSTAGRAM_CLIENT_SECRET: z.string().optional().default(""),
+  INSTAGRAM_GRAPH_API_VERSION: z.string().regex(/^v\d+\.\d+$/).default("v26.0"),
   INSTAGRAM_WEBHOOK_VERIFY_TOKEN: z.string().optional().default(""),
   INSTAGRAM_OAUTH_SCOPES: z
     .string()

@@ -143,6 +143,8 @@ prepare_env() {
   ensure_env_value FACEBOOK_CLIENT_ID "${FACEBOOK_CLIENT_ID:-1743484710132300}"
   force_env_value FACEBOOK_OAUTH_SCOPES "public_profile,pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_metadata"
   ensure_env_value INSTAGRAM_OAUTH_SCOPES "${INSTAGRAM_OAUTH_SCOPES:-instagram_business_basic,instagram_business_content_publish}"
+  ensure_env_value INSTAGRAM_GRAPH_API_VERSION "${INSTAGRAM_GRAPH_API_VERSION:-v26.0}"
+  ensure_env_value INSTAGRAM_WEBHOOK_VERIFY_TOKEN "${INSTAGRAM_WEBHOOK_VERIFY_TOKEN:-$(random_hex 32)}"
   ensure_env_value TIKTOK_OAUTH_SCOPES "${TIKTOK_OAUTH_SCOPES:-user.info.basic}"
   ensure_env_value TIKTOK_DIRECT_POST_AUDITED "${TIKTOK_DIRECT_POST_AUDITED:-false}"
 

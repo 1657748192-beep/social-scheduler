@@ -226,6 +226,7 @@ model SocialAccount {
   credential        OauthCredential?
   postVariants      PostVariant[]
   instagramPrivateReplyAttempts InstagramPrivateReplyAttempt[]
+  instagramEngagementOAuthStates OauthState[] @relation("InstagramEngagementReauth")
 
   @@unique([workspaceId, platform, providerAccountId])
   @@map("social_accounts")
@@ -288,6 +289,7 @@ model OauthState {
   platform     Platform
   state        String    @unique
   authorizationLinkId String? @map("authorization_link_id") @db.Uuid
+  instagramEngagementSocialAccountId String? @map("instagram_engagement_social_account_id") @db.Uuid
   codeVerifier String?   @map("code_verifier")
   redirectUri  String    @map("redirect_uri")
   scopes       String[]
@@ -296,6 +298,7 @@ model OauthState {
   workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   authorizationLink OauthAuthorizationLink? @relation(fields: [authorizationLinkId], references: [id], onDelete: SetNull)
+  instagramEngagementSocialAccount SocialAccount? @relation("InstagramEngagementReauth", fields: [instagramEngagementSocialAccountId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId, platform, createdAt])
   @@index([expiresAt])

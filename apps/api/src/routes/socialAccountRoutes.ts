@@ -10,7 +10,8 @@ import {
   oauthCallbackController,
   oauthProviderStatusController,
   startSharedOAuthController,
-  startOAuthController
+  startOAuthController,
+  startInstagramEngagementOAuthController
 } from "../controllers/socialAccountController";
 import { requireAuth } from "../middleware/auth";
 import { asyncHandler } from "../utils/asyncHandler";
@@ -54,6 +55,11 @@ socialAccountRoutes.get(
   "/workspaces/:workspaceId/social-accounts/:socialAccountId/pinterest-boards",
   requireAuth,
   asyncHandler(getPinterestBoardsController)
+);
+socialAccountRoutes.post(
+  "/workspaces/:workspaceId/social-accounts/:socialAccountId/instagram-engagement/oauth/start",
+  requireAuth,
+  asyncHandler(startInstagramEngagementOAuthController)
 );
 socialAccountRoutes.post(
   "/workspaces/:workspaceId/social-accounts/:socialAccountId/pinterest-boards",

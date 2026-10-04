@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { config } from "../config";
+import { prisma } from "../prisma";
 import {
   listOAuthProviderStatuses
 } from "../integrations/oauth/oauthProviders";
@@ -16,6 +17,7 @@ import {
   listSocialAccounts,
   startSharedOAuth,
   startOAuth,
+  startInstagramEngagementOAuth,
   startOAuthSchema
 } from "../services/socialAccountService";
 import { HttpError } from "../utils/errors";
@@ -24,6 +26,15 @@ export async function startOAuthController(req: Request, res: Response) {
   const query = startOAuthSchema.parse(req.query);
   const result = await startOAuth(req.user!.id, req.params.platform, query.workspaceId);
   return res.json(result);
+}
+
+export async function startInstagramEngagementOAuthController(req: Request, res: Response) {
+  const result = await startInstagramEngagementOAuth(
+    req.user!.id,
+    req.params.workspaceId,
+    req.params.socialAccountId
+  );
+  return res.json({ authorizationUrl: result.authorizationUrl });
 }
 
 export async function oauthProviderStatusController(_req: Request, res: Response) {
@@ -36,6 +47,9 @@ export async function oauthCallbackController(req: Request, res: Response) {
   const error = typeof req.query.error === "string" ? req.query.error : undefined;
 
   if (error) {
+    if (state) {
+      await prisma.oauthState.deleteMany({ where: { state } }).catch(() => null);
+    }
     return res.redirect(`${config.WEB_APP_URL}/dashboard?oauth=error&reason=${encodeURIComponent(error)}`);
   }
 

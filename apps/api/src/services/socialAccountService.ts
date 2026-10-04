@@ -8,6 +8,10 @@ import {
   redirectUriFor,
   type OAuthProviderConfig
 } from "../integrations/oauth/oauthProviders";
+import {
+  buildInstagramEngagementScopes,
+  validateInstagramEngagementReauthorization
+} from "../integrations/oauth/instagramEngagementOAuth";
 import { PinterestPublisher } from "../integrations/social/pinterestPublisher";
 import { exchangeInstagramLongLivedToken } from "../integrations/social/instagramTokenRefresh";
 import { refreshDeadline } from "../integrations/social/oauthExpiry";
@@ -297,6 +301,8 @@ type CreateOAuthStateOptions = {
   platformParam: string;
   workspaceId: string;
   authorizationLinkId?: string;
+  scopes?: string[];
+  instagramEngagementSocialAccountId?: string;
   expiresAt?: Date;
 };
 
@@ -305,6 +311,8 @@ async function createOAuthAuthorization({
   platformParam,
   workspaceId,
   authorizationLinkId,
+  scopes: requestedScopes,
+  instagramEngagementSocialAccountId,
   expiresAt
 }: CreateOAuthStateOptions) {
   const provider = getOAuthProvider(platformParam);
@@ -312,7 +320,7 @@ async function createOAuthAuthorization({
   const state = randomBase64Url();
   const codeVerifier = provider.usesPkce ? randomBase64Url(64) : undefined;
   const redirectUri = redirectUriFor(provider.platform);
-  const scopes = provider.defaultScopes;
+  const scopes = requestedScopes ?? provider.defaultScopes;
   const defaultExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
   const stateExpiresAt =
     expiresAt && expiresAt.getTime() < defaultExpiresAt.getTime() ? expiresAt : defaultExpiresAt;
@@ -324,6 +332,7 @@ async function createOAuthAuthorization({
       platform: provider.platform,
       state,
       authorizationLinkId,
+      instagramEngagementSocialAccountId,
       codeVerifier,
       redirectUri,
       scopes,
@@ -367,6 +376,34 @@ export async function startOAuth(userId: string, platformParam: string, workspac
     userId,
     platformParam,
     workspaceId
+  });
+}
+
+export async function startInstagramEngagementOAuth(
+  userId: string,
+  workspaceId: string,
+  socialAccountId: string
+) {
+  await requireWorkspaceManager(userId, workspaceId);
+  const account = await prisma.socialAccount.findFirst({
+    where: { id: socialAccountId, workspaceId, platform: "instagram", status: "active" },
+    include: { credential: { select: { scopes: true } } }
+  });
+  if (!account?.credential) {
+    throw new HttpError(404, "Connected Instagram account not found");
+  }
+
+  const provider = getOAuthProvider("instagram");
+  const scopes = buildInstagramEngagementScopes([
+    ...account.credential.scopes,
+    ...provider.defaultScopes
+  ]);
+  return createOAuthAuthorization({
+    userId,
+    platformParam: "instagram",
+    workspaceId,
+    scopes,
+    instagramEngagementSocialAccountId: account.id
   });
 }
 
@@ -509,6 +546,32 @@ export async function completeOAuth(platformParam: string, code: string, state: 
     );
   }
   const scopes = parseScopes(credentialTokenResponse, oauthState.scopes);
+  const engagementAccountId = oauthState.instagramEngagementSocialAccountId;
+  const engagementAccount = engagementAccountId
+    ? await prisma.socialAccount.findFirst({
+        where: { id: engagementAccountId, workspaceId: oauthState.workspaceId, platform: "instagram" },
+        include: { credential: { select: { scopes: true } } }
+      })
+    : null;
+  if (engagementAccountId) {
+    const validation = engagementAccount?.credential
+      ? validateInstagramEngagementReauthorization({
+          expectedProviderAccountId: engagementAccount.providerAccountId,
+          actualProviderAccountId: profile.providerAccountId,
+          existingScopes: engagementAccount.credential.scopes,
+          grantedScopes: scopes
+        })
+      : { accepted: false as const, reason: "account_mismatch" as const };
+    if (!validation.accepted) {
+      await prisma.oauthState.delete({ where: { id: oauthState.id } }).catch(() => null);
+      throw new HttpError(
+        400,
+        validation.reason === "publishing_scope_missing"
+          ? "Instagram publishing permissions were not retained; the existing connection was not changed."
+          : "The authorized Instagram account did not match the connected account; the existing connection was not changed."
+      );
+    }
+  }
   const expiresAt = credentialTokenResponse.expires_in
     ? new Date(Date.now() + credentialTokenResponse.expires_in * 1000)
     : null;
@@ -520,6 +583,34 @@ export async function completeOAuth(platformParam: string, code: string, state: 
   };
 
   const socialAccount = await prisma.$transaction(async (tx) => {
+    if (engagementAccountId && engagementAccount) {
+      const account = await tx.socialAccount.update({
+        where: { id: engagementAccount.id },
+        data: {
+          displayName: profile.displayName,
+          avatarUrl: profile.avatarUrl,
+          accountType: profile.accountType,
+          status: "active",
+          capabilities
+        }
+      });
+      await tx.oauthCredential.update({
+        where: { socialAccountId: engagementAccount.id },
+        data: {
+          accessTokenEncrypted: encryptToken(credentialTokenResponse.access_token),
+          refreshTokenEncrypted: credentialTokenResponse.refresh_token
+            ? encryptToken(credentialTokenResponse.refresh_token)
+            : undefined,
+          tokenType: credentialTokenResponse.token_type ?? "Bearer",
+          scopes,
+          expiresAt,
+          refreshTokenExpiresAt
+        }
+      });
+      await removeOAuthStateIfPresent(tx.oauthState, oauthState.id);
+      return account;
+    }
+
     if (facebookPages.length) {
       let firstAccount:
         | Awaited<ReturnType<typeof tx.socialAccount.upsert>>
