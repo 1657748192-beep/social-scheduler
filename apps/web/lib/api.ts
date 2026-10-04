@@ -387,6 +387,7 @@ export type PublishedPost = {
   text: string;
   providerPostId?: string | null;
   instagramEngagement?: {
+    accountLinkState: "connected" | "reconnect" | "legacy_unverified";
     readPostActivity: boolean;
     readComments: boolean;
     replyToComments: boolean;

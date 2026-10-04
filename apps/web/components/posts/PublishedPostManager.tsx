@@ -9,6 +9,7 @@ import {
   type InstagramConnection,
   type InstagramPostMetrics,
   type PublishedPost,
+  type SocialAccount,
   type Workspace
 } from "../../lib/api";
 import { formatChinaDateTime } from "../../lib/chinaTime";
@@ -59,6 +60,9 @@ export function InstagramPostEngagementPanel({ token, workspaceId, post, role }:
   const [replyTarget, setReplyTarget] = useState<{ commentId: string; mode: "public" | "private" } | null>(null);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
+  const [recoveryAccounts, setRecoveryAccounts] = useState<SocialAccount[] | null>(null);
+  const [selectedRecoveryAccount, setSelectedRecoveryAccount] = useState("");
+  const [recovering, setRecovering] = useState(false);
   const permissions = post.instagramEngagement;
   const canReply = role !== "viewer";
   const canReauthorize = role === "owner" || role === "admin";
@@ -141,6 +145,36 @@ export function InstagramPostEngagementPanel({ token, workspaceId, post, role }:
     }
   }
 
+  async function openRecoveryPicker() {
+    try {
+      const accounts = await apiRequest<SocialAccount[]>(`/workspaces/${encodeURIComponent(workspaceId)}/social-accounts`, { token });
+      const activeInstagramAccounts = accounts.filter((account) => account.platform === "instagram" && account.status === "active");
+      setRecoveryAccounts(activeInstagramAccounts);
+      setSelectedRecoveryAccount(activeInstagramAccounts[0]?.id ?? "");
+      setError(activeInstagramAccounts.length ? null : t("此工作区没有可验证的已连接 Instagram 账号。请先在连接渠道中添加账号。", "No active Instagram account is available to verify. Connect an account in Connected Channels first."));
+    } catch (requestError) {
+      setError(instagramErrorMessage(requestError, t));
+    }
+  }
+
+  async function recoverLegacyPost() {
+    if (!selectedRecoveryAccount || recovering || !canReauthorize) return;
+    setRecovering(true);
+    setError(null);
+    try {
+      await apiRequest(`${postPath}/recover-account`, {
+        method: "POST",
+        token,
+        body: { socialAccountId: selectedRecoveryAccount }
+      });
+      window.location.reload();
+    } catch (requestError) {
+      setError(instagramErrorMessage(requestError, t));
+    } finally {
+      setRecovering(false);
+    }
+  }
+
   return (
     <section className="instagram-engagement-panel">
       <button
@@ -168,8 +202,32 @@ export function InstagramPostEngagementPanel({ token, workspaceId, post, role }:
           ) : null}
           {!permissions?.readComments || !permissions?.readPostActivity ? (
             <div className="instagram-notice">
-              <span>{t("互动权限待开通或需要重新授权；这不会影响原有帖子发布。", "Interaction permissions are pending or need reauthorization; existing publishing is unaffected.")}</span>
-              {canReauthorize ? <button className="button secondary" onClick={() => void reauthorize()} type="button">{t("重新授权 Instagram", "Reauthorize Instagram")}</button> : null}
+              {permissions?.accountLinkState === "legacy_unverified" ? (
+                <>
+                  <span>{t("此历史帖子尚未关联 Instagram 账号。选择一个已连接账号后，我们会先验证帖子归属；不会改变原发布账号或发布设置。", "This legacy post is not linked to an Instagram account. Choose a connected account and we will verify ownership first; publishing settings will not change.")}</span>
+                  {canReauthorize ? <button className="button secondary" onClick={() => void openRecoveryPicker()} type="button">{t("验证并关联账号", "Verify and link account")}</button> : null}
+                  {recoveryAccounts?.length ? (
+                    <div className="instagram-recovery-picker">
+                      <label className="field">
+                        <span>{t("Instagram 账号", "Instagram account")}</span>
+                        <select onChange={(event) => setSelectedRecoveryAccount(event.target.value)} value={selectedRecoveryAccount}>
+                          {recoveryAccounts.map((account) => <option key={account.id} value={account.id}>{account.displayName}</option>)}
+                        </select>
+                      </label>
+                      <button className="button" disabled={!selectedRecoveryAccount || recovering} onClick={() => void recoverLegacyPost()} type="button">
+                        {recovering ? t("正在验证…", "Verifying...") : t("开始验证", "Verify")}
+                      </button>
+                    </div>
+                  ) : null}
+                </>
+              ) : permissions?.accountLinkState === "reconnect" && !post.socialAccount?.id ? (
+                <span>{t("原 Instagram 账号当前未连接。请先到“连接渠道”重新连接同一个 Instagram 专业账号；原有发布不受影响。", "The original Instagram account is not connected. Reconnect the same Instagram professional account in Connected Channels; publishing is unaffected.")}</span>
+              ) : (
+                <>
+                  <span>{t("互动权限待开通或需要重新授权；这不会影响原有帖子发布。", "Interaction permissions are pending or need reauthorization; existing publishing is unaffected.")}</span>
+                  {canReauthorize && post.socialAccount?.id ? <button className="button secondary" onClick={() => void reauthorize()} type="button">{t("重新授权 Instagram", "Reauthorize Instagram")}</button> : null}
+                </>
+              )}
             </div>
           ) : null}
           {metrics ? (
