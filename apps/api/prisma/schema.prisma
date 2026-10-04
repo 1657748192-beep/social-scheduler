@@ -55,6 +55,14 @@ enum SocialAccountStatus {
   @@map("social_account_status")
 }
 
+enum InstagramPrivateReplyStatus {
+  pending
+  sent
+  failed
+
+  @@map("instagram_private_reply_status")
+}
+
 enum PostStatus {
   draft
   in_review
@@ -217,9 +225,26 @@ model SocialAccount {
   workspace         Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   credential        OauthCredential?
   postVariants      PostVariant[]
+  instagramPrivateReplyAttempts InstagramPrivateReplyAttempt[]
 
   @@unique([workspaceId, platform, providerAccountId])
   @@map("social_accounts")
+}
+
+model InstagramPrivateReplyAttempt {
+  id                String                       @id @default(uuid()) @db.Uuid
+  socialAccountId   String                       @map("social_account_id") @db.Uuid
+  mediaId           String                       @map("media_id")
+  commentId         String                       @map("comment_id")
+  status            InstagramPrivateReplyStatus @default(pending)
+  providerMessageId String?                      @map("provider_message_id")
+  createdAt         DateTime                     @default(now()) @map("created_at")
+  updatedAt         DateTime                     @updatedAt @map("updated_at")
+  socialAccount     SocialAccount                @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([socialAccountId, commentId])
+  @@index([socialAccountId, mediaId, createdAt])
+  @@map("instagram_private_reply_attempts")
 }
 
 model OauthCredential {
