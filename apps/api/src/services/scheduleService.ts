@@ -13,6 +13,7 @@ import { tiktokProfilePermalink } from "../integrations/social/tiktokPublisher";
 import { HttpError } from "../utils/errors";
 import { withResolvedMediaUrl } from "./mediaStorageService";
 import { requireWorkspaceMembership, requireWorkspacePublishingAccess } from "./workspaceService";
+import { instagramAccountLinkState } from "./instagramPostAccountIdentity";
 
 const writableRoles: WorkspaceRole[] = ["owner", "admin", "editor"];
 const activeScheduleStatuses = ["scheduled", "locked"] as const;
@@ -79,6 +80,8 @@ const publishedPostInclude = {
           id: true,
           displayName: true,
           platform: true,
+          providerAccountId: true,
+          status: true,
           avatarUrl: true,
           credential: { select: { scopes: true } }
         }
@@ -339,9 +342,20 @@ export async function listPublishedPosts(userId: string, workspaceId: string) {
     take: 100
   });
 
-  return schedules.map((schedule) => {
+  return Promise.all(schedules.map(async (schedule) => {
     const publishJob = schedule.publishJobs[0];
-    const connectedAccount = schedule.postVariant.socialAccount;
+    const linkedAccount = schedule.postVariant.socialAccount;
+    const savedProviderAccountId = schedule.postVariant.instagramProviderAccountId;
+    const linkedIsExact = linkedAccount?.platform === "instagram" && linkedAccount.status === "active" &&
+      (!savedProviderAccountId || linkedAccount.providerAccountId === savedProviderAccountId);
+    const restoredAccount = schedule.postVariant.platform === "instagram" && savedProviderAccountId && !linkedIsExact
+      ? await prisma.socialAccount.findFirst({
+          where: { workspaceId, platform: "instagram", providerAccountId: savedProviderAccountId, status: "active" },
+          select: { id: true, displayName: true, platform: true, providerAccountId: true, status: true, avatarUrl: true,
+            credential: { select: { scopes: true } } }
+        })
+      : null;
+    const connectedAccount = linkedIsExact ? linkedAccount : restoredAccount;
     const scopes = connectedAccount?.credential?.scopes ?? [];
     const providerPostId = publishJob?.providerPostId ?? null;
     const publishedAt = publishJob?.updatedAt ?? schedule.updatedAt;
@@ -369,6 +383,7 @@ export async function listPublishedPosts(userId: string, workspaceId: string) {
       } : null,
       providerPostId: schedule.postVariant.platform === "instagram" ? providerPostId : null,
       instagramEngagement: schedule.postVariant.platform === "instagram" ? {
+        accountLinkState: instagramAccountLinkState(savedProviderAccountId, connectedAccount?.providerAccountId ?? null),
         readPostActivity: scopes.includes("instagram_business_basic"),
         readComments: scopes.includes("instagram_business_basic") && scopes.includes("instagram_business_manage_comments"),
         replyToComments: scopes.includes("instagram_business_manage_comments"),
@@ -386,7 +401,7 @@ export async function listPublishedPosts(userId: string, workspaceId: string) {
         publishJob?.rawResponse
       )
     };
-  });
+  }));
 }
 
 export async function getSchedule(userId: string, workspaceId: string, scheduleId: string) {

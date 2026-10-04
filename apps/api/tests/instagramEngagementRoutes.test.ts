@@ -7,7 +7,9 @@ const publishedPost = {
   workspaceId: ids.workspace,
   status: "published",
   postVariant: {
+    id: "variant-a",
     platform: "instagram",
+    instagramProviderAccountId: "ig-123",
     socialAccount: {
       id: ids.account,
       workspaceId: ids.workspace,
@@ -29,21 +31,26 @@ function setup(
   role: "owner" | "admin" | "editor" | "viewer" = "viewer",
   post: unknown = publishedPost,
   commentMediaId = "ig-media-123",
-  conversationMessages: unknown[] = []
+  conversationMessages: unknown[] = [],
+  selectedAccount: unknown = publishedPost.postVariant.socialAccount,
+  ownershipVerified = true,
+  updateCount = 1
 ) {
   const calls: Array<{ method: string; args?: unknown }> = [];
   const claimedReplies = new Set<string>();
   const deps = {
     prisma: {
       schedule: { findFirst: async (args: unknown) => { calls.push({ method: "schedule.findFirst", args }); return post; } },
+      postVariant: { updateMany: async (args: unknown) => { calls.push({ method: "postVariant.updateMany", args }); return { count: updateCount }; } },
       socialAccount: { findFirst: async (args: unknown) => {
         calls.push({ method: "socialAccount.findFirst", args });
-        return { ...publishedPost.postVariant.socialAccount, id: ids.account };
+        return selectedAccount;
       } }
     },
     requireWorkspaceMembership: async () => ({ role }),
     now: () => new Date("2026-10-04T12:00:00Z"),
     createClient: () => ({
+      ownsMedia: async (mediaId: string) => { calls.push({ method: "ownsMedia", args: mediaId }); return ownershipVerified; },
       getPostMetrics: async (mediaId: string) => { calls.push({ method: "metrics", args: mediaId }); return { likeCount: 4, commentCount: 2 }; },
       listComments: async (mediaId: string) => ({ items: [{ id: "comment-1", mediaId }], nextCursor: null }),
       getComment: async (commentId: string) => ({ id: commentId, mediaId: commentMediaId, timestamp: "2026-10-01T00:00:00Z" }),
@@ -82,6 +89,97 @@ test("interaction reads bind to a successful Instagram post owned by the request
   const lookup = calls.find((call) => call.method === "schedule.findFirst")?.args as { where: Record<string, unknown> };
   assert.deepEqual(lookup.where, { id: ids.schedule, workspaceId: ids.workspace, status: "published" });
   assert.deepEqual(calls.find((call) => call.method === "metrics")?.args, "ig-media-123");
+});
+
+test("recovers a legacy orphan only after the selected same-workspace account verifies its media", async () => {
+  process.env.DATABASE_URL ??= "postgresql://app:secret@localhost:5432/social_scheduler";
+  process.env.REDIS_URL ??= "redis://localhost:6379";
+  process.env.JWT_SECRET ??= "0123456789abcdef0123456789abcdef";
+  const { createInstagramEngagementService } = await import("../src/services/instagramEngagementService");
+  const legacyOrphan = {
+    ...publishedPost,
+    postVariant: { ...publishedPost.postVariant, instagramProviderAccountId: null, socialAccount: null }
+  };
+  const { deps, calls } = setup("owner", legacyOrphan);
+  const service = createInstagramEngagementService(deps as never);
+
+  assert.deepEqual(await service.recoverLegacyPostAccount("owner", ids.workspace, ids.schedule, ids.account), {
+    accountLinkState: "connected"
+  });
+  assert.equal(calls.find((call) => call.method === "ownsMedia")?.args, "ig-media-123");
+  assert.deepEqual(calls.find((call) => call.method === "postVariant.updateMany")?.args, {
+    where: { id: "variant-a", platform: "instagram", instagramProviderAccountId: null, socialAccountId: null },
+    data: { instagramProviderAccountId: "ig-123" }
+  });
+});
+
+test("legacy account recovery rejects viewers, mismatched accounts, unverified media, and concurrent conflicts without linking", async () => {
+  process.env.DATABASE_URL ??= "postgresql://app:secret@localhost:5432/social_scheduler";
+  process.env.REDIS_URL ??= "redis://localhost:6379";
+  process.env.JWT_SECRET ??= "0123456789abcdef0123456789abcdef";
+  const { createInstagramEngagementService } = await import("../src/services/instagramEngagementService");
+  const legacyOrphan = {
+    ...publishedPost,
+    postVariant: { ...publishedPost.postVariant, instagramProviderAccountId: null, socialAccount: null }
+  };
+  const cases = [
+    { role: "viewer" as const, account: publishedPost.postVariant.socialAccount, owned: true, updateCount: 1 },
+    { role: "owner" as const, account: { ...publishedPost.postVariant.socialAccount, workspaceId: "workspace-other" }, owned: true, updateCount: 1 },
+    { role: "owner" as const, account: publishedPost.postVariant.socialAccount, owned: false, updateCount: 1 },
+    { role: "owner" as const, account: publishedPost.postVariant.socialAccount, owned: true, updateCount: 0 },
+    { role: "owner" as const, account: { ...publishedPost.postVariant.socialAccount, credential: { accessTokenEncrypted: "encrypted", scopes: [] } }, owned: true, updateCount: 1 }
+  ];
+  for (const scenario of cases) {
+    const { deps, calls } = setup(scenario.role, legacyOrphan, "ig-media-123", [], scenario.account, scenario.owned, scenario.updateCount);
+    const service = createInstagramEngagementService(deps as never);
+    await assert.rejects(service.recoverLegacyPostAccount(scenario.role, ids.workspace, ids.schedule, ids.account));
+    if (scenario.role === "viewer" || scenario.account.workspaceId !== ids.workspace || !scenario.owned) {
+      assert.equal(calls.some((call) => call.method === "postVariant.updateMany"), false);
+    }
+  }
+});
+
+test("provider verification failures stay retryable and never write a recovered identity", async () => {
+  process.env.DATABASE_URL ??= "postgresql://app:secret@localhost:5432/social_scheduler";
+  process.env.REDIS_URL ??= "redis://localhost:6379";
+  process.env.JWT_SECRET ??= "0123456789abcdef0123456789abcdef";
+  const { createInstagramEngagementService } = await import("../src/services/instagramEngagementService");
+  const legacyOrphan = {
+    ...publishedPost,
+    postVariant: { ...publishedPost.postVariant, instagramProviderAccountId: null, socialAccountId: null, socialAccount: null }
+  };
+  const { deps, calls } = setup("owner", legacyOrphan);
+  const originalCreateClient = deps.createClient;
+  deps.createClient = (input) => ({ ...originalCreateClient(input), ownsMedia: async () => { throw { kind: "rate_limited" }; } });
+  const service = createInstagramEngagementService(deps as never);
+  await assert.rejects(service.recoverLegacyPostAccount("owner", ids.workspace, ids.schedule, ids.account),
+    (error: { statusCode?: number }) => error.statusCode === 429);
+  assert.equal(calls.some((call) => call.method === "postVariant.updateMany"), false);
+});
+
+test("interaction reads resolve the saved provider account identity after its original row is removed", async () => {
+  process.env.DATABASE_URL ??= "postgresql://app:secret@localhost:5432/social_scheduler";
+  process.env.REDIS_URL ??= "redis://localhost:6379";
+  process.env.JWT_SECRET ??= "0123456789abcdef0123456789abcdef";
+  const { createInstagramEngagementService } = await import("../src/services/instagramEngagementService");
+  const orphan = {
+    ...publishedPost,
+    postVariant: { ...publishedPost.postVariant, socialAccount: null }
+  };
+  const { deps, calls } = setup("viewer", orphan);
+  const service = createInstagramEngagementService(deps as never);
+
+  assert.deepEqual(await service.getPostMetrics("viewer", ids.workspace, ids.schedule), {
+    likeCount: 4,
+    commentCount: 2
+  });
+  const accountLookup = calls.find((call) => call.method === "socialAccount.findFirst")?.args as { where: Record<string, unknown> };
+  assert.deepEqual(accountLookup.where, {
+    workspaceId: ids.workspace,
+    platform: "instagram",
+    providerAccountId: "ig-123",
+    status: "active"
+  });
 });
 
 test("rejects forged, cross-workspace, non-Instagram, and unsuccessful post references", async () => {

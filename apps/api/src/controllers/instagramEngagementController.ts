@@ -8,6 +8,15 @@ const paginationSchema = z.object({
 });
 const replySchema = z.object({ message: z.string().trim().min(1).max(2000) });
 const commentReplySchema = replySchema.extend({ commentId: z.string().trim().min(1).max(200) });
+const recoverAccountSchema = z.object({ socialAccountId: z.string().trim().min(1).max(200) });
+
+export async function recoverLegacyInstagramPostAccountController(req: Request, res: Response) {
+  const body = recoverAccountSchema.parse(req.body);
+  const data = await instagramEngagementService.recoverLegacyPostAccount(
+    req.user!.id, req.params.workspaceId, req.params.scheduleId, body.socialAccountId
+  );
+  return res.json(data);
+}
 
 export async function getInstagramPostMetricsController(req: Request, res: Response) {
   const data = await instagramEngagementService.getPostMetrics(req.user!.id, req.params.workspaceId, req.params.scheduleId);

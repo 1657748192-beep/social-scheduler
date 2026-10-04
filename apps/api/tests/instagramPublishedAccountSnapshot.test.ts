@@ -4,11 +4,16 @@ import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
 test("stores the provider account identity only for Instagram variants", async () => {
-  const { instagramProviderAccountSnapshot } = await import("../src/services/instagramPostAccountIdentity");
+  const { instagramProviderAccountSnapshot, instagramAccountLinkState } = await import("../src/services/instagramPostAccountIdentity");
 
   assert.equal(instagramProviderAccountSnapshot("instagram", "ig-professional-42"), "ig-professional-42");
   assert.equal(instagramProviderAccountSnapshot("facebook", "fb-page-42"), null);
   assert.equal(instagramProviderAccountSnapshot("instagram", null), null);
+  assert.equal(instagramAccountLinkState("ig-professional-42", "ig-professional-42"), "connected");
+  assert.equal(instagramAccountLinkState("ig-professional-42", "ig-another-account"), "reconnect");
+  assert.equal(instagramAccountLinkState("ig-professional-42", null), "reconnect");
+  assert.equal(instagramAccountLinkState(null, null), "legacy_unverified");
+  assert.equal(instagramAccountLinkState(null, "ig-professional-42"), "connected");
 });
 
 test("migration backfills linked Instagram variants and leaves non-Instagram and orphan variants empty", () => {

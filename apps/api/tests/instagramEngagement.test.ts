@@ -40,6 +40,45 @@ test("reads post metrics and paginated comments using the Instagram Login API", 
   assert.equal(new Headers(calls[0].init?.headers).get("Authorization"), "Bearer secret-token");
 });
 
+test("verifies ownership only through the connected account media edge and stops when the media is found", async () => {
+  const calls: URL[] = [];
+  const client = createInstagramEngagementClient({
+    accessToken: "secret-token",
+    instagramAccountId: "ig-account",
+    apiVersion: "v26.0",
+    fetcher: async (input) => {
+      const url = new URL(String(input));
+      calls.push(url);
+      return calls.length === 1
+        ? response({ data: [{ id: "other-media" }], paging: { cursors: { after: "cursor-2" } } })
+        : response({ data: [{ id: "owned-media" }] });
+    }
+  });
+
+  assert.equal(await client.ownsMedia("owned-media"), true);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].pathname, "/v26.0/ig-account/media");
+  assert.equal(calls[0].searchParams.get("fields"), "id");
+  assert.equal(calls[0].searchParams.get("limit"), "50");
+  assert.equal(calls[1].searchParams.get("after"), "cursor-2");
+});
+
+test("caps ownership verification at twenty media pages and fails closed", async () => {
+  let calls = 0;
+  const client = createInstagramEngagementClient({
+    accessToken: "secret-token",
+    instagramAccountId: "ig-account",
+    apiVersion: "v26.0",
+    fetcher: async () => {
+      calls += 1;
+      return response({ data: [{ id: `other-${calls}` }], paging: { cursors: { after: `cursor-${calls + 1}` } } });
+    }
+  });
+
+  assert.equal(await client.ownsMedia("not-found"), false);
+  assert.equal(calls, 20);
+});
+
 test("sends public comment replies as form data and private replies or DMs as explicit message payloads", async () => {
   const calls: Array<{ url: URL; init?: RequestInit }> = [];
   const client = createInstagramEngagementClient({

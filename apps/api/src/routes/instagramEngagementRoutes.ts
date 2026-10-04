@@ -6,7 +6,8 @@ import {
   listInstagramMessagesController,
   replyToInstagramConversationController,
   replyToInstagramPostCommentController,
-  sendInstagramPrivateReplyController
+  sendInstagramPrivateReplyController,
+  recoverLegacyInstagramPostAccountController
 } from "../controllers/instagramEngagementController";
 import { requireAuth } from "../middleware/auth";
 import { asyncHandler } from "../utils/asyncHandler";
@@ -17,6 +18,11 @@ instagramEngagementRoutes.get(
   "/workspaces/:workspaceId/instagram/posts/:scheduleId/metrics",
   requireAuth,
   asyncHandler(getInstagramPostMetricsController)
+);
+instagramEngagementRoutes.post(
+  "/workspaces/:workspaceId/instagram/posts/:scheduleId/recover-account",
+  requireAuth,
+  asyncHandler(recoverLegacyInstagramPostAccountController)
 );
 instagramEngagementRoutes.get(
   "/workspaces/:workspaceId/instagram/posts/:scheduleId/comments",

@@ -159,6 +159,22 @@ export function createInstagramEngagementClient(input: {
   }
 
   return {
+    async ownsMedia(mediaId: string) {
+      const expectedId = requiredId(mediaId, "mediaId");
+      let after: string | undefined;
+      for (let page = 0; page < 20; page += 1) {
+        const payload = await request<GraphConnection<{ id?: string }>>(`${accountId}/media`, {
+          query: { fields: "id", limit: 50, after }
+        });
+        if (!Array.isArray(payload.data)) throw new InstagramEngagementApiError("request_failed");
+        if (payload.data.some((media) => media?.id === expectedId)) return true;
+        const next = payload.paging?.cursors?.after;
+        if (typeof next !== "string" || !next || next === after) return false;
+        after = next;
+      }
+      return false;
+    },
+
     async getPostMetrics(mediaId: string) {
       const payload = await request<{ id?: string; like_count?: number; comments_count?: number }>(
         requiredId(mediaId, "mediaId"),

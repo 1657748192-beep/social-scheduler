@@ -16,6 +16,7 @@ import { decryptToken } from "../utils/tokenCrypto";
 import { HttpError } from "../utils/errors";
 import { prisma } from "../prisma";
 import { requireWorkspaceMembership } from "./workspaceService";
+import { instagramAccountLinkState } from "./instagramPostAccountIdentity";
 
 type AccountRecord = {
   id: string;
@@ -30,13 +31,14 @@ type PublishedPostRecord = {
   id: string;
   workspaceId: string;
   status: string;
-  postVariant: { platform: string; socialAccount: AccountRecord | null };
+  postVariant: { id: string; platform: string; instagramProviderAccountId: string | null; socialAccountId: string | null; socialAccount: AccountRecord | null };
   publishJobs: Array<{ status: string; providerPostId: string | null; rawResponse?: unknown }>;
 };
 
 type ServicePrisma = {
   schedule: { findFirst(args: Record<string, unknown>): Promise<unknown> };
   socialAccount: { findFirst(args: Record<string, unknown>): Promise<unknown> };
+  postVariant: { updateMany(args: Record<string, unknown>): Promise<{ count: number }> };
 };
 
 type ServiceDependencies = {
@@ -66,8 +68,9 @@ function publishedPostRecord(value: unknown): PublishedPostRecord | null {
   if (!isRecord(value) || typeof value.id !== "string" || typeof value.workspaceId !== "string" ||
       typeof value.status !== "string" || !isRecord(value.postVariant) ||
       typeof value.postVariant.platform !== "string" || !Array.isArray(value.publishJobs)) return null;
-  const account = accountRecord(value.postVariant.socialAccount);
-  if (!account) return null;
+  const rawAccount = value.postVariant.socialAccount;
+  const account = rawAccount == null ? null : accountRecord(rawAccount);
+  if (rawAccount != null && !account) return null;
   const jobs = value.publishJobs.filter(isRecord).map((job) => ({
     status: typeof job.status === "string" ? job.status : "",
     providerPostId: typeof job.providerPostId === "string" ? job.providerPostId : null,
@@ -77,7 +80,13 @@ function publishedPostRecord(value: unknown): PublishedPostRecord | null {
     id: value.id,
     workspaceId: value.workspaceId,
     status: value.status,
-    postVariant: { platform: value.postVariant.platform, socialAccount: account },
+    postVariant: {
+      id: typeof value.postVariant.id === "string" ? value.postVariant.id : "",
+      platform: value.postVariant.platform,
+      instagramProviderAccountId: typeof value.postVariant.instagramProviderAccountId === "string" ? value.postVariant.instagramProviderAccountId : null,
+      socialAccountId: typeof value.postVariant.socialAccountId === "string" ? value.postVariant.socialAccountId : null,
+      socialAccount: account
+    },
     publishJobs: jobs
   };
 }
@@ -141,14 +150,27 @@ export function createInstagramEngagementService(dependencies: ServiceDependenci
     const rawResponse = job?.rawResponse;
     const simulated = isRecord(rawResponse) && rawResponse.platform === "instagram" && rawResponse.simulated === true;
     if (!post || post.id !== scheduleId || post.workspaceId !== workspaceId || post.status !== "published" ||
-        post.postVariant.platform !== "instagram" || !post.postVariant.socialAccount ||
-        post.postVariant.socialAccount.workspaceId !== workspaceId || post.postVariant.socialAccount.platform !== "instagram" ||
-        post.postVariant.socialAccount.status !== "active" ||
-        !post.postVariant.socialAccount.credential || !job || job.status !== "succeeded" ||
+        post.postVariant.platform !== "instagram" || !job || job.status !== "succeeded" ||
         !job.providerPostId || simulated) {
       throw new HttpError(404, "Published Instagram post not found");
     }
-    return { post, account: post.postVariant.socialAccount, mediaId: job.providerPostId };
+    const expectedProviderAccountId = post.postVariant.instagramProviderAccountId ?? post.postVariant.socialAccount?.providerAccountId;
+    if (!expectedProviderAccountId) throw new HttpError(409, "This legacy Instagram post must be linked to an account before interactions can be viewed.");
+    const linkedAccount = post.postVariant.socialAccount;
+    if (linkedAccount && (linkedAccount.workspaceId !== workspaceId || linkedAccount.platform !== "instagram")) {
+      throw new HttpError(404, "Published Instagram post not found");
+    }
+    const account = linkedAccount?.workspaceId === workspaceId && linkedAccount.platform === "instagram" &&
+      linkedAccount.status === "active" && linkedAccount.providerAccountId === expectedProviderAccountId
+      ? linkedAccount
+      : accountRecord(await dependencies.prisma.socialAccount.findFirst({
+          where: { workspaceId, platform: "instagram", providerAccountId: expectedProviderAccountId, status: "active" },
+          include: { credential: { select: { accessTokenEncrypted: true, scopes: true } } }
+        }));
+    if (!account || account.workspaceId !== workspaceId || account.platform !== "instagram" || account.status !== "active" || !account.credential) {
+      throw new HttpError(409, "Instagram account is no longer connected. Reconnect it to view post activity.");
+    }
+    return { post, account, mediaId: job.providerPostId };
   }
 
   function client(account: AccountRecord): InstagramEngagementClient {
@@ -170,6 +192,42 @@ export function createInstagramEngagementService(dependencies: ServiceDependenci
   }
 
   return {
+    async recoverLegacyPostAccount(userId: string, workspaceId: string, scheduleId: string, socialAccountId: string) {
+      const member = await membership(userId, workspaceId);
+      if (member.role !== "owner" && member.role !== "admin") throw new HttpError(403, "Only workspace owners or admins can link a legacy Instagram post.");
+      const account = await accountForWorkspace(workspaceId, socialAccountId);
+      const raw = await dependencies.prisma.schedule.findFirst({
+        where: { id: scheduleId, workspaceId, status: "published" },
+        include: {
+          postVariant: true,
+          publishJobs: { where: { status: "succeeded" }, orderBy: { updatedAt: "desc" }, take: 1 }
+        }
+      });
+      const post = publishedPostRecord(raw);
+      const job = post?.publishJobs[0];
+      const response = job?.rawResponse;
+      const simulated = isRecord(response) && response.platform === "instagram" && response.simulated === true;
+      if (!post || post.workspaceId !== workspaceId || post.status !== "published" || post.postVariant.platform !== "instagram" ||
+          !job || job.status !== "succeeded" || !job.providerPostId || simulated || !post.postVariant.id) {
+        throw new HttpError(404, "Published Instagram post not found");
+      }
+      const savedId = post.postVariant.instagramProviderAccountId;
+      if (savedId) {
+        if (savedId !== account.providerAccountId) throw new HttpError(409, "This post is already linked to a different Instagram account.");
+        return { accountLinkState: "connected" as const };
+      }
+      if (post.postVariant.socialAccountId) throw new HttpError(409, "This post is still linked to its original account; refresh the page and try again.");
+      requireScope(account, "instagram_business_basic");
+      let verified = false;
+      try { verified = await client(account).ownsMedia(job.providerPostId); } catch (error) { safeProviderError(error); }
+      if (!verified) throw new HttpError(409, "Could not verify that this published post belongs to the selected Instagram account.");
+      const result = await dependencies.prisma.postVariant.updateMany({
+        where: { id: post.postVariant.id, platform: "instagram", instagramProviderAccountId: null, socialAccountId: null },
+        data: { instagramProviderAccountId: account.providerAccountId }
+      });
+      if (result.count !== 1) throw new HttpError(409, "This post changed while it was being linked. Refresh and try again.");
+      return { accountLinkState: "connected" as const };
+    },
     async getPostMetrics(userId: string, workspaceId: string, scheduleId: string) {
       const { account, mediaId } = await publishedInstagramPost(userId, workspaceId, scheduleId);
       requireScope(account, "instagram_business_basic");
