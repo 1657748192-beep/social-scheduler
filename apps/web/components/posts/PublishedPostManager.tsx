@@ -189,6 +189,11 @@ export function InstagramPostEngagementPanel({ token, workspaceId, post, role }:
       >
         {expanded ? t("收起互动", "Hide activity") : t("查看互动", "View activity")}
       </button>
+      {canReauthorize && post.socialAccount?.id && permissions?.accountLinkState === "connected" ? (
+        <button className="button secondary" onClick={() => void reauthorize()} type="button">
+          {t("重新授权 Instagram", "Reauthorize Instagram")}
+        </button>
+      ) : null}
       {expanded ? (
         <div className="instagram-engagement-content">
           <div className="instagram-engagement-heading">
@@ -225,7 +230,6 @@ export function InstagramPostEngagementPanel({ token, workspaceId, post, role }:
               ) : (
                 <>
                   <span>{t("互动权限待开通或需要重新授权；这不会影响原有帖子发布。", "Interaction permissions are pending or need reauthorization; existing publishing is unaffected.")}</span>
-                  {canReauthorize && post.socialAccount?.id ? <button className="button secondary" onClick={() => void reauthorize()} type="button">{t("重新授权 Instagram", "Reauthorize Instagram")}</button> : null}
                 </>
               )}
             </div>

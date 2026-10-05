@@ -42,10 +42,7 @@ export function validateInstagramEngagementReauthorization(input: {
   }
 
   const granted = new Set(input.grantedScopes);
-  const requiredToPreservePublishing = new Set([
-    ...input.existingScopes,
-    ...INSTAGRAM_PUBLISHING_SCOPES
-  ]);
+  const requiredToPreservePublishing = new Set(INSTAGRAM_PUBLISHING_SCOPES);
   if ([...requiredToPreservePublishing].some((scope) => !granted.has(scope))) {
     return { accepted: false, reason: "publishing_scope_missing" };
   }

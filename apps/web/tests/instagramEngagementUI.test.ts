@@ -102,3 +102,23 @@ test("disconnected snapshot state remains collapsed and has reconnect guidance w
   assert.match(manager, /permissions\?\.accountLinkState === "reconnect" && !post\.socialAccount\?\.id/);
   assert.match(manager, /The original Instagram account is not connected/);
 });
+
+test("managers can reauthorize a connected post even when stored interaction permissions are already present", async () => {
+  (globalThis as typeof globalThis & { React?: typeof React }).React = React;
+  const { LanguageProvider } = await import("../components/LanguageProvider");
+  const { InstagramPostEngagementPanel } = await import("../components/posts/PublishedPostManager");
+  const post = {
+    id: "schedule-3", postId: "post-3", baseText: "Text", text: "Text", platform: "instagram" as const,
+    scheduledAt: "2026-10-01T00:00:00Z", publishedAt: "2026-10-01T00:00:00Z", providerPostId: "media-3",
+    socialAccount: { id: "ig-account", displayName: "mooyamcosmetic", platform: "instagram" as const },
+    instagramEngagement: { accountLinkState: "connected" as const, readPostActivity: true, readComments: true,
+      replyToComments: true, privateReply: true, inbox: true, webhookConfigured: true }, media: []
+  };
+  for (const role of ["owner", "admin", "viewer"] as const) {
+    const html = renderToStaticMarkup(React.createElement(LanguageProvider, null,
+      React.createElement(InstagramPostEngagementPanel, { token: "test-token", workspaceId: "workspace-1", role, post })));
+    if (role === "viewer") assert.doesNotMatch(html, /重新授权 Instagram/);
+    else assert.match(html, /重新授权 Instagram/);
+    assert.match(html, /aria-expanded="false"/);
+  }
+});

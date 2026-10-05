@@ -172,9 +172,16 @@ export function InstagramInbox({ token, workspaces }: InstagramInboxProps) {
           <h2>{t("Instagram 收件箱", "Instagram inbox")}</h2>
           <p className="muted">{t("查看会话，并由团队成员逐条手动回复。", "Review conversations and have a team member reply manually, one message at a time.")}</p>
         </div>
-        <button className="button secondary" disabled={loadingAccounts || loadingConversations || loadingMessages} onClick={() => void refreshAll()} type="button">
-          {t("刷新", "Refresh")}
-        </button>
+        <div>
+          {selectedAccount && canManage ? (
+            <button className="button secondary" onClick={() => void reauthorize()} type="button">
+              {t("重新授权 Instagram", "Reauthorize Instagram")}
+            </button>
+          ) : null}
+          <button className="button secondary" disabled={loadingAccounts || loadingConversations || loadingMessages} onClick={() => void refreshAll()} type="button">
+            {t("刷新", "Refresh")}
+          </button>
+        </div>
       </header>
       <div className="instagram-inbox-filters">
         <label className="field">
@@ -197,7 +204,6 @@ export function InstagramInbox({ token, workspaces }: InstagramInboxProps) {
       {selectedAccount && !hasMessagePermission ? (
         <div className="instagram-notice">
           <span>{t("Instagram 消息权限待开通或需要重新授权；原有发帖功能不受影响。", "Instagram messaging permission is pending or needs reauthorization; publishing is unaffected.")}</span>
-          {canManage ? <button className="button secondary" onClick={() => void reauthorize()} type="button">{t("重新授权 Instagram", "Reauthorize Instagram")}</button> : null}
         </div>
       ) : null}
       {selectedAccount && selectedAccount.status !== "active" ? (

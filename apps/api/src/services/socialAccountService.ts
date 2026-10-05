@@ -548,9 +548,15 @@ export async function completeOAuth(platformParam: string, code: string, state: 
     );
   }
   const actualInstagramScopes = provider.platform === "instagram"
-    ? parseInstagramGrantedScopes(tokenResponse)
+    ? parseInstagramGrantedScopes(credentialTokenResponse)
     : null;
-  const scopes = actualInstagramScopes ?? parseScopes(credentialTokenResponse, oauthState.scopes);
+  if (provider.platform === "instagram" && (!actualInstagramScopes || !actualInstagramScopes.length)) {
+    await prisma.oauthState.delete({ where: { id: oauthState.id } }).catch(() => null);
+    throw new HttpError(400, "Instagram did not return the granted permissions; the existing connection was not changed.");
+  }
+  const scopes = provider.platform === "instagram"
+    ? actualInstagramScopes!
+    : parseScopes(credentialTokenResponse, oauthState.scopes);
   const engagementAccountId = oauthState.instagramEngagementSocialAccountId;
   const engagementAccount = engagementAccountId
     ? await prisma.socialAccount.findFirst({
@@ -559,10 +565,6 @@ export async function completeOAuth(platformParam: string, code: string, state: 
       })
     : null;
   if (engagementAccountId) {
-    if (!actualInstagramScopes) {
-      await prisma.oauthState.delete({ where: { id: oauthState.id } }).catch(() => null);
-      throw new HttpError(400, "Instagram did not return the granted permissions; the existing connection was not changed.");
-    }
     const validation = engagementAccount?.credential
       ? validateInstagramEngagementReauthorization({
           expectedProviderAccountId: engagementAccount.providerAccountId,

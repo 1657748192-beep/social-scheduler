@@ -69,6 +69,20 @@ test("accepts reauthorization only for the same Instagram account and when prior
   );
 });
 
+test("reauthorization corrects old interaction scope claims when Meta grants publishing only", () => {
+  assert.deepEqual(validateInstagramEngagementReauthorization({
+    expectedProviderAccountId: "ig-123", actualProviderAccountId: "ig-123",
+    existingScopes: [
+      "instagram_business_basic", "instagram_business_content_publish",
+      "instagram_business_manage_comments", "instagram_business_manage_messages"
+    ],
+    grantedScopes: ["instagram_business_basic", "instagram_business_content_publish"]
+  }), {
+    accepted: true,
+    grantedScopes: ["instagram_business_basic", "instagram_business_content_publish"]
+  });
+});
+
 test("reads Meta's actual granted Instagram permissions instead of assuming every requested scope was accepted", () => {
   assert.deepEqual(parseInstagramGrantedScopes({
     access_token: "short-token",
