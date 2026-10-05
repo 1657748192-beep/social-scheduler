@@ -103,7 +103,7 @@ test("disconnected snapshot state remains collapsed and has reconnect guidance w
   assert.match(manager, /The original Instagram account is not connected/);
 });
 
-test("managers can reauthorize a connected post even when stored interaction permissions are already present", async () => {
+test("connected posts keep an optional authorization action after permissions are recorded", async () => {
   (globalThis as typeof globalThis & { React?: typeof React }).React = React;
   const { LanguageProvider } = await import("../components/LanguageProvider");
   const { InstagramPostEngagementPanel } = await import("../components/posts/PublishedPostManager");
@@ -117,8 +117,19 @@ test("managers can reauthorize a connected post even when stored interaction per
   for (const role of ["owner", "admin", "viewer"] as const) {
     const html = renderToStaticMarkup(React.createElement(LanguageProvider, null,
       React.createElement(InstagramPostEngagementPanel, { token: "test-token", workspaceId: "workspace-1", role, post })));
-    if (role === "viewer") assert.doesNotMatch(html, /重新授权 Instagram/);
-    else assert.match(html, /重新授权 Instagram/);
+    assert.doesNotMatch(html, /重新授权 Instagram/);
+    if (role === "viewer") assert.doesNotMatch(html, /更新授权（可选）/);
+    else assert.match(html, /更新授权（可选）/);
     assert.match(html, /aria-expanded="false"/);
   }
+  const missingMessagePermission = {
+    ...post,
+    instagramEngagement: { ...post.instagramEngagement, inbox: false, privateReply: false }
+  };
+  const html = renderToStaticMarkup(React.createElement(LanguageProvider, null,
+    React.createElement(InstagramPostEngagementPanel, {
+      token: "test-token", workspaceId: "workspace-1", role: "admin", post: missingMessagePermission
+    })));
+  assert.match(html, /重新授权 Instagram/);
+  assert.doesNotMatch(html, /更新授权（可选）/);
 });

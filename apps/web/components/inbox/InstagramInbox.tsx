@@ -167,15 +167,17 @@ export function InstagramInbox({ token, workspaces }: InstagramInboxProps) {
   return (
     <section className="instagram-inbox panel">
       <header className="instagram-inbox-header">
-        <div className="instagram-inbox-actions">
+        <div>
           <p className="section-kicker">Instagram</p>
           <h2>{t("Instagram 收件箱", "Instagram inbox")}</h2>
           <p className="muted">{t("查看会话，并由团队成员逐条手动回复。", "Review conversations and have a team member reply manually, one message at a time.")}</p>
         </div>
-        <div>
+        <div className="instagram-inbox-actions">
           {selectedAccount && canManage ? (
             <button className="button secondary" onClick={() => void reauthorize()} type="button">
-              {t("重新授权 Instagram", "Reauthorize Instagram")}
+              {hasMessagePermission
+                ? t("更新授权（可选）", "Update authorization (optional)")
+                : t("重新授权 Instagram", "Reauthorize Instagram")}
             </button>
           ) : null}
           <button className="button secondary" disabled={loadingAccounts || loadingConversations || loadingMessages} onClick={() => void refreshAll()} type="button">

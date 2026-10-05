@@ -191,7 +191,9 @@ export function InstagramPostEngagementPanel({ token, workspaceId, post, role }:
       </button>
       {canReauthorize && post.socialAccount?.id && permissions?.accountLinkState === "connected" ? (
         <button className="button secondary" onClick={() => void reauthorize()} type="button">
-          {t("重新授权 Instagram", "Reauthorize Instagram")}
+          {permissions.readComments && permissions.inbox
+            ? t("更新授权（可选）", "Update authorization (optional)")
+            : t("重新授权 Instagram", "Reauthorize Instagram")}
         </button>
       ) : null}
       {expanded ? (
