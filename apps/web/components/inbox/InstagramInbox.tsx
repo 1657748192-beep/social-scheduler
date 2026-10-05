@@ -167,7 +167,7 @@ export function InstagramInbox({ token, workspaces }: InstagramInboxProps) {
   return (
     <section className="instagram-inbox panel">
       <header className="instagram-inbox-header">
-        <div>
+        <div className="instagram-inbox-actions">
           <p className="section-kicker">Instagram</p>
           <h2>{t("Instagram 收件箱", "Instagram inbox")}</h2>
           <p className="muted">{t("查看会话，并由团队成员逐条手动回复。", "Review conversations and have a team member reply manually, one message at a time.")}</p>
