@@ -104,3 +104,15 @@ Instagram OAuth 仍未稳定，主要报错是 token exchange 时 redirect URI �
 账号接口：`GET /api/v1/workspaces/:workspaceId/social-accounts/:accountId/tiktok-stats`，同样要求登录及工作区成员权限。
 两个面板独立检查各自权限。缺少 `video.list`、`user.info.stats` 或读取 API 报错只影响相应数据面板，不将整个发布账号标记为缺少权限。仅手动读取，不保存计数历史，不显示增长趋势。
 本地测试不等于生产验收；真实计数仍需已批准权限、用户授权和可查询的公开视频。
+
+### 独立 TikTok Sandbox 数据测试
+
+测试面板位于工作区首页，仅对服务器允许的单一用户、工作区和正式 TikTok 账号显示，且用户必须为有效 owner/admin。测试账号限定为 `andypeng97`；不加入发布渠道，不后台轮询或下载视频。
+
+服务器配置：`TIKTOK_SANDBOX_ENABLED`（默认 `false`）、`TIKTOK_SANDBOX_ALLOWED_USER_ID`、`TIKTOK_SANDBOX_WORKSPACE_ID`、`TIKTOK_SANDBOX_SOCIAL_ACCOUNT_ID`、`TIKTOK_SANDBOX_CLIENT_ID`、`TIKTOK_SANDBOX_CLIENT_SECRET`。通过受限服务器环境配置注入密钥，勿在聊天、日志或前端填写 secret。不要替换任何 `TIKTOK_CLIENT_*` 或生产 OAuth scopes。
+
+在 Sandbox Login Kit 增加独立回调 `https://app.bufferhelp.com/api/v1/integrations/tiktok-sandbox/oauth/callback`，保留原回调。此入口仅申请 `user.info.basic,video.list,user.info.stats`，使用独立加密凭证和一次性 state；权限未获生产批准不改变已有发布行为。
+
+部署时先应用新增表迁移并保持开关关闭，健康检查后再配置允许身份。用户本人授权后手动读取账号统计及本软件真实发布的公开视频数据。正式授权过期、缺少既有发布权限、身份 union_id 缺失或不一致、无合格视频、平台拒绝均是验收阻塞，不能以零或模拟数据代替。
+
+停止测试时关闭 `TIKTOK_SANDBOX_ENABLED` 并重建应用容器；也可在面板断开测试连接，仅删除测试凭证及待完成 state。回滚应用镜像时保留新增表。详见 `docs/tiktok-sandbox-verification.md`。

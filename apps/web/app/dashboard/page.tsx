@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "../../components/AppShell";
 import { TikTokAccountStatsPanel } from "../../components/channels/TikTokAccountStatsPanel";
+import { TikTokSandboxPanel } from "../../components/channels/TikTokSandboxPanel";
 import {
   apiRequest,
   type CurrentUser,
@@ -458,6 +459,7 @@ export default function DashboardPage() {
           ))}
         </section>
 
+        {token && selectedWorkspace ? <TikTokSandboxPanel token={token} workspaceId={selectedWorkspace.id} /> : null}
         <div className="dashboard-layout">
           <section className="panel workspace-panel">
             <div className="row">
