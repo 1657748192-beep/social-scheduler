@@ -2,6 +2,8 @@ import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 import morgan from "morgan";
+import { safeRequestLogUrl } from "./utils/requestLog";
+import { tiktokSandboxRoutes } from "./routes/tiktokSandboxRoutes";
 import { config } from "./config";
 import { uploadRoot } from "./middleware/upload";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
@@ -34,13 +36,15 @@ export function createApp() {
     })
   );
   app.use(express.json({ limit: "1mb" }));
-  app.use(morgan("dev"));
+  morgan.token("safe-url", req => safeRequestLogUrl(req.url ?? ""));
+  app.use(morgan(":method :safe-url :status :response-time ms"));
   app.use("/uploads", express.static(uploadRoot));
 
   app.use("/api/v1", healthRoutes);
   app.use("/api/v1/auth", authRoutes);
   app.use("/api/v1", adminRoutes);
   app.use("/api/v1", workspaceRoutes);
+  app.use("/api/v1", tiktokSandboxRoutes);
   app.use("/api/v1", socialAccountRoutes);
   app.use("/api/v1", composerRoutes);
   app.use("/api/v1", scheduleRoutes);

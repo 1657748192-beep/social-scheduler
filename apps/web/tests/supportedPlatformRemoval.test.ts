@@ -61,6 +61,6 @@ test("local and server deployment configuration omit retired platform credential
 
   for (const config of [envExample, localCompose, serverCompose]) {
     assert.doesNotMatch(config, /LINKEDIN_CLIENT_(ID|SECRET)/);
-    assert.doesNotMatch(config, /X_CLIENT_(ID|SECRET)/);
+    assert.doesNotMatch(config, /\bX_CLIENT_(ID|SECRET)\b/);
   }
 });
