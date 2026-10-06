@@ -3,12 +3,15 @@ import { z } from "zod";
 import { instagramEngagementService } from "../services/instagramEngagementService";
 
 const paginationSchema = z.object({
-  after: z.string().trim().min(1).max(1024).optional(),
+  after: z.string().trim().min(1).max(8192).optional(),
   limit: z.coerce.number().int().min(1).max(50).optional()
 });
 const replySchema = z.object({ message: z.string().trim().min(1).max(2000) });
 const commentReplySchema = replySchema.extend({ commentId: z.string().trim().min(1).max(200) });
 const recoverAccountSchema = z.object({ socialAccountId: z.string().trim().min(1).max(200) });
+export async function getInstagramReceptionController(req: Request, res: Response) {
+  return res.json(await instagramEngagementService.getReceptionStatus(req.user!.id, req.params.workspaceId, req.params.socialAccountId));
+}
 
 export async function recoverLegacyInstagramPostAccountController(req: Request, res: Response) {
   const body = recoverAccountSchema.parse(req.body);

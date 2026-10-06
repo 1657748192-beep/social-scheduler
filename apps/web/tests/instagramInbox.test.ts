@@ -19,7 +19,7 @@ test("inbox supports manual refresh and replies while viewers and missing permis
   assert.match(inbox, /instagram\/conversations\/.*replies/);
   assert.match(inbox, /isViewer/);
   assert.match(inbox, /instagram_business_manage_messages/);
-  assert.match(inbox, /Webhook.*(?:未配置|not configured)/i);
+  assert.match(inbox, /Meta 回调及应用发布状态尚未验证/);
   assert.match(inbox, /24 小时|24-hour/);
   assert.doesNotMatch(inbox, /localStorage\.(?:setItem|getItem)[\s\S]*?(?:comment|message)/i);
 });

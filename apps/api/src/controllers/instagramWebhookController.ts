@@ -5,15 +5,17 @@ import {
   isValidInstagramWebhookSignature,
   type InstagramWebhookEvent
 } from "../services/instagramWebhookService";
+import { InvalidInstagramWebhookPayload } from "../services/instagramWebhookService";
 
 export type InstagramWebhookControllerOptions = {
   verifyToken: string;
   appSecret: string;
   onEvent?: (event: InstagramWebhookEvent) => void | Promise<void>;
+  captureContent?: boolean;
 };
 
 export function createInstagramWebhookController(options: InstagramWebhookControllerOptions) {
-  const processPayload = createInstagramWebhookProcessor({ onEvent: options.onEvent });
+  const processPayload = createInstagramWebhookProcessor({ onEvent: options.onEvent, captureContent: options.captureContent });
 
   return {
     verify(req: Request, res: Response) {
@@ -59,8 +61,9 @@ export function createInstagramWebhookController(options: InstagramWebhookContro
       }
       try {
         res.status(200).json(await processPayload(payload));
-      } catch {
-        res.status(400).json({ error: "Invalid webhook request." });
+      } catch (error) {
+        const invalid = error instanceof InvalidInstagramWebhookPayload;
+        res.status(invalid ? 400 : 503).json({ error: invalid ? "Invalid webhook request." : "Webhook storage temporarily unavailable." });
       }
     }
   };

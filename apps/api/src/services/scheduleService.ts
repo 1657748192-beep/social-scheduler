@@ -389,7 +389,8 @@ export async function listPublishedPosts(userId: string, workspaceId: string) {
         replyToComments: scopes.includes("instagram_business_manage_comments"),
         privateReply: scopes.includes("instagram_business_manage_comments") && scopes.includes("instagram_business_manage_messages"),
         inbox: scopes.includes("instagram_business_manage_messages"),
-        webhookConfigured: Boolean(config.INSTAGRAM_WEBHOOK_VERIFY_TOKEN && config.INSTAGRAM_CLIENT_SECRET)
+        webhookConfigured: false,
+        webhookServerReady: Boolean(config.INSTAGRAM_WEBHOOK_VERIFY_TOKEN && config.INSTAGRAM_CLIENT_SECRET)
       } : null,
       media: schedule.postVariant.media.map((item) => ({
         ...item,

@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createReceptionPoller, instagramInboxReadNotice, type InstagramReceptionStatus, type InstagramReadMetadata } from "../../lib/instagramReception";
 import {
   apiRequest,
   type InstagramConnection,
@@ -44,6 +45,14 @@ export function InstagramInbox({ token, workspaces }: InstagramInboxProps) {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reception, setReception] = useState<InstagramReceptionStatus | null>(null);
+  const [readMeta, setReadMeta] = useState<InstagramReadMetadata | null>(null);
+  const [messageMeta, setMessageMeta] = useState<InstagramReadMetadata | null>(null);
+  const [conversationCursor, setConversationCursor] = useState<string | null>(null);
+  const [messageCursor, setMessageCursor] = useState<string | null>(null);
+  const [latestInboundAt, setLatestInboundAt] = useState<string | null>(null);
+  const context = useRef({ workspaceId, accountId, conversationId });
+  context.current = { workspaceId, accountId, conversationId };
   const selectedWorkspace = workspaces.find((workspace) => workspace.id === workspaceId);
   const selectedAccount = accounts.find((account) => account.id === accountId);
   const activeInstagramAccounts = useMemo(
@@ -65,6 +74,7 @@ export function InstagramInbox({ token, workspaces }: InstagramInboxProps) {
     setError(null);
     try {
       const result = await apiRequest<SocialAccount[]>(`/workspaces/${encodeURIComponent(workspaceId)}/social-accounts`, { token });
+      if (context.current.workspaceId !== workspaceId) return;
       const nextAccounts = result.filter((account) => account.platform === "instagram" && account.status === "active");
       setAccounts(nextAccounts);
       setAccountId((current) => nextAccounts.some((account) => account.id === current) ? current : nextAccounts[0]?.id ?? "");
@@ -85,12 +95,18 @@ export function InstagramInbox({ token, workspaces }: InstagramInboxProps) {
         `/workspaces/${encodeURIComponent(workspaceId)}/social-accounts/${encodeURIComponent(accountId)}/instagram/conversations?limit=25`,
         { token }
       );
+      if (context.current.workspaceId !== workspaceId || context.current.accountId !== accountId) return;
+      setReadMeta(result);
+      setConversationCursor(result.nextCursor);
       setConversations(result.items);
       setConversationId((current) => result.items.some((conversation) => conversation.id === current) ? current : result.items[0]?.id ?? "");
+      return true;
     } catch (requestError) {
+      if (context.current.workspaceId !== workspaceId || context.current.accountId !== accountId) return;
       setConversations([]);
       setConversationId("");
       setError(inboxErrorMessage(requestError, t));
+      return false;
     } finally {
       setLoadingConversations(false);
     }
@@ -105,10 +121,15 @@ export function InstagramInbox({ token, workspaces }: InstagramInboxProps) {
         `/workspaces/${encodeURIComponent(workspaceId)}/social-accounts/${encodeURIComponent(accountId)}/instagram/conversations/${encodeURIComponent(conversationId)}/messages?limit=50`,
         { token }
       );
+      if (context.current.workspaceId !== workspaceId || context.current.accountId !== accountId || context.current.conversationId !== conversationId) return;
+      setMessageMeta(result); setMessageCursor(result.nextCursor); setLatestInboundAt(result.latestInboundAt ?? null);
       setMessages(result.items);
+      return true;
     } catch (requestError) {
+      if (context.current.workspaceId !== workspaceId || context.current.accountId !== accountId || context.current.conversationId !== conversationId) return;
       setMessages([]);
       setError(inboxErrorMessage(requestError, t));
+      return false;
     } finally {
       setLoadingMessages(false);
     }
@@ -117,13 +138,46 @@ export function InstagramInbox({ token, workspaces }: InstagramInboxProps) {
   useEffect(() => { void loadAccounts(); }, [loadAccounts]);
   useEffect(() => { void loadConversations(); }, [loadConversations]);
   useEffect(() => { void loadMessages(); }, [loadMessages]);
+  useEffect(() => {
+    setReception(null);
+    if (!workspaceId || !accountId) return;
+    let alive = true;
+    const readStatus = async () => {
+      const result = await apiRequest<InstagramReceptionStatus>(`/workspaces/${encodeURIComponent(workspaceId)}/social-accounts/${encodeURIComponent(accountId)}/instagram/reception`, { token });
+      if (alive) setReception(result);
+      return result;
+    };
+    void readStatus().catch(() => { if (alive) setReception(null); });
+    const poller = createReceptionPoller({ readStatus, onRevision: async () => { if (alive) {
+      const conversationsLoaded = await loadConversations();
+      const messagesLoaded = conversationId ? await loadMessages() : true;
+      if (!conversationsLoaded || !messagesLoaded) throw new Error("Inbox refresh failed");
+    } }, intervalMs: 15000, isVisible: () => document.visibilityState === "visible" });
+    return () => { alive = false; poller.stop(); };
+  }, [workspaceId, accountId, token, loadConversations, loadMessages]);
+  useEffect(() => { setReadMeta(null); setMessageMeta(null); setLatestInboundAt(null); setMessages([]); setDraft(""); }, [workspaceId, accountId]);
+  useEffect(() => { setMessageMeta(null); setLatestInboundAt(null); setMessageCursor(null); }, [conversationId]);
 
   const latestInbound = [...messages]
-    .filter((message) => message.from?.id && message.from.id !== selectedAccount?.providerAccountId)
+    .filter((message) => message.inbound !== false && message.from?.id && message.from.id !== selectedAccount?.providerAccountId)
     .map((message) => new Date(message.created_time ?? ""))
     .filter((date) => Number.isFinite(date.getTime()))
     .sort((left, right) => right.getTime() - left.getTime())[0];
-  const withinReplyWindow = Boolean(latestInbound && Date.now() - latestInbound.getTime() <= 24 * 60 * 60 * 1000);
+  const receivedInbound = latestInboundAt ? new Date(latestInboundAt) : undefined;
+  const authoritativeInbound = receivedInbound && (!latestInbound || receivedInbound > latestInbound) ? receivedInbound : latestInbound;
+  const withinReplyWindow = Boolean(authoritativeInbound && Date.now() >= authoritativeInbound.getTime() && Date.now() - authoritativeInbound.getTime() <= 24 * 60 * 60 * 1000);
+  async function loadOlder(kind: "conversations" | "messages") {
+    const cursor = kind === "conversations" ? conversationCursor : messageCursor;
+    if (!cursor) return;
+    const requested = { workspaceId, accountId, conversationId };
+    try {
+      const path = `/workspaces/${encodeURIComponent(workspaceId)}/social-accounts/${encodeURIComponent(accountId)}/instagram/conversations${kind === "messages" ? `/${encodeURIComponent(conversationId)}/messages` : ""}`;
+      const result = await apiRequest<InstagramConnection<InstagramConversation & InstagramMessage>>(`${path}?after=${encodeURIComponent(cursor)}&limit=25`, { token });
+      if (context.current.workspaceId !== requested.workspaceId || context.current.accountId !== requested.accountId || context.current.conversationId !== requested.conversationId) return;
+      if (kind === "conversations") { setConversations(current => [...new Map([...current, ...result.items].map(item => [item.id, item])).values()]); setConversationCursor(result.nextCursor); }
+      else { setMessages(current => [...new Map([...current, ...result.items].map(item => [item.id, item])).values()]); setMessageCursor(result.nextCursor); setMessageMeta(result); }
+    } catch (requestError) { setError(inboxErrorMessage(requestError, t)); }
+  }
   const canSend = hasMessagePermission && !isViewer && withinReplyWindow && Boolean(draft.trim()) && !sending;
 
   async function refreshAll() {
@@ -151,12 +205,13 @@ export function InstagramInbox({ token, workspaces }: InstagramInboxProps) {
     setSending(true);
     setError(null);
     try {
-      await apiRequest(
+      const result = await apiRequest<{ localSaveStatus?: string }>(
         `/workspaces/${encodeURIComponent(workspaceId)}/social-accounts/${encodeURIComponent(selectedAccount.id)}/instagram/conversations/${encodeURIComponent(conversationId)}/replies`,
         { method: "POST", token, body: { message: draft.trim() } }
       );
       setDraft("");
       await loadMessages();
+      if (result.localSaveStatus === "failed") setError(t("消息已发送，但本地保存失败；请勿重复发送，等待回执同步。", "Message sent, but local save failed. Do not resend; wait for the delivery echo."));
     } catch (requestError) {
       setError(inboxErrorMessage(requestError, t));
     } finally {
@@ -201,8 +256,10 @@ export function InstagramInbox({ token, workspaces }: InstagramInboxProps) {
       </div>
       {error ? <p className="error" role="alert">{error}</p> : null}
       {selectedAccount?.capabilities.instagramEngagement?.webhookConfigured === false ? (
-        <p className="instagram-notice">{t("Webhook 未配置，实时消息通知不可用；可手动刷新收件箱。", "Webhook is not configured, so live message notifications are unavailable. You can refresh the inbox manually.")}</p>
+        <p className="instagram-notice">{t("Meta 回调及应用发布状态尚未验证；服务器配置不代表消息已接通。", "Meta callback and publication status are not verified; server configuration does not prove message delivery.")}</p>
       ) : null}
+      {reception ? <p className="muted">{reception.serverReady ? t("服务器接收端就绪", "Server receiver ready") : t("服务器接收端未配置", "Server receiver not configured")} · {t("账号订阅", "Account subscription")}: {reception.subscriptionStatus === "verified" ? reception.subscribedFields.join(", ") || t("无", "none") : t("未验证", "not verified")} · {t("最近收到事件", "Last event received")}: {timestamp(reception.lastReceivedAt ?? undefined) || t("尚未收到", "none yet")}</p> : null}
+      {instagramInboxReadNotice(readMeta, messageMeta) ? <p className="instagram-notice">{t("Meta 读取失败；当前展示已接收的消息，不代表历史会话同步完成。", "Meta read failed. Showing received messages; historical sync is not complete.")}</p> : null}
       {selectedAccount && !hasMessagePermission ? (
         <div className="instagram-notice">
           <span>{t("Instagram 消息权限待开通或需要重新授权；原有发帖功能不受影响。", "Instagram messaging permission is pending or needs reauthorization; publishing is unaffected.")}</span>
@@ -217,7 +274,7 @@ export function InstagramInbox({ token, workspaces }: InstagramInboxProps) {
       <div className="instagram-inbox-layout">
         <aside className="instagram-conversation-list" aria-label={t("会话列表", "Conversations")}>
           {loadingConversations && !conversations.length ? <p className="muted">{t("正在读取会话…", "Loading conversations...")}</p> : null}
-          {!loadingConversations && !conversations.length && hasMessagePermission ? <p className="muted">{t("暂无会话。新消息到达后刷新查看。", "No conversations yet. Refresh after a new message arrives.")}</p> : null}
+          {!loadingConversations && !conversations.length && hasMessagePermission ? <p className="muted">{t("尚未取得会话数据；这不代表 Instagram 没有私信。", "No conversation data received; this does not mean Instagram has no messages.")}</p> : null}
           {conversations.map((conversation) => {
             const participant = conversation.participants?.data?.find((item) => item.id !== selectedAccount?.providerAccountId);
             return (
@@ -230,23 +287,27 @@ export function InstagramInbox({ token, workspaces }: InstagramInboxProps) {
               >
                 <strong>{participant?.username ? `@${participant.username}` : participant?.id || t("Instagram 会话", "Instagram conversation")}</strong>
                 <span>{timestamp(conversation.updated_time)}</span>
+                {conversation.source === "received" ? <span>{t("已接收", "Received")}</span> : null}
               </button>
             );
           })}
+          {conversationCursor ? <button className="button secondary" onClick={() => void loadOlder("conversations")}>{t("更多会话", "More conversations")}</button> : null}
         </aside>
         <div className="instagram-conversation-detail">
           <div className="instagram-message-list" aria-live="polite">
             {loadingMessages && !messages.length ? <p className="muted">{t("正在读取消息…", "Loading messages...")}</p> : null}
-            {messages.map((message) => {
+            {[...messages].sort((a, b) => new Date(a.created_time ?? "").getTime() - new Date(b.created_time ?? "").getTime()).map((message) => {
               const isOwn = message.from?.id === selectedAccount?.providerAccountId;
               return (
                 <article className={isOwn ? "instagram-message own" : "instagram-message"} key={message.id}>
                   <strong>{isOwn ? selectedAccount?.displayName : message.from?.username || t("客户", "Customer")}</strong>
                   <p>{message.message}</p>
                   <time dateTime={message.created_time}>{timestamp(message.created_time)}</time>
+                  {message.source === "received" ? <small>{t("已接收", "Received")} · {timestamp(message.receivedAt)}</small> : null}
                 </article>
               );
             })}
+            {messageCursor ? <button className="button secondary" onClick={() => void loadOlder("messages")}>{t("更早消息", "Older messages")}</button> : null}
             {conversationId && !loadingMessages && !messages.length ? <p className="muted">{t("此会话暂无消息。", "No messages in this conversation.")}</p> : null}
           </div>
           <div className="instagram-inbox-reply">

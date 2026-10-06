@@ -74,6 +74,64 @@ function setup(
   return { deps, calls };
 }
 
+test("empty live comments retain received data with explicit source and provider state", async () => {
+  const { createInstagramEngagementService } = await import("../src/services/instagramEngagementService");
+  const { deps } = setup();
+  const client = deps.createClient();
+  client.listComments = async () => ({ items: [], nextCursor: null });
+  const received = { id: "received-comment", text: "hello", timestamp: "2026-10-04T10:00:00Z" };
+  const service = createInstagramEngagementService({ ...deps, createClient: () => client,
+    receptionStore: { listComments: async (account: string, media: string) => {
+      assert.equal(account, ids.account); assert.equal(media, "ig-media-123");
+      return { items: [received], nextCursor: null };
+    }, getStatus: async () => ({ revision: "1", lastReceivedAt: "2026-10-04T10:00:00Z" }) }
+  } as never);
+  const result = await service.listComments("viewer", ids.workspace, ids.schedule);
+  assert.equal(result.items[0].id, received.id);
+  assert.equal((result as any).source, "received");
+  assert.equal((result as any).providerReadStatus, "empty");
+});
+
+test("received inbox remains readable when Meta errors and denies foreign local thread IDs", async () => {
+  const { createInstagramEngagementService } = await import("../src/services/instagramEngagementService");
+  const { deps } = setup();
+  const client = deps.createClient();
+  client.listConversations = async () => { throw { kind: "temporary_failure" }; };
+  const service = createInstagramEngagementService({ ...deps, createClient: () => client,
+    receptionStore: { listThreads: async () => ({ items: [{ id: "local:thread", participants: { data: [{ id: "customer" }] } }], nextCursor: null }),
+      getThread: async () => null, getStatus: async () => ({ revision: "2", lastReceivedAt: null }) }
+  } as never);
+  const result = await service.listConversations("viewer", ids.workspace, ids.account);
+  assert.equal(result.items[0].id, "local:thread");
+  assert.equal((result as any).providerReadStatus, "error");
+  await assert.rejects(service.listMessages("viewer", ids.workspace, ids.account, "local:foreign"), /not found/);
+});
+
+test("mixed pagination retains local remainder after the provider page ends", async () => {
+  const { createInstagramEngagementService } = await import("../src/services/instagramEngagementService");
+  const { deps } = setup(); const api = deps.createClient();
+  api.listComments = async (_media, options: any) => ({ items: [{ id: options?.after ? "live2" : "live1" }], nextCursor: options?.after ? null : "live-next" });
+  const service = createInstagramEngagementService({ ...deps, createClient: () => api, receptionStore: {
+    listComments: async (_a: string, _m: string, after?: string) => ({ items: [{ id: after ? "local2" : "local1" }], nextCursor: after ? null : "local-next" }),
+    getStatus: async () => ({ revision: "1", lastReceivedAt: null })
+  } } as never);
+  const first = await service.listComments("viewer", ids.workspace, ids.schedule);
+  const second = await service.listComments("viewer", ids.workspace, ids.schedule, { after: first.nextCursor! });
+  assert.deepEqual(new Set([...first.items, ...second.items].map(i => i.id)), new Set(["live1", "live2", "local1", "local2"]));
+});
+
+test("subscription status expires from the last actual verification, not every poll", async () => {
+  const { createInstagramEngagementService } = await import("../src/services/instagramEngagementService");
+  const { deps } = setup(); const api = deps.createClient(); let reads = 0;
+  (api as any).getSubscribedFields = async () => { reads++; return reads === 1 ? ["messages"] : ["messages", "comments"]; };
+  const service = createInstagramEngagementService({ ...deps, createClient: () => api } as never);
+  const original = Date.now; let now = 0; Date.now = () => now;
+  try {
+    for (now = 0; now < 150000; now += 15000) await service.getReceptionStatus("viewer", ids.workspace, ids.account);
+    assert.ok(reads >= 3);
+  } finally { Date.now = original; }
+});
+
 test("interaction reads bind to a successful Instagram post owned by the requested workspace", async () => {
   process.env.DATABASE_URL ??= "postgresql://app:secret@localhost:5432/social_scheduler";
   process.env.REDIS_URL ??= "redis://localhost:6379";

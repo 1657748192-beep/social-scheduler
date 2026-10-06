@@ -126,3 +126,26 @@ test("fails closed when webhook credentials are not configured", async () => {
   await controller.receive(mockRequest({ body: Buffer.from("{}") }), receive);
   assert.equal(receive.statusCode, 503);
 });
+
+test("direct Instagram Login comments retain content for the private store", async () => {
+  const events: InstagramWebhookEvent[] = [];
+  const controller = createInstagramWebhookController({ verifyToken: "verify-token", appSecret: "app-secret", captureContent: true, onEvent: e => { events.push(e); } });
+  const body = JSON.stringify({ object: "instagram", entry: [{ id: "owner", time: 1791072000, field: "comments", value: { id: "c2", text: "hello", from: { id: "customer", username: "test" }, media: { id: "media" } } }] });
+  const res = mockResponse();
+  await controller.receive(mockRequest({ headers: { "X-Hub-Signature-256": signed(body) }, body: Buffer.from(body) }), res);
+  assert.equal(events.length, 1);
+  assert.equal((events[0] as any).text, "hello");
+  assert.equal(JSON.stringify(res.body).includes("hello"), false);
+});
+
+test("failed event persistence returns retryable status and does not poison deduplication", async () => {
+  let writes = 0;
+  const controller = createInstagramWebhookController({ verifyToken: "verify-token", appSecret: "app-secret", onEvent: () => { if (++writes === 1) throw new Error("database unavailable"); } });
+  const body = JSON.stringify({ object: "instagram", entry: [{ id: "owner", messaging: [{ sender: { id: "customer" }, recipient: { id: "owner" }, message: { mid: "m1", text: "hello" } }] }] });
+  const request = mockRequest({ headers: { "X-Hub-Signature-256": signed(body) }, body: Buffer.from(body) });
+  const first = mockResponse(); await controller.receive(request, first);
+  assert.equal(first.statusCode, 503);
+  const retry = mockResponse(); await controller.receive(request, retry);
+  assert.equal(retry.statusCode, 200);
+  assert.equal(writes, 2);
+});

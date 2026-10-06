@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   getInstagramPostMetricsController,
+  getInstagramReceptionController,
   listInstagramPostCommentsController,
   listInstagramConversationsController,
   listInstagramMessagesController,
@@ -13,6 +14,7 @@ import { requireAuth } from "../middleware/auth";
 import { asyncHandler } from "../utils/asyncHandler";
 
 export const instagramEngagementRoutes = Router();
+instagramEngagementRoutes.get("/workspaces/:workspaceId/social-accounts/:socialAccountId/instagram/reception", requireAuth, asyncHandler(getInstagramReceptionController));
 
 instagramEngagementRoutes.get(
   "/workspaces/:workspaceId/instagram/posts/:scheduleId/metrics",

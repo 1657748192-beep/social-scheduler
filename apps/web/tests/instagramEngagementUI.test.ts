@@ -24,7 +24,7 @@ test("post interaction UI loads on expansion, paginates, refreshes, and requires
   assert.match(manager, /onClick=[\s\S]*(?:send|reply)|onClick=/);
   assert.doesNotMatch(manager, /localStorage\.(?:setItem|getItem)[\s\S]*?(?:comment|message)/i);
   assert.match(manager, /需要重新授权|Reauthorize/);
-  assert.match(manager, /Webhook.*(?:未配置|not configured)/i);
+  assert.match(manager, /Meta 回调及应用发布状态尚未验证/);
   assert.match(manager, /24 小时|24-hour/);
 });
 

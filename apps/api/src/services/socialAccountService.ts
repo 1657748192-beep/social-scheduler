@@ -827,7 +827,8 @@ export async function listSocialAccounts(userId: string, workspaceId: string) {
           instagramEngagement: {
             manageComments: scopes.includes("instagram_business_manage_comments"),
             manageMessages: scopes.includes("instagram_business_manage_messages"),
-            webhookConfigured: Boolean(config.INSTAGRAM_WEBHOOK_VERIFY_TOKEN && config.INSTAGRAM_CLIENT_SECRET)
+            webhookConfigured: false,
+            webhookServerReady: Boolean(config.INSTAGRAM_WEBHOOK_VERIFY_TOKEN && config.INSTAGRAM_CLIENT_SECRET)
           }
         } : {})
       }

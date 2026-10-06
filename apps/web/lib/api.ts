@@ -436,6 +436,7 @@ export type InstagramConversation = {
   id: string;
   updated_time?: string;
   participants?: { data?: Array<{ id?: string; username?: string }> };
+  source?: string;
 };
 
 export type InstagramMessage = {
@@ -443,11 +444,18 @@ export type InstagramMessage = {
   message?: string;
   created_time?: string;
   from?: { id?: string; username?: string };
+  inbound?: boolean;
+  source?: string;
+  receivedAt?: string;
 };
 
 export type InstagramConnection<T> = {
   items: T[];
   nextCursor: string | null;
+  source?: string;
+  providerReadStatus?: string;
+  lastReceivedAt?: string | null;
+  latestInboundAt?: string | null;
 };
 
 export type CosUploadIntent = {

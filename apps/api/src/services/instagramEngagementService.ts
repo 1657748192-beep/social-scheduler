@@ -17,6 +17,8 @@ import { HttpError } from "../utils/errors";
 import { prisma } from "../prisma";
 import { requireWorkspaceMembership } from "./workspaceService";
 import { instagramAccountLinkState } from "./instagramPostAccountIdentity";
+import { instagramReceptionStore } from "./instagramReception";
+import type { InstagramReceptionStore } from "./instagramReceptionStore";
 
 type AccountRecord = {
   id: string;
@@ -48,6 +50,7 @@ type ServiceDependencies = {
   decryptToken(value: string): string;
   privateReplyStore: PrivateReplyAttemptStore;
   now(): Date;
+  receptionStore?: InstagramReceptionStore;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -117,7 +120,42 @@ function safeProviderError(error: unknown): never {
   throw error;
 }
 
+type ReceptionCursor = { localAfter?: string; providerAfter?: string; localDone?: boolean; providerDone?: boolean };
+function receptionCursor(after?: string): ReceptionCursor {
+  if (!after) return {};
+  if (after.startsWith("mixed:")) {
+    try {
+      const cursor = JSON.parse(Buffer.from(after.slice(6), "base64url").toString("utf8"));
+      if (!isRecord(cursor) || [cursor.localAfter, cursor.providerAfter].some(v => v !== undefined && (typeof v !== "string" || v.length > 4096)) ||
+        [cursor.localDone, cursor.providerDone].some(v => v !== undefined && typeof v !== "boolean")) throw new Error();
+      return cursor as ReceptionCursor;
+    } catch { throw new HttpError(400, "Invalid Instagram pagination cursor"); }
+  }
+  return after.startsWith("received:") ? { localAfter: after.slice(9), providerDone: true } : { providerAfter: after, localDone: true };
+}
+
 export function createInstagramEngagementService(dependencies: ServiceDependencies) {
+  const store = dependencies.receptionStore;
+  const subscriptionCache = new Map<string, { fields: string[]; expiresAt: number }>();
+  async function receivedRead(account: AccountRecord, local: { items: Record<string, unknown>[]; nextCursor: string | null }, liveRead: (() => Promise<{ items: unknown[]; nextCursor: string | null }>) | null, cursor: ReceptionCursor) {
+    let live = { items: [] as unknown[], nextCursor: null as string | null };
+    let providerReadStatus: "ok" | "empty" | "error" | "not_requested" = "not_requested";
+    if (!cursor.providerDone && liveRead) {
+      try { live = await liveRead(); providerReadStatus = live.items.length ? "ok" : "empty"; }
+      catch (error) {
+        const kind = isRecord(error) ? error.kind : undefined;
+        if (!local.items.length || kind === "authorization_invalid" || kind === "permission_missing") safeProviderError(error);
+        providerReadStatus = "error";
+      }
+    }
+    const unique = new Map<string, Record<string, unknown>>();
+    for (const item of [...local.items, ...live.items]) if (isRecord(item) && typeof item.id === "string") unique.set(item.id, item);
+    const status = store ? await store.getStatus(account.id) : { lastReceivedAt: null };
+    const next: ReceptionCursor = { localAfter: local.nextCursor ?? undefined, providerAfter: live.nextCursor ?? undefined,
+      localDone: cursor.localDone || !local.nextCursor, providerDone: cursor.providerDone || !live.nextCursor };
+    return { items: [...unique.values()], nextCursor: next.localDone && next.providerDone ? null : `mixed:${Buffer.from(JSON.stringify(next)).toString("base64url")}`,
+      source: live.items.length ? local.items.length ? "combined" : "live" : local.items.length ? "received" : "none", providerReadStatus, lastReceivedAt: status.lastReceivedAt };
+  }
   async function membership(userId: string, workspaceId: string, write = false) {
     const member = await dependencies.requireWorkspaceMembership(userId, workspaceId);
     if (write) requireCanWrite(member.role);
@@ -191,6 +229,17 @@ export function createInstagramEngagementService(dependencies: ServiceDependenci
     return conversation;
   }
 
+  async function ownedComment(account: AccountRecord, mediaId: string, commentId: string, api: InstagramEngagementClient) {
+    try { return await api.getComment(commentId); }
+    catch (error) {
+      const kind = isRecord(error) ? error.kind : undefined;
+      if (kind === "authorization_invalid" || kind === "permission_missing") safeProviderError(error);
+      const received = store ? await store.getComment(account.id, mediaId, commentId) : null;
+      if (received) return { id: received.providerCommentId, mediaId: received.mediaId, timestamp: received.occurredAt.toISOString() };
+      safeProviderError(error);
+    }
+  }
+
   return {
     async recoverLegacyPostAccount(userId: string, workspaceId: string, scheduleId: string, socialAccountId: string) {
       const member = await membership(userId, workspaceId);
@@ -237,7 +286,10 @@ export function createInstagramEngagementService(dependencies: ServiceDependenci
     async listComments(userId: string, workspaceId: string, scheduleId: string, options?: { after?: string; limit?: number }) {
       const { account, mediaId } = await publishedInstagramPost(userId, workspaceId, scheduleId);
       requireScope(account, "instagram_business_basic", "instagram_business_manage_comments");
-      try { return await client(account).listComments(mediaId, options); } catch (error) { safeProviderError(error); }
+      if (!store) { try { return await client(account).listComments(mediaId, options); } catch (error) { safeProviderError(error); } }
+      const cursor = receptionCursor(options?.after);
+      const local = cursor.localDone ? { items: [], nextCursor: null } : await store.listComments(account.id, mediaId, cursor.localAfter, options?.limit);
+      return receivedRead(account, local, () => client(account).listComments(mediaId, { after: cursor.providerAfter, limit: options?.limit }), cursor);
     },
 
     async replyToComment(userId: string, workspaceId: string, scheduleId: string, commentId: string, message: string) {
@@ -246,7 +298,7 @@ export function createInstagramEngagementService(dependencies: ServiceDependenci
       requireScope(account, "instagram_business_manage_comments");
       const api = client(account);
       let comment;
-      try { comment = await api.getComment(commentId); } catch (error) { safeProviderError(error); }
+      comment = await ownedComment(account, mediaId, commentId, api);
       if (comment.mediaId !== mediaId) throw new HttpError(404, "Instagram comment not found on this post");
       try { return await api.replyToComment(commentId, message); } catch (error) { safeProviderError(error); }
     },
@@ -294,7 +346,24 @@ export function createInstagramEngagementService(dependencies: ServiceDependenci
       await membership(userId, workspaceId);
       const account = await accountForWorkspace(workspaceId, socialAccountId);
       requireScope(account, "instagram_business_manage_messages");
-      try { return await client(account).listConversations(options); } catch (error) { safeProviderError(error); }
+      if (!store) { try { return await client(account).listConversations(options); } catch (error) { safeProviderError(error); } }
+      const cursor = receptionCursor(options?.after);
+      const local = cursor.localDone ? { items: [], nextCursor: null } : await store.listThreads(account.id, cursor.localAfter, options?.limit);
+      return receivedRead(account, local, async () => {
+        const live = await client(account).listConversations({ after: cursor.providerAfter, limit: options?.limit });
+        // Keep the local ID so received messages remain reachable even if Meta later withholds the thread.
+        const items = await Promise.all(live.items.map(async item => {
+          if (!isRecord(item) || typeof item.id !== "string" || !isRecord(item.participants) || !Array.isArray(item.participants.data)) return item;
+          const participants = item.participants.data.filter(isRecord).map(p => p.id);
+          if (!participants.includes(account.providerAccountId)) return item;
+          const counterparty = participants.find(id => typeof id === "string" && id !== account.providerAccountId);
+          const match = local.items.find(thread => participants.includes(thread.counterpartyId)) ?? (typeof counterparty === "string" ? await store.getThreadByCounterparty(account.id, counterparty) : null);
+          if (!match) return item;
+          await store.linkConversation(account.id, match.id, item.id);
+          return { ...item, id: match.id, source: "combined" };
+        }));
+        return { ...live, items };
+      }, cursor);
     },
 
     async listMessages(userId: string, workspaceId: string, socialAccountId: string, conversationId: string, options?: { after?: string; limit?: number }) {
@@ -302,8 +371,39 @@ export function createInstagramEngagementService(dependencies: ServiceDependenci
       const account = await accountForWorkspace(workspaceId, socialAccountId);
       requireScope(account, "instagram_business_manage_messages");
       const api = client(account);
+      if (conversationId.startsWith("local:") && store) {
+        const thread = await store.getThread(account.id, conversationId);
+        if (!thread) throw new HttpError(404, "Instagram conversation not found");
+        const cursor = receptionCursor(options?.after);
+        const local = cursor.localDone ? { items: [], nextCursor: null } : await store.listMessages(account.id, conversationId, cursor.localAfter, options?.limit);
+        const result = await receivedRead(account, local, thread.providerConversationId ? async () => {
+          await verifiedConversation(account, thread.providerConversationId!, api);
+          return api.listMessages(thread.providerConversationId!, { after: cursor.providerAfter, limit: options?.limit });
+        } : null, cursor);
+        const inbound = await store.latestInbound(account.id, conversationId);
+        return { ...result, latestInboundAt: inbound?.occurredAt.toISOString() ?? null };
+      }
       await verifiedConversation(account, conversationId, api);
       try { return await api.listMessages(conversationId, options); } catch (error) { safeProviderError(error); }
+    },
+
+    async getReceptionStatus(userId: string, workspaceId: string, socialAccountId: string) {
+      await membership(userId, workspaceId);
+      const account = await accountForWorkspace(workspaceId, socialAccountId);
+      requireScope(account, "instagram_business_basic");
+      let subscriptionStatus = "unknown";
+      let subscribedFields: string[] = [];
+      const cached = subscriptionCache.get(account.id);
+      try {
+        const fresh = !cached || cached.expiresAt <= Date.now();
+        subscribedFields = fresh ? await client(account).getSubscribedFields() : cached.fields;
+        subscriptionStatus = "verified";
+        if (subscriptionCache.size >= 1000) subscriptionCache.clear();
+        if (fresh) subscriptionCache.set(account.id, { fields: subscribedFields, expiresAt: Date.now() + 60000 });
+      } catch { subscriptionStatus = "error"; }
+      return { ...(store ? await store.getStatus(account.id) : { revision: "0", lastReceivedAt: null }),
+        serverReady: Boolean(config.INSTAGRAM_WEBHOOK_VERIFY_TOKEN && config.INSTAGRAM_CLIENT_SECRET),
+        subscriptionStatus, subscribedFields, callbackStatus: "unknown", publicationStatus: "unknown" };
     },
 
     async replyToConversation(userId: string, workspaceId: string, socialAccountId: string, conversationId: string, message: string) {
@@ -311,6 +411,37 @@ export function createInstagramEngagementService(dependencies: ServiceDependenci
       const account = await accountForWorkspace(workspaceId, socialAccountId);
       requireScope(account, "instagram_business_manage_messages");
       const api = client(account);
+      if (conversationId.startsWith("local:") && store) {
+        const thread = await store.getThread(account.id, conversationId);
+        if (!thread) throw new HttpError(404, "Instagram conversation not found");
+        let inbound = await store.latestInbound(account.id, conversationId);
+        if (thread.providerConversationId) {
+          try {
+            const liveThread = await verifiedConversation(account, thread.providerConversationId, api);
+            if (!liveThread.participantIds.includes(thread.counterpartyId)) throw new HttpError(404, "Instagram conversation participant not found");
+            const live = await api.listMessages(thread.providerConversationId, { limit: 50 });
+            const candidates = live.items.filter(isRecord).filter(item => isRecord(item.from) && item.from.id === thread.counterpartyId)
+              .map(item => ({ senderId: thread.counterpartyId, occurredAt: new Date(String(item.created_time ?? "")) }))
+              .filter(item => Number.isFinite(item.occurredAt.getTime()) && item.occurredAt <= dependencies.now())
+              .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
+            if (candidates[0] && (!inbound || candidates[0].occurredAt > inbound.occurredAt)) inbound = candidates[0] as typeof inbound;
+          } catch (error) {
+            const kind = isRecord(error) ? error.kind : undefined;
+            if (error instanceof HttpError || kind === "permission_missing" || kind === "authorization_invalid") safeProviderError(error);
+          }
+        }
+        if (!inbound || inbound.senderId !== thread.counterpartyId || !isInstagramMessagingWindowOpen(inbound.occurredAt, dependencies.now())) {
+          throw new HttpError(400, "The Instagram 24-hour messaging window has expired.");
+        }
+        let result;
+        try { result = await api.sendMessage(thread.counterpartyId, message); } catch (error) { safeProviderError(error); }
+        // Never turn a successful provider send into a retryable send failure.
+        let localSaveStatus = "saved";
+        try { await store.recordMessage(account.id, { accountId: account.providerAccountId, field: "messages", eventId: result.messageId,
+          senderId: account.providerAccountId, recipientId: thread.counterpartyId, text: message, timestamp: dependencies.now().getTime(), isEcho: true }); }
+        catch { localSaveStatus = "failed"; }
+        return { ...result, localSaveStatus };
+      }
       const conversation = await verifiedConversation(account, conversationId, api);
       let messages;
       try { messages = await api.listMessages(conversationId, { limit: 50 }); } catch (error) { safeProviderError(error); }
@@ -327,7 +458,14 @@ export function createInstagramEngagementService(dependencies: ServiceDependenci
       }
       const recipientId = conversation.participantIds.find((id) => id !== account.providerAccountId);
       if (!recipientId || recipientId !== inbound.fromId) throw new HttpError(404, "Instagram conversation participant not found");
-      try { return await api.sendMessage(recipientId, message); } catch (error) { safeProviderError(error); }
+      let result;
+      try { result = await api.sendMessage(recipientId, message); } catch (error) { safeProviderError(error); }
+      if (!store) return result;
+      let localSaveStatus = "saved";
+      try { await store.recordMessage(account.id, { accountId: account.providerAccountId, field: "messages", eventId: result.messageId,
+        senderId: account.providerAccountId, recipientId, text: message, timestamp: dependencies.now().getTime(), isEcho: true }); }
+      catch { localSaveStatus = "failed"; }
+      return { ...result, localSaveStatus };
     }
   };
 }
@@ -338,7 +476,8 @@ const productionDependencies: ServiceDependencies = {
   createClient: createInstagramEngagementClient,
   decryptToken,
   privateReplyStore: instagramPrivateReplyAttemptStore,
-  now: () => new Date()
+  now: () => new Date(),
+  receptionStore: instagramReceptionStore
 };
 
 export const instagramEngagementService = createInstagramEngagementService(productionDependencies);

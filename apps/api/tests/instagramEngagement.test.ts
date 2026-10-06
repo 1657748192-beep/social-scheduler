@@ -12,6 +12,11 @@ function response(payload: unknown, status = 200) {
   return Response.json(payload, { status });
 }
 
+test("an empty Meta list with an after cursor but no next link has no subsequent page", async () => {
+  const client = createInstagramEngagementClient({ accessToken: "test", instagramAccountId: "owner", apiVersion: "v26.0", fetcher: async () => response({ data: [], paging: { cursors: { after: "unused" } } }) });
+  assert.equal((await client.listComments("media")).nextCursor, null);
+});
+
 test("reads post metrics and paginated comments using the Instagram Login API", async () => {
   const calls: Array<{ url: URL; init?: RequestInit }> = [];
   const client = createInstagramEngagementClient({
@@ -22,7 +27,7 @@ test("reads post metrics and paginated comments using the Instagram Login API", 
       calls.push({ url: new URL(String(input)), init });
       return calls.length === 1
         ? response({ id: "media-1", like_count: 12, comments_count: 2 })
-        : response({ data: [{ id: "comment-1", text: "hello", timestamp: "2026-10-01T00:00:00+0000" }], paging: { cursors: { after: "next-cursor" } } });
+        : response({ data: [{ id: "comment-1", text: "hello", timestamp: "2026-10-01T00:00:00+0000" }], paging: { next: "https://graph.instagram.com/next", cursors: { after: "next-cursor" } } });
     }
   });
 
@@ -143,7 +148,7 @@ test("reads conversations and messages without persisting or rewriting Meta payl
     fetcher: async (input) => {
       calls.push(new URL(String(input)));
       return calls.length === 1
-        ? response({ data: [{ id: "conversation-1", updated_time: "2026-10-01T00:00:00+0000" }], paging: { cursors: { after: "c-next" } } })
+        ? response({ data: [{ id: "conversation-1", updated_time: "2026-10-01T00:00:00+0000" }], paging: { next: "https://graph.instagram.com/next", cursors: { after: "c-next" } } })
         : response({ data: [{ id: "message-1", message: "customer text", created_time: "2026-10-01T00:00:00+0000" }] });
     }
   });

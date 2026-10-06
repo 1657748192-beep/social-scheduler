@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createReceptionPoller, instagramReadNotice, readInstagramPostActivity, type InstagramReadMetadata, type InstagramReceptionStatus } from "../../lib/instagramReception";
 import {
   apiRequest,
   type ComposerPlatform,
@@ -68,6 +69,17 @@ export function InstagramPostEngagementPanel({ token, workspaceId, post, role }:
   const canReply = role !== "viewer";
   const canReauthorize = role === "owner" || role === "admin";
   const postPath = `/workspaces/${encodeURIComponent(workspaceId)}/instagram/posts/${encodeURIComponent(post.id)}`;
+  const [readMeta, setReadMeta] = useState<InstagramReadMetadata | null>(null);
+  const currentPath = useRef(postPath);
+  currentPath.current = postPath;
+  useEffect(() => {
+    if (!expanded || !post.socialAccount?.id) return;
+    const poller = createReceptionPoller({
+      readStatus: () => apiRequest<InstagramReceptionStatus>(`/workspaces/${encodeURIComponent(workspaceId)}/social-accounts/${encodeURIComponent(post.socialAccount!.id)}/instagram/reception`, { token }),
+      onRevision: async () => { if (!await loadInitial()) throw new Error("Activity refresh failed"); }, intervalMs: 15000, isVisible: () => document.visibilityState === "visible"
+    });
+    return () => poller.stop();
+  }, [expanded, postPath, token, post.socialAccount?.id]);
 
   async function loadInitial() {
     setLoading(true);
@@ -79,15 +91,22 @@ export function InstagramPostEngagementPanel({ token, workspaceId, post, role }:
       const commentsRequest = permissions?.readComments
         ? apiRequest<InstagramConnection<InstagramComment>>(`${postPath}/comments?limit=25`, { token })
         : Promise.resolve(null);
-      const [metricsResult, commentsResult] = await Promise.all([metricsRequest, commentsRequest]);
-      setMetrics(metricsResult);
-      setComments(commentsResult?.items ?? []);
-      setNextCursor(commentsResult?.nextCursor ?? null);
+      const result = await readInstagramPostActivity(() => metricsRequest, () => commentsRequest);
+      if (currentPath.current !== postPath) return false;
+      if (!result.metrics.error) setMetrics(result.metrics.data);
+      if (!result.comments.error) {
+        setReadMeta(result.comments.data);
+        setComments(result.comments.data?.items ?? []);
+        setNextCursor(result.comments.data?.nextCursor ?? null);
+      }
+      if (result.metrics.error || result.comments.error) setError(instagramErrorMessage(result.comments.error ?? result.metrics.error, t));
       if (!permissions?.readPostActivity || !permissions.readComments) {
         setError(t("查看评论的权限尚未开通；帖子发布仍可正常使用。", "Comment access is not enabled yet; publishing remains available."));
       }
+      return !result.comments.error;
     } catch (requestError) {
       setError(instagramErrorMessage(requestError, t));
+      return false;
     } finally {
       setLoading(false);
     }
@@ -100,7 +119,8 @@ export function InstagramPostEngagementPanel({ token, workspaceId, post, role }:
     try {
       const query = new URLSearchParams({ after: nextCursor, limit: "25" });
       const result = await apiRequest<InstagramConnection<InstagramComment>>(`${postPath}/comments?${query}`, { token });
-      setComments((current) => [...current, ...result.items]);
+      if (currentPath.current !== postPath) return;
+      setComments((current) => [...new Map([...current, ...result.items].map(item => [item.id, item])).values()]);
       setNextCursor(result.nextCursor);
     } catch (requestError) {
       setError(instagramErrorMessage(requestError, t));
@@ -206,7 +226,7 @@ export function InstagramPostEngagementPanel({ token, workspaceId, post, role }:
             </button>
           </div>
           {permissions?.webhookConfigured === false ? (
-            <p className="instagram-notice">{t("Webhook 未配置：实时通知暂不可用；仍可手动刷新查看。", "Webhook is not configured: live notifications are unavailable. You can still refresh manually.")}</p>
+            <p className="instagram-notice">{t("Meta 回调及应用发布状态尚未验证；服务器配置不代表互动事件已接通。", "Meta callback and publication status are not verified; server configuration does not prove event delivery.")}</p>
           ) : null}
           {!permissions?.readComments || !permissions?.readPostActivity ? (
             <div className="instagram-notice">
@@ -244,6 +264,9 @@ export function InstagramPostEngagementPanel({ token, workspaceId, post, role }:
             </div>
           ) : null}
           {error ? <p className="error" role="alert">{error}</p> : null}
+          {instagramReadNotice(readMeta, metrics?.commentCount ?? 0, comments.length) === "visibility" ? <p className="instagram-notice">{t("Meta 返回了评论总数，但评论列表为空；请核查测试访问范围，不是没有评论。", "Meta returned a comment count but an empty list. Check test access visibility; comments do exist.")}</p> : null}
+          {readMeta?.providerReadStatus === "error" ? <p className="instagram-notice">{t("Meta 读取失败，当前展示已接收的评论。", "Meta read failed; showing received comments.")}</p> : null}
+          {readMeta?.lastReceivedAt ? <p className="muted">{t("最近接收时间", "Last received")}: {new Date(readMeta.lastReceivedAt).toLocaleString()}</p> : null}
           {loading && !comments.length ? <p className="muted">{t("正在读取评论…", "Loading comments...")}</p> : null}
           <div className="instagram-comments-list">
             {comments.map((comment) => (
@@ -279,7 +302,7 @@ export function InstagramPostEngagementPanel({ token, workspaceId, post, role }:
             ))}
           </div>
           {nextCursor ? <button className="button secondary" disabled={loading} onClick={() => void loadMore()} type="button">{t("加载更多评论", "Load more comments")}</button> : null}
-          {!loading && permissions?.readComments && !comments.length ? <p className="muted">{t("暂无评论。", "No comments yet.")}</p> : null}
+          {!loading && permissions?.readComments && !comments.length && !metrics?.commentCount ? <p className="muted">{t("暂无评论。", "No comments yet.")}</p> : null}
         </div>
       ) : null}
     </section>

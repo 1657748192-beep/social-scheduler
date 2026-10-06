@@ -8,6 +8,10 @@ export type InstagramWebhookEvent = {
   senderId?: string;
   recipientId?: string;
   timestamp?: number;
+  text?: string;
+  username?: string;
+  attachments?: Array<{ type: string; url?: string }>;
+  isEcho?: boolean;
 };
 
 type JsonRecord = Record<string, unknown>;
@@ -42,7 +46,9 @@ export function isInstagramWebhookVerifyTokenValid(receivedToken: string | undef
   return received.length === expected.length && timingSafeEqual(received, expected);
 }
 
-export function createInstagramWebhookProcessor(input: { onEvent?: EventHandler; now?: () => number } = {}) {
+export class InvalidInstagramWebhookPayload extends Error {}
+
+export function createInstagramWebhookProcessor(input: { onEvent?: EventHandler; now?: () => number; captureContent?: boolean } = {}) {
   const onEvent = input.onEvent ?? (() => undefined);
   const now = input.now ?? Date.now;
   const seen = new Map<string, number>();
@@ -56,7 +62,6 @@ export function createInstagramWebhookProcessor(input: { onEvent?: EventHandler;
       seen.delete(existingKey);
     }
     if (seen.has(key)) return true;
-    seen.set(key, currentTime + ttlMs);
     if (seen.size > maxKeys) {
       const oldest = seen.keys().next().value;
       if (oldest) seen.delete(oldest);
@@ -66,7 +71,7 @@ export function createInstagramWebhookProcessor(input: { onEvent?: EventHandler;
 
   return async function processInstagramWebhookPayload(payload: unknown) {
     const root = record(payload);
-    if (!root || !Array.isArray(root.entry)) throw new Error("Invalid Instagram webhook payload");
+    if (!root || !Array.isArray(root.entry)) throw new InvalidInstagramWebhookPayload("Invalid Instagram webhook payload");
     if (root.object !== "instagram") return { received: 0, duplicates: 0, ignored: 1 };
 
     let received = 0;
@@ -81,12 +86,13 @@ export function createInstagramWebhookProcessor(input: { onEvent?: EventHandler;
       }
       const entryTime = timestamp(entry.time, true);
 
-      if (Array.isArray(entry.changes)) {
-        for (const rawChange of entry.changes) {
+      const changes = Array.isArray(entry.changes) ? entry.changes : entry.field ? [entry] : [];
+      if (changes.length) {
+        for (const rawChange of changes) {
           const change = record(rawChange);
           const field = change && text(change.field);
           const value = change && record(change.value);
-          const eventId = value && text(value.id);
+          const eventId = value && (text(value.id) ?? text(value.comment_id));
           const media = value && record(value.media);
           const mediaId = media && text(media.id);
           if ((field !== "comments" && field !== "live_comments") || !eventId || !mediaId) {
@@ -100,11 +106,18 @@ export function createInstagramWebhookProcessor(input: { onEvent?: EventHandler;
             mediaId,
             timestamp: timestamp(value.timestamp) ?? entryTime
           };
+          if (input.captureContent) {
+            const from = value && record(value.from);
+            event.text = text(value?.text)?.slice(0, 10000);
+            event.senderId = text(from?.id)?.slice(0, 256);
+            event.username = text(from?.username)?.slice(0, 256);
+          }
           if (isDuplicate(`${accountId}:${field}:${eventId}:${event.timestamp ?? ""}`)) {
             duplicates += 1;
             continue;
           }
           await onEvent(event);
+          seen.set(`${accountId}:${field}:${eventId}:${event.timestamp ?? ""}`, now() + ttlMs);
           received += 1;
         }
       }
@@ -131,11 +144,23 @@ export function createInstagramWebhookProcessor(input: { onEvent?: EventHandler;
             recipientId,
             timestamp: time
           };
+          if (input.captureContent) {
+            event.text = text(message?.text)?.slice(0, 10000);
+            event.isEcho = message?.is_echo === true;
+            event.attachments = Array.isArray(message?.attachments) ? message.attachments.slice(0, 10).flatMap(item => {
+              const attachment = record(item);
+              const payload = attachment && record(attachment.payload);
+              const type = text(attachment?.type);
+              const url = text(payload?.url);
+              return type ? [{ type: type.slice(0, 64), ...(url?.startsWith("https://") ? { url: url.slice(0, 2048) } : {}) }] : [];
+            }) : [];
+          }
           if (isDuplicate(`${accountId}:messages:${eventId}:${time ?? ""}`)) {
             duplicates += 1;
             continue;
           }
           await onEvent(event);
+          seen.set(`${accountId}:messages:${eventId}:${time ?? ""}`, now() + ttlMs);
           received += 1;
         }
       }

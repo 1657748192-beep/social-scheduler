@@ -76,7 +76,7 @@ export function isInstagramMessagingWindowOpen(lastInboundMessageAt: Date, now =
 
 type GraphConnection<T> = {
   data?: T[];
-  paging?: { cursors?: { after?: string } };
+  paging?: { next?: string; cursors?: { after?: string } };
 };
 
 type InstagramGraphResponse = Record<string, unknown>;
@@ -99,7 +99,7 @@ function connection<T>(payload: unknown): { items: T[]; nextCursor: string | nul
   const after = cursors?.after;
   return {
     items: payload.data as T[],
-    nextCursor: typeof after === "string" && after ? after : null
+    nextCursor: typeof paging?.next === "string" && paging.next && typeof after === "string" && after ? after : null
   };
 }
 
@@ -159,6 +159,11 @@ export function createInstagramEngagementClient(input: {
   }
 
   return {
+    async getSubscribedFields() {
+      const payload = await request<GraphConnection<{ subscribed_fields?: string[] }>>(`${accountId}/subscribed_apps`);
+      if (!Array.isArray(payload.data)) throw new InstagramEngagementApiError("request_failed");
+      return [...new Set(payload.data.flatMap(app => Array.isArray(app.subscribed_fields) ? app.subscribed_fields.filter(field => typeof field === "string") : []))];
+    },
     async ownsMedia(mediaId: string) {
       const expectedId = requiredId(mediaId, "mediaId");
       let after: string | undefined;

@@ -57,6 +57,7 @@ const envSchema = z.object({
   INSTAGRAM_CLIENT_SECRET: z.string().optional().default(""),
   INSTAGRAM_GRAPH_API_VERSION: z.string().regex(/^v\d+\.\d+$/).default("v26.0"),
   INSTAGRAM_WEBHOOK_VERIFY_TOKEN: z.string().optional().default(""),
+  INSTAGRAM_RECEPTION_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(90),
   INSTAGRAM_OAUTH_SCOPES: z
     .string()
     .optional()

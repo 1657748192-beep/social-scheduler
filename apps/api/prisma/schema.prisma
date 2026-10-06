@@ -233,9 +233,67 @@ model SocialAccount {
   postVariants      PostVariant[]
   instagramPrivateReplyAttempts InstagramPrivateReplyAttempt[]
   instagramEngagementOAuthStates OauthState[] @relation("InstagramEngagementReauth")
+  instagramReceivedComments InstagramReceivedComment[]
+  instagramReceivedThreads InstagramReceivedThread[]
+  instagramReceptionState InstagramReceptionState?
 
   @@unique([workspaceId, platform, providerAccountId])
   @@map("social_accounts")
+}
+
+model InstagramReceivedComment {
+  id String @id @default(uuid()) @db.Uuid
+  socialAccountId String @db.Uuid
+  providerCommentId String
+  mediaId String
+  text String?
+  senderId String?
+  username String?
+  occurredAt DateTime
+  receivedAt DateTime @default(now())
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  @@unique([socialAccountId, providerCommentId])
+  @@index([socialAccountId, mediaId, id])
+  @@index([receivedAt])
+  @@map("instagram_received_comments")
+}
+
+model InstagramReceivedThread {
+  id String @id @default(uuid()) @db.Uuid
+  socialAccountId String @db.Uuid
+  counterpartyId String
+  providerConversationId String?
+  updatedAt DateTime @default(now())
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  messages InstagramReceivedMessage[]
+  @@unique([socialAccountId, counterpartyId])
+  @@map("instagram_received_threads")
+}
+
+model InstagramReceivedMessage {
+  id String @id @default(uuid()) @db.Uuid
+  threadId String @db.Uuid
+  providerMessageId String
+  senderId String
+  recipientId String
+  text String?
+  attachments Json @default("[]")
+  inbound Boolean
+  occurredAt DateTime
+  receivedAt DateTime @default(now())
+  thread InstagramReceivedThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  @@unique([threadId, providerMessageId])
+  @@index([threadId, id])
+  @@index([receivedAt])
+  @@map("instagram_received_messages")
+}
+
+model InstagramReceptionState {
+  socialAccountId String @id @db.Uuid
+  revision BigInt @default(0)
+  lastReceivedAt DateTime?
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  @@map("instagram_reception_states")
 }
 
 model InstagramPrivateReplyAttempt {

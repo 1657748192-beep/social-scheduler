@@ -13,6 +13,7 @@ import { composerRoutes } from "./routes/composerRoutes";
 import { healthRoutes } from "./routes/healthRoutes";
 import { createInstagramWebhookRouter } from "./routes/instagramWebhookRoutes";
 import { instagramEngagementRoutes } from "./routes/instagramEngagementRoutes";
+import { instagramReceptionService } from "./services/instagramReception";
 import { tiktokPostMetricsRoutes } from "./routes/tiktokPostMetricsRoutes";
 import { scheduleRoutes } from "./routes/scheduleRoutes";
 import { socialAccountRoutes } from "./routes/socialAccountRoutes";
@@ -32,7 +33,9 @@ export function createApp() {
     "/api/v1/webhooks/instagram",
     createInstagramWebhookRouter({
       verifyToken: config.INSTAGRAM_WEBHOOK_VERIFY_TOKEN,
-      appSecret: config.INSTAGRAM_CLIENT_SECRET
+      appSecret: config.INSTAGRAM_CLIENT_SECRET,
+      captureContent: true,
+      onEvent: event => instagramReceptionService.receive(event)
     })
   );
   app.use(express.json({ limit: "1mb" }));
