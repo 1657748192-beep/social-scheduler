@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { encryptToken, decryptToken } from "../src/utils/tokenCrypto";
 import { createSandboxAuthorizationService } from "../src/services/tiktokSandboxAuthorizationService";
+import { createSandboxCredentialService } from "../src/integrations/social/tiktokSandboxCredentialService";
 
 test("Sandbox database isolation, replay protection and identity gating", async t => {
   const url = process.env.SANDBOX_TEST_DATABASE_URL;
@@ -14,13 +15,16 @@ test("Sandbox database isolation, replay protection and identity gating", async 
   const userId = randomUUID(), workspaceId = randomUUID(), accountId = randomUUID(), sessionId = randomUUID();
   const settings = { enabled: true, allowedUserId: userId, allowedWorkspaceId: workspaceId, allowedAccountId: accountId,
     clientId: "sandbox-client", clientSecret: "sandbox-secret", redirectUri: "https://example.com/api/v1/integrations/tiktok-sandbox/oauth/callback" };
-  let username = "andypeng97", identityUnion = "same", exchanged = 0;
+  let username = "andypeng97", identityUnion = "same", exchanged = 0, refreshed = 0;
   const api = {
     creator: async () => username,
     identity: async (token: string) => ({ openId: token === "prod-token" ? "prod-open" : "sandbox-open", unionId: identityUnion }),
     exchange: async (key: string, secret: string) => { assert.equal(key, "sandbox-client"); assert.equal(secret, "sandbox-secret"); exchanged++; return {
       accessToken: "test-token", refreshToken: "test-refresh", openId: "sandbox-open", scopes: ["user.info.basic", "video.list", "user.info.stats"], expiresIn: 86400, refreshExpiresIn: 31536000 }; },
-    refresh: async () => { throw new Error("unexpected refresh"); }
+    refresh: async (key: string, secret: string, refreshToken: string) => {
+      assert.equal(key, "sandbox-client"); assert.equal(secret, "sandbox-secret"); assert.equal(refreshToken, "test-refresh"); refreshed++;
+      return { accessToken: "renewed", refreshToken: "rotated", openId: "sandbox-open", scopes: ["user.info.basic", "video.list", "user.info.stats"], expiresIn: 86400, refreshExpiresIn: 31536000 };
+    }
   };
   const service = createSandboxAuthorizationService({ db, settings, api });
   try {
@@ -60,6 +64,23 @@ test("Sandbox database isolation, replay protection and identity gating", async 
         await db.userSession.update({ where: { id: sessionId }, data: { revokedAt: null } });
         await db.workspaceMember.updateMany({ where: { userId, workspaceId }, data: { role: "owner" } });
       }
+    });
+    assert.deepEqual(await db.socialAccount.findUnique({ where: { id: accountId }, include: { credential: true } }), before);
+    const credentials = createSandboxCredentialService({ db, settings, api });
+    await t.test("parallel refresh rotates sandbox tokens only once", async () => {
+      await db.tikTokSandboxCredential.update({ where: { socialAccountId: accountId }, data: { expiresAt: new Date(0) } });
+      const tokens = await Promise.all([credentials.token(userId, workspaceId), credentials.token(userId, workspaceId)]);
+      assert.equal(refreshed, 1); assert.deepEqual(tokens.map(v => v.accessToken), ["renewed", "renewed"]);
+      assert.equal(decryptToken((await db.tikTokSandboxCredential.findUniqueOrThrow({ where: { socialAccountId: accountId } })).refreshTokenEncrypted!), "rotated");
+    });
+    await t.test("changed client or disabled feature rejects cached token", async () => {
+      settings.clientId = "other"; await assert.rejects(credentials.token(userId, workspaceId)); settings.clientId = "sandbox-client";
+      settings.enabled = false; await assert.rejects(credentials.token(userId, workspaceId)); settings.enabled = true;
+    });
+    await t.test("disconnect invalidates pending callbacks and does not recreate credentials", async () => {
+      const state = await start(); await credentials.disconnect(userId, workspaceId);
+      await assert.rejects(service.complete({ state, code: "code" })); await assert.rejects(credentials.token(userId, workspaceId));
+      assert.equal(await db.tikTokSandboxCredential.count({ where: { socialAccountId: accountId } }), 0);
     });
     assert.deepEqual(await db.socialAccount.findUnique({ where: { id: accountId }, include: { credential: true } }), before);
     assert.equal(await db.socialAccount.count({ where: { workspaceId } }), 1);
