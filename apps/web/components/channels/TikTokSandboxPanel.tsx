@@ -35,8 +35,23 @@ export function TikTokSandboxView(p: ViewProps) {
   </section>;
 }
 export function TikTokSandboxPanel(props: { token: string; workspaceId: string }) {
+  const { t } = useLanguage();
+  const [search, setSearch] = useState("");
+  useEffect(() => { setSearch(window.location.search); }, []);
   // Remount on tenant/session changes: in-flight requests cannot update the new tenant UI.
-  return <SandboxConnection key={`${props.workspaceId}:${props.token}`} {...props} />;
+  return <><TikTokSandboxOutcome search={search} t={t} /><SandboxConnection key={`${props.workspaceId}:${props.token}`} {...props} /></>;
+}
+export function TikTokSandboxOutcome({ search, t }: { search: string; t(zh: string, en: string): string }) {
+  const result = new URLSearchParams(search).get("tiktok_sandbox");
+  if (result === "failed") return <p role="alert" className="notice">{t(
+    "本次 TikTok 测试授权失败。请确认登录 andypeng97 并同意全部测试权限，再重新连接。已有授权不会被本次失败覆盖。",
+    "TikTok sandbox authorization failed. Sign in as andypeng97, allow all test permissions, and reconnect. This failed attempt did not replace an existing authorization."
+  )}</p>;
+  if (result === "connected") return <p role="status" className="notice">{t(
+    "TikTok 测试授权已完成。请在对应工作区手动读取数据；正式发布授权未更改。",
+    "TikTok sandbox authorization completed. Load data manually in the matching workspace; production publishing authorization is unchanged."
+  )}</p>;
+  return null;
 }
 function SandboxConnection({ token, workspaceId }: { token: string; workspaceId: string }) {
   const { t } = useLanguage();

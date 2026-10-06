@@ -77,6 +77,24 @@ test("Sandbox database isolation, replay protection and identity gating", async 
       settings.clientId = "other"; await assert.rejects(credentials.token(userId, workspaceId)); settings.clientId = "sandbox-client";
       settings.enabled = false; await assert.rejects(credentials.token(userId, workspaceId)); settings.enabled = true;
     });
+    await t.test("disconnect overlapping a blocked refresh leaves no resurrected credentials", async () => {
+      await service.complete({ state: await start(), code: "code" });
+      await db.tikTokSandboxCredential.update({ where: { socialAccountId: accountId }, data: { expiresAt: new Date(0) } });
+      let entered!: () => void, release!: () => void;
+      const entering = new Promise<void>(resolve => { entered = resolve; });
+      const blocked = new Promise<void>(resolve => { release = resolve; });
+      const original = api.refresh;
+      api.refresh = async (...args) => { entered(); await blocked; return original(...args); };
+      try {
+        const refreshing = credentials.token(userId, workspaceId);
+        await entering;
+        const disconnecting = credentials.disconnect(userId, workspaceId);
+        release();
+        await Promise.all([refreshing, disconnecting]);
+        assert.equal(await db.tikTokSandboxCredential.count({ where: { socialAccountId: accountId } }), 0);
+        await assert.rejects(credentials.token(userId, workspaceId));
+      } finally { release(); api.refresh = original; }
+    });
     await t.test("disconnect invalidates pending callbacks and does not recreate credentials", async () => {
       const state = await start(); await credentials.disconnect(userId, workspaceId);
       await assert.rejects(service.complete({ state, code: "code" })); await assert.rejects(credentials.token(userId, workspaceId));
