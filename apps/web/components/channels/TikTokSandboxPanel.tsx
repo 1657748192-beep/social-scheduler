@@ -13,6 +13,7 @@ type ViewProps = { status: Status; busy: boolean; error: string; posts: Item[]; 
 export function TikTokSandboxView(p: ViewProps) {
   if (!p.status.eligible) return null;
   const { t } = p;
+  const needsVideoLookup = (post: Item) => !post.videoId && !(post.id === p.selected && p.metrics?.status === "ok");
   return <section className="panel" aria-label={t("TikTok Sandbox 数据测试", "TikTok Sandbox metrics test")} aria-busy={p.busy}>
     <h2>{t("TikTok Sandbox 数据测试", "TikTok Sandbox metrics test")}</h2>
     <p>andypeng97 · {t("只读测试，不更改正式发布授权。", "Read-only testing; production publishing authorization is unchanged.")}</p>
@@ -25,11 +26,11 @@ export function TikTokSandboxView(p: ViewProps) {
       <button className="button secondary" disabled={p.busy} onClick={() => p.onAction("posts")}>{t("读取已发布帖子", "Load published posts")}</button>
       <select aria-label={t("选择测试帖子", "Select test post")} disabled={p.busy} value={p.selected} onChange={e => p.onSelect(e.target.value)}>
         <option value="">{t("请选择帖子", "Select a post")}</option>
-        {p.posts.map(post => <option key={post.id} value={post.id}>{post.text || post.videoId || post.id}{!post.videoId ? t("（待查询视频 ID）", " (video ID lookup pending)") : ""}</option>)}
+        {p.posts.map(post => <option key={post.id} value={post.id}>{post.text || post.videoId || post.id}{needsVideoLookup(post) ? t("（待查询视频 ID）", " (video ID lookup pending)") : ""}</option>)}
       </select>
       {p.nextCursor ? <button className="button secondary" disabled={p.busy} onClick={() => p.onAction("more")}>{t("更多", "More")}</button> : null}
       <button className="button secondary" disabled={p.busy || !p.selected} onClick={() => p.onAction("metrics")}>{t("刷新视频数据", "Refresh video metrics")}</button>
-      {p.posts.some(post => post.id === p.selected && !post.videoId) ? <p className="muted">{t("此记录已发布。点击刷新视频数据，将查询真实视频 ID；不会重新发布视频。", "This record is published. Refresh video metrics to look up its actual video ID; this will not republish the video.")}</p> : null}
+      {p.posts.some(post => post.id === p.selected && needsVideoLookup(post)) ? <p className="muted">{t("此记录已发布。点击刷新视频数据，将查询真实视频 ID；不会重新发布视频。", "This record is published. Refresh video metrics to look up its actual video ID; this will not republish the video.")}</p> : null}
       {p.metrics ? <TikTokMetricsSummary result={p.metrics} t={t} /> : null}
     </> : null}
     {p.error ? <p role="alert" className="notice">{p.error}</p> : null}
