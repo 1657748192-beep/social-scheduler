@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "../../components/AppShell";
+import { TikTokAccountStatsPanel } from "../../components/channels/TikTokAccountStatsPanel";
 import {
   apiRequest,
   type CurrentUser,
@@ -698,6 +699,9 @@ export default function DashboardPage() {
                     "-"
                   )}
                 </span>
+                {account.platform === "tiktok" && token && selectedWorkspace ? (
+                  <TikTokAccountStatsPanel key={`${selectedWorkspace.id}:${account.id}:${account.status}:${token}`} token={token} workspaceId={selectedWorkspace.id} accountId={account.id} />
+                ) : null}
               </div>
             ))}
             {!socialAccounts.length ? (

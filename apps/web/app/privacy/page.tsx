@@ -46,7 +46,8 @@ export default function PrivacyPage() {
           <li><strong>Facebook：</strong>读取用户公开资料及其已授权主页的标识、名称、头像和主页访问权限，用于展示可连接主页，并仅在用户选定主页并确认操作时执行该主页允许的发布或管理操作。</li>
           <li><strong>Instagram：</strong>读取已授权专业账号的账号标识、用户名或显示名称、头像及必要访问令牌，用于显示用户选择的 Instagram 账号并处理用户明确发起的内容操作。</li>
           <li><strong>YouTube：</strong><code>youtube.readonly</code> 仅用于读取并显示用户已授权的 YouTube 频道；<code>youtube.upload</code> 仅在用户选择原创视频、填写标题或描述并确认发布后，用于上传该视频至用户选择的频道。</li>
-          <li><strong>TikTok：</strong><code>user.info.basic</code> 仅用于读取 TikTok 返回的 Open ID、公开头像和显示名称，以识别和展示用户选择的账号；<code>video.publish</code> 仅在用户选择视频、确认文案、隐私与互动设置并点击发布后，用于提交该用户选择的原创视频。</li>
+          <li><strong>TikTok：</strong><code>user.info.basic</code> 仅用于读取 TikTok 返回的 Open ID、公开头像和显示名称，以识别和展示用户选择的账号；<code>video.publish</code> 仅在用户选择视频、确认文案、隐私与互动设置并点击发布后，用于提交该用户选择的原创视频。可选的 <code>video.list</code> 权限用于用户主动查看本软件已发布公开视频的播放量、点赞数、评论数和分享数；本功能不读取评论正文或私信，不下载视频，也不将这些计数长期存储到数据库。</li>
+          <li><strong>TikTok 账号统计：</strong>可选的 <code>user.info.stats</code> 权限用于用户主动查看已连接账号的粉丝数、关注数、累计获赞数和公开视频数。这些是账号整体数据，包含在本软件之外发布的视频；我们不将统计计数长期保存到数据库，也不后台轮询。</li>
           <li><strong>LinkedIn、Pinterest 与 X：</strong>读取用户授权返回的账号标识、公开显示名称、头像（如平台提供）及必要令牌，用于账号连接、账号展示以及用户明确发起且平台允许的操作。</li>
         </ul>
         <p>我们不会读取未获授权的私信、私人内容或其他无关数据，也不会在没有用户主动操作的情况下向任何第三方平台发布内容。</p>

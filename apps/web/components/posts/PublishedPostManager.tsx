@@ -15,6 +15,7 @@ import {
 import { formatChinaDateTime } from "../../lib/chinaTime";
 import { getActiveWorkspaceId, setActiveWorkspaceId } from "../../lib/activeWorkspace";
 import { useLanguage } from "../LanguageProvider";
+import { TikTokPostMetricsPanel } from "./TikTokPostMetricsPanel";
 
 type PublishedPostManagerProps = {
   token: string;
@@ -557,6 +558,9 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
                 </div>
                 {post.platform === "instagram" && post.providerPostId && post.instagramEngagement ? (
                   <InstagramPostEngagementPanel token={token} workspaceId={workspaceId} post={post} role={workspaceRole} />
+                ) : null}
+                {post.platform === "tiktok" ? (
+                  <TikTokPostMetricsPanel key={`${workspaceId}:${post.id}:${token}`} token={token} workspaceId={workspaceId} scheduleId={post.id} />
                 ) : null}
               </div>
             </article>

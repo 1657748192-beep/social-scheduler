@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "crypto";
+import { validateTikTokMetricsGrant } from "../integrations/oauth/tiktokMetricsAuthorization";
 import type { Platform } from "@prisma/client";
 import { z } from "zod";
 import { config } from "../config";
@@ -556,7 +557,9 @@ export async function completeOAuth(platformParam: string, code: string, state: 
   }
   const scopes = provider.platform === "instagram"
     ? actualInstagramScopes!
-    : parseScopes(credentialTokenResponse, oauthState.scopes);
+    : provider.platform === "tiktok" && oauthState.scopes.some(scope => ["video.list", "user.info.stats"].includes(scope))
+      ? validateTikTokMetricsGrant(credentialTokenResponse.scope, [])
+      : parseScopes(credentialTokenResponse, oauthState.scopes);
   const engagementAccountId = oauthState.instagramEngagementSocialAccountId;
   const engagementAccount = engagementAccountId
     ? await prisma.socialAccount.findFirst({
@@ -594,6 +597,15 @@ export async function completeOAuth(platformParam: string, code: string, state: 
   };
 
   const socialAccount = await prisma.$transaction(async (tx) => {
+    if (provider.platform === "tiktok" && oauthState.scopes.some(scope => ["video.list", "user.info.stats"].includes(scope))) {
+      const previous = await tx.socialAccount.findUnique({
+        where: { workspaceId_platform_providerAccountId: {
+          workspaceId: oauthState.workspaceId, platform: "tiktok", providerAccountId: profile.providerAccountId
+        } },
+        select: { credential: { select: { scopes: true } } }
+      });
+      validateTikTokMetricsGrant(credentialTokenResponse.scope, previous?.credential?.scopes ?? []);
+    }
     if (engagementAccountId && engagementAccount) {
       const account = await tx.socialAccount.update({
         where: { id: engagementAccount.id },

@@ -4914,3 +4914,15 @@ textarea {
     border-right: 0;
   }
 }
+.tiktok-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.tiktok-metrics-grid > div { background: #f1f5f9; padding: 12px; border-radius: 8px; }
+.tiktok-metrics-grid dt { font-size: 13px; color: #526179; }
+.tiktok-metrics-grid dd { margin: 6px 0 0; font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
+@media (max-width: 600px) { .tiktok-metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.tiktok-account-stats { grid-column: 1 / -1; width: 100%; min-width: 0; }

@@ -1,5 +1,14 @@
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
 
+export type TikTokAccountStats =
+  | { status: "ok"; followerCount: number; followingCount: number; likesCount: number; videoCount: number; fetchedAt: string }
+  | { status: "permission_missing" | "authorization_required" | "rate_limited" | "temporarily_unavailable" | "data_unavailable" | "account_unavailable" };
+
+export type TikTokPostMetrics =
+  | { status: "ok"; viewCount: number; likeCount: number; commentCount: number; shareCount: number; fetchedAt: string }
+  | { status: "permission_missing" | "authorization_required" | "rate_limited" | "temporarily_unavailable" |
+      "video_unavailable" | "private_video" | "video_id_missing" | "account_unavailable" };
+
 type ApiOptions = {
   token?: string | null;
   method?: string;

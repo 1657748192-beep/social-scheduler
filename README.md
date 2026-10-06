@@ -85,3 +85,22 @@ Instagram OAuth 仍未稳定，主要报错是 token exchange 时 redirect URI �
 - 不要提交 `.env`。
 - 不要在文档、代码或日志里写真实 App Secret、SMTP 密码、数据库密码、SSH 密码、Token、Cookie、私钥。
 - 如果发现历史提交泄露密钥，立即更换相关密钥。
+# TikTok 帖子与账号数据（可选）
+
+已发布页面的 TikTok 帖子提供“查看数据”，按需读取播放、点赞、评论、分享计数。
+渠道管理的 TikTok 账号下提供“查看账号数据”：粉丝数、关注数、累计获赞数和公开视频数。账号数据覆盖该账号全部视频，不限于本软件发布记录；使用 `user.info.stats`，不需要 `user.info.profile`。
+只查询当前工作区内本软件成功发布且具有真实视频 ID 的公开帖子。接口未返回完整数据时显示原因，不补零。
+没有后台轮询、视频下载或新增数据库表。评论正文、回复和私信不在本功能范围内。
+
+启用步骤：
+
+1. 在原 TikTok 开发者应用中申请 Display API、`video.list` 和 `user.info.stats`，保留 Content Posting API 及原有发布权限。
+2. 获批后才在现有 `TIKTOK_OAUTH_SCOPES` 后追加 `video.list,user.info.stats`（通常为 `user.info.basic,video.publish,video.list,user.info.stats`；如原来使用 `video.upload` 等权限，继续保留），按现有流程重新部署配置。不要更换应用密钥或回调地址。
+3. 需要查看数据的用户从“连接渠道”为同一 TikTok 账号补充授权；原账号无需为继续发布而重新授权。回调会校验实际授予权限，拒绝用缺少既有发布权限的凭证覆盖旧连接。
+4. 对本软件发布的公开视频展开“查看数据”，核对四项计数；刷新后读取时间应更新。只有发布任务 ID 的历史记录暂不可查询。
+5. 验证原有立即发布、定时发布和令牌刷新，之后再扩大使用范围。应用审核需演示真实授权及数据展示，不能用模拟数据冒充平台返回数据。
+
+接口：`GET /api/v1/workspaces/:workspaceId/tiktok/posts/:scheduleId/metrics`，要求登录及工作区成员权限。
+账号接口：`GET /api/v1/workspaces/:workspaceId/social-accounts/:accountId/tiktok-stats`，同样要求登录及工作区成员权限。
+两个面板独立检查各自权限。缺少 `video.list`、`user.info.stats` 或读取 API 报错只影响相应数据面板，不将整个发布账号标记为缺少权限。仅手动读取，不保存计数历史，不显示增长趋势。
+本地测试不等于生产验收；真实计数仍需已批准权限、用户授权和可查询的公开视频。
