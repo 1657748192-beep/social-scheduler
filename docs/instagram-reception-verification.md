@@ -61,3 +61,10 @@ The user authorized commit name `社媒` and an arbitrary email; commits used th
 - Byte comparison confirmed `.env` unchanged, preserving provider credentials and publishing configuration.
 - Production reception service read used an existing workspace owner for the existing account, without creating sessions or disclosing credentials/content. Result: serverReady true; subscriptionStatus verified; subscribedFields `[messages]`; revision `0`; lastReceivedAt null; retentionDays 90; callback/publication unknown. Wrong-workspace read was denied (`SCOPED_READ_AND_ISOLATION_OK`).
 - Missing comments subscription and absence of received real events remain external acceptance gaps. No synthetic production webhook, customer reply, Meta publication or review submission was performed.
+
+## Meta configuration follow-up — user confirmed
+
+- Saved and verified the existing server handshake token with callback `https://app.bufferhelp.com/api/v1/webhooks/instagram` in Meta's Instagram Login API setup. Saved UI shows a green completion check and masked verification token. No token rotation or publishing credential change occurred.
+- App-level `comments` and `messages` subscriptions were already checked once the saved callback fields were visible. Other pre-existing app-level subscriptions were left unchanged, rather than disabling unrelated functionality.
+- Updated only the existing `mooyamcosmetic` account subscription through its stored, comment-authorized Instagram credential: pre-read `[messages]`; POST HTTP 200 with `success:true`; post-read `[messages,comments]`. Existing subscribed fields were preserved. Other accounts were not changed.
+- Meta still displays that the app must be published to receive Webhooks. No app publication or app-review submission was performed. Real tester comment/message acceptance and any reply remain pending; callback verification and subscription success alone do not establish content delivery.
