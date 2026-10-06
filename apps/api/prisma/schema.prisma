@@ -122,6 +122,8 @@ model User {
   sentInvites  WorkspaceInvitation[] @relation("InvitationSender")
   acceptedInvites WorkspaceInvitation[] @relation("InvitationAccepter")
   oauthStates  OauthState[]
+  tiktokSandboxCredentials TikTokSandboxCredential[]
+  tiktokSandboxStates TikTokSandboxOAuthState[]
   oauthAuthorizationLinks OauthAuthorizationLink[] @relation("OauthAuthorizationLinkCreator")
   uploadedMedia MediaAsset[]     @relation("MediaUploader")
 
@@ -170,6 +172,8 @@ model Workspace {
   invitations WorkspaceInvitation[]
   socialAccounts SocialAccount[]
   oauthStates OauthState[]
+  tiktokSandboxCredentials TikTokSandboxCredential[]
+  tiktokSandboxStates TikTokSandboxOAuthState[]
   oauthAuthorizationLinks OauthAuthorizationLink[]
   mediaAssets MediaAsset[]
 
@@ -224,6 +228,8 @@ model SocialAccount {
   createdAt         DateTime            @default(now()) @map("created_at")
   workspace         Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   credential        OauthCredential?
+  tiktokSandboxCredential TikTokSandboxCredential?
+  tiktokSandboxStates TikTokSandboxOAuthState[]
   postVariants      PostVariant[]
   instagramPrivateReplyAttempts InstagramPrivateReplyAttempt[]
   instagramEngagementOAuthStates OauthState[] @relation("InstagramEngagementReauth")
@@ -246,6 +252,47 @@ model InstagramPrivateReplyAttempt {
   @@unique([socialAccountId, commentId])
   @@index([socialAccountId, mediaId, createdAt])
   @@map("instagram_private_reply_attempts")
+}
+
+model TikTokSandboxCredential {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  workspaceId String @db.Uuid
+  socialAccountId String @unique @db.Uuid
+  clientKey String
+  openId String
+  unionId String
+  accessTokenEncrypted String
+  refreshTokenEncrypted String?
+  scopes String[]
+  expiresAt DateTime
+  refreshTokenExpiresAt DateTime?
+  revision String @default(uuid()) @db.Uuid
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  @@map("tiktok_sandbox_credentials")
+}
+
+model TikTokSandboxOAuthState {
+  id String @id @default(uuid()) @db.Uuid
+  stateHash String @unique
+  userId String @db.Uuid
+  workspaceId String @db.Uuid
+  socialAccountId String @db.Uuid
+  sessionId String @db.Uuid
+  clientKey String
+  expectedUnionId String
+  redirectUri String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  @@index([expiresAt])
+  @@map("tiktok_sandbox_oauth_states")
 }
 
 model OauthCredential {

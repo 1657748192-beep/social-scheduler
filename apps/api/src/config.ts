@@ -66,6 +66,12 @@ const envSchema = z.object({
   YOUTUBE_CLIENT_ID: z.string().optional().default(""),
   YOUTUBE_CLIENT_SECRET: z.string().optional().default(""),
   TIKTOK_CLIENT_ID: z.string().optional().default(""),
+  TIKTOK_SANDBOX_ENABLED: z.enum(["true", "false"]).default("false").transform(value => value === "true"),
+  TIKTOK_SANDBOX_CLIENT_ID: z.string().default(""),
+  TIKTOK_SANDBOX_CLIENT_SECRET: z.string().default(""),
+  TIKTOK_SANDBOX_ALLOWED_USER_ID: z.string().default(""),
+  TIKTOK_SANDBOX_WORKSPACE_ID: z.string().default(""),
+  TIKTOK_SANDBOX_SOCIAL_ACCOUNT_ID: z.string().default(""),
   TIKTOK_CLIENT_SECRET: z.string().optional().default(""),
   TIKTOK_OAUTH_SCOPES: z.string().optional().default("user.info.basic"),
   TIKTOK_DIRECT_POST_AUDITED: z
