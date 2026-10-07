@@ -149,6 +149,43 @@
 .software-shell .calendar-toolbar { border-color: var(--line); }
 .software-shell .channel-modal { border-radius: 16px; }
 .software-shell .channel-card.connected { background: #effaf3; border-color: #65b68e; }
+.software-shell .dashboard-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  align-items: start;
+  gap: 20px;
+}
+.software-shell .dashboard-overview-grid > * { min-width: 0; }
+.software-shell .dashboard-overview-grid .channel-management { gap: 20px; scroll-margin-top: 110px; }
+.software-shell .dashboard-overview-grid .provider-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.software-shell .dashboard-overview-grid .provider-card { padding: 16px; }
+.software-shell .dashboard-overview-grid .connected-table { overflow-x: auto; }
+.software-shell .dashboard-overview-grid :is(.connected-table-head, .connected-table-row) { grid-template-columns: 90px minmax(110px, 1fr) 110px 90px; min-width: 452px; gap: 10px; }
+.software-shell .dashboard-overview-sidebar { display: grid; gap: 20px; min-width: 0; }
+.software-shell .dashboard-overview-sidebar .panel { padding: 20px; }
+.software-shell .dashboard-overview-sidebar h2 { margin: 0; font-size: 16px; }
+.software-shell .dashboard-account-list { list-style: none; padding: 0; margin: 18px 0; display: grid; gap: 16px; max-height: 340px; overflow-y: auto; }
+.software-shell .dashboard-account-list li { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.software-shell .dashboard-account-identity { display: grid; gap: 4px; min-width: 0; }
+.software-shell .dashboard-account-identity strong { font-size: 13px; overflow-wrap: anywhere; }
+.software-shell .dashboard-account-identity small { font-size: 11px; color: var(--muted); }
+.software-shell .dashboard-account-state { color: #93591a; font-size: 11px; max-width: 92px; }
+.software-shell .dashboard-account-state::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 5px; border-radius: 50%; background: #d39437; }
+.software-shell .dashboard-account-state[data-connected="true"] { color: #168355; }
+.software-shell .dashboard-account-state[data-connected="true"]::before { background: #16b77b; }
+.software-shell .dashboard-account-manage { width: 100%; }
+.software-shell .dashboard-shortcut-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+.software-shell .dashboard-shortcut-grid a { display: grid; justify-items: center; gap: 8px; padding: 16px 8px; border: 1px solid transparent; border-radius: 10px; background: #f5f8fa; text-decoration: none; color: var(--text); }
+.software-shell .dashboard-shortcut-grid a:hover { border-color: #bddccb; background: #edf8f1; }
+.software-shell .dashboard-shortcut-grid strong { font-size: 12px; font-weight: 500; text-align: center; }
+.software-shell .shortcut-symbol { font-size: 26px; line-height: 1; color: #0aa976; }
+.software-shell .shortcut-symbol.tone-1 { color: #2588da; }
+.software-shell .shortcut-symbol.tone-2 { color: #9555d6; }
+.software-shell .shortcut-symbol.tone-3 { color: #e79638; }
+@media (max-width: 1200px) {
+  .software-shell .dashboard-overview-grid { grid-template-columns: minmax(0, 1fr); }
+  .software-shell .dashboard-overview-sidebar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 @media (max-width: 1100px) and (min-width: 761px) {
   .software-shell { grid-template-columns: 228px minmax(0, 1fr); }
   .software-shell .software-topbar { flex-wrap: wrap; padding: 18px 22px; }
@@ -166,6 +203,8 @@
   .software-shell .software-content { padding: 18px 14px 28px; }
   .software-shell :is(.panel, .composer-panel) { padding: 18px; }
   .software-shell .connected-table { overflow-x: auto; }
+  .software-shell .dashboard-overview-sidebar,
+  .software-shell .dashboard-overview-grid .provider-grid { grid-template-columns: minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) {
   .software-shell *, .software-shell *::before { transition: none !important; animation: none !important; }

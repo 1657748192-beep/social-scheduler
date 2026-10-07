@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "../../components/AppShell";
+import { DashboardSidebar } from "../../components/dashboard/DashboardSidebar";
 import { TikTokAccountStatsPanel } from "../../components/channels/TikTokAccountStatsPanel";
 import { TikTokSandboxPanel } from "../../components/channels/TikTokSandboxPanel";
 import {
@@ -101,6 +102,7 @@ export default function DashboardPage() {
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([]);
   const [socialAccounts, setSocialAccounts] = useState<SocialAccount[]>([]);
+  const [accountsWorkspaceId, setAccountsWorkspaceId] = useState<string | null>(null);
   const [oauthStatuses, setOAuthStatuses] = useState<OAuthProviderStatus[]>([]);
   const [authorizationLinks, setAuthorizationLinks] = useState<
     Record<string, OAuthAuthorizationLink>
@@ -148,6 +150,7 @@ export default function DashboardPage() {
     setMembers(memberList);
     setInvitations(invitationList);
     setSocialAccounts(socialAccountList);
+    setAccountsWorkspaceId(workspaceId);
     setOAuthStatuses(oauthStatusList);
   }
 
@@ -459,114 +462,7 @@ export default function DashboardPage() {
           ))}
         </section>
 
-        {token && selectedWorkspace ? <TikTokSandboxPanel token={token} workspaceId={selectedWorkspace.id} /> : null}
-        <div className="dashboard-layout">
-          <section className="panel workspace-panel">
-            <div className="row">
-              <h2>{t("工作区", "Workspaces")}</h2>
-              <span className="muted">{t(`${workspaces.length} 个`, `${workspaces.length}`)}</span>
-            </div>
-
-            <label className="field">
-              <span>{t("当前工作区", "Current workspace")}</span>
-              <select
-                value={selectedWorkspaceId}
-                onChange={(event) => selectWorkspace(event.target.value)}
-              >
-                {workspaces.map((workspace) => (
-                  <option key={workspace.id} value={workspace.id}>
-                    {workspace.name} ({roleLabel(workspace.role, locale)})
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <form className="inline-form" onSubmit={createWorkspace}>
-              <input name="name" placeholder={t("新工作区名称", "New workspace name")} required />
-              <button className="button" type="submit">
-                {t("创建", "Create")}
-              </button>
-              <input name="timezone" type="hidden" value="Asia/Shanghai" />
-            </form>
-
-            <ul className="list compact-list">
-              {workspaces.map((workspace) => (
-                <li key={workspace.id}>
-                  <strong>{workspace.name}</strong>
-                  <div className="muted">
-                    {workspace.slug} · {roleLabel(workspace.role, locale)}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <section className="panel">
-            <div className="row">
-              <h2>{t("成员", "Members")}</h2>
-              <span className="muted">{t(`${members.length} 人`, `${members.length}`)}</span>
-            </div>
-
-            <ul className="list compact-list">
-              {members.map((member) => (
-                <li className="workspace-member-row" key={member.id}>
-                  <div>
-                    <strong>{member.name}</strong>
-                    <div className="muted">
-                      {member.email} · {roleLabel(member.role, locale)} · {memberStatusLabel(member.status, locale)}
-                    </div>
-                  </div>
-                  {canManageMembers && member.role !== "owner" ? (
-                    <div className="workspace-member-actions">
-                      <button
-                        className="button secondary"
-                        disabled={memberActionId === member.id}
-                        onClick={() => toggleMemberStatus(member)}
-                        type="button"
-                      >
-                        {member.status === "disabled" ? t("恢复成员", "Restore") : t("停用成员", "Disable")}
-                      </button>
-                      <button
-                        className="button danger-button"
-                        disabled={memberActionId === member.id}
-                        onClick={() => removeMember(member)}
-                        type="button"
-                      >
-                        {t("移除成员", "Remove")}
-                      </button>
-                    </div>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-
-            {canManageMembers ? (
-              <div className="invite-box">
-                <h3>{t("邀请成员", "Invite member")}</h3>
-                <form className="form tight-form" onSubmit={inviteMember}>
-                  <label className="field">
-                    <span>{t("电子邮箱", "Email")}</span>
-                    <input name="email" type="email" required />
-                  </label>
-                  <label className="field">
-                    <span>{t("权限", "Role")}</span>
-                    <select name="role" defaultValue="viewer">
-                      <option value="admin">{t("管理员", "Admin")}</option>
-                      <option value="editor">{t("编辑者", "Editor")}</option>
-                      <option value="viewer">{t("查看者", "Viewer")}</option>
-                    </select>
-                  </label>
-                  <button className="button" type="submit">
-                    {t("创建邀请", "Create invitation")}
-                  </button>
-                </form>
-                {latestInviteUrl ? <code className="code">{latestInviteUrl}</code> : null}
-              </div>
-            ) : null}
-          </section>
-
-        </div>
-
+        <div className="dashboard-overview-grid">
         <section className="panel channel-management" id="social-channels">
           <div className="row">
             <div>
@@ -711,6 +607,123 @@ export default function DashboardPage() {
             ) : null}
           </div>
         </section>
+
+          <DashboardSidebar
+            accounts={accountsWorkspaceId === selectedWorkspaceId ? socialAccounts : []}
+            locale={locale}
+            loading={accountsWorkspaceId !== selectedWorkspaceId}
+            failed={Boolean(error) && accountsWorkspaceId !== selectedWorkspaceId}
+          />
+        </div>
+
+        <div className="dashboard-layout">
+          <section className="panel workspace-panel">
+            <div className="row">
+              <h2>{t("工作区", "Workspaces")}</h2>
+              <span className="muted">{t(`${workspaces.length} 个`, `${workspaces.length}`)}</span>
+            </div>
+
+            <label className="field">
+              <span>{t("当前工作区", "Current workspace")}</span>
+              <select
+                value={selectedWorkspaceId}
+                onChange={(event) => selectWorkspace(event.target.value)}
+              >
+                {workspaces.map((workspace) => (
+                  <option key={workspace.id} value={workspace.id}>
+                    {workspace.name} ({roleLabel(workspace.role, locale)})
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <form className="inline-form" onSubmit={createWorkspace}>
+              <input name="name" placeholder={t("新工作区名称", "New workspace name")} required />
+              <button className="button" type="submit">
+                {t("创建", "Create")}
+              </button>
+              <input name="timezone" type="hidden" value="Asia/Shanghai" />
+            </form>
+
+            <ul className="list compact-list">
+              {workspaces.map((workspace) => (
+                <li key={workspace.id}>
+                  <strong>{workspace.name}</strong>
+                  <div className="muted">
+                    {workspace.slug} · {roleLabel(workspace.role, locale)}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="panel">
+            <div className="row">
+              <h2>{t("成员", "Members")}</h2>
+              <span className="muted">{t(`${members.length} 人`, `${members.length}`)}</span>
+            </div>
+
+            <ul className="list compact-list">
+              {members.map((member) => (
+                <li className="workspace-member-row" key={member.id}>
+                  <div>
+                    <strong>{member.name}</strong>
+                    <div className="muted">
+                      {member.email} · {roleLabel(member.role, locale)} · {memberStatusLabel(member.status, locale)}
+                    </div>
+                  </div>
+                  {canManageMembers && member.role !== "owner" ? (
+                    <div className="workspace-member-actions">
+                      <button
+                        className="button secondary"
+                        disabled={memberActionId === member.id}
+                        onClick={() => toggleMemberStatus(member)}
+                        type="button"
+                      >
+                        {member.status === "disabled" ? t("恢复成员", "Restore") : t("停用成员", "Disable")}
+                      </button>
+                      <button
+                        className="button danger-button"
+                        disabled={memberActionId === member.id}
+                        onClick={() => removeMember(member)}
+                        type="button"
+                      >
+                        {t("移除成员", "Remove")}
+                      </button>
+                    </div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+
+            {canManageMembers ? (
+              <div className="invite-box">
+                <h3>{t("邀请成员", "Invite member")}</h3>
+                <form className="form tight-form" onSubmit={inviteMember}>
+                  <label className="field">
+                    <span>{t("电子邮箱", "Email")}</span>
+                    <input name="email" type="email" required />
+                  </label>
+                  <label className="field">
+                    <span>{t("权限", "Role")}</span>
+                    <select name="role" defaultValue="viewer">
+                      <option value="admin">{t("管理员", "Admin")}</option>
+                      <option value="editor">{t("编辑者", "Editor")}</option>
+                      <option value="viewer">{t("查看者", "Viewer")}</option>
+                    </select>
+                  </label>
+                  <button className="button" type="submit">
+                    {t("创建邀请", "Create invitation")}
+                  </button>
+                </form>
+                {latestInviteUrl ? <code className="code">{latestInviteUrl}</code> : null}
+              </div>
+            ) : null}
+          </section>
+
+        </div>
+
+        {token && selectedWorkspace ? <TikTokSandboxPanel token={token} workspaceId={selectedWorkspace.id} /> : null}
 
         <section className="panel">
           <div className="row">
