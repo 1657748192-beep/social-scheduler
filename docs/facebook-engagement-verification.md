@@ -14,3 +14,11 @@ Official references checked:
 The adapter never follows provider next URLs or redirects, uses Page Bearer tokens, and checks actual debug_token grant/identity for capability prerequisites. Available scope status does not prove a user's Page task or Advanced Access: real Graph requests remain authoritative. Missing/ambiguous responses are not treated as empty lists. Sends have no automatic retry, and transport/ambiguous results are returned as unknown.
 
 Task 1 verification: 12 new adapter/policy tests passed; API TypeScript build passed; configured independent-database full suite 300 passed, 0 failed, 0 skipped. Configuration for test runs is taken from existing disposable local Docker database without printing its password. No production DB used.
+
+## Supplemental authorization stage
+
+Created independent `facebook_engagement_test` on the same disposable local container at 127.0.0.1:55436. Applied all 17 migrations from scratch, including additive Facebook OAuth fields. The earlier reception_test has no migration ledger, so it was not reset or baselined. All integration suites now use the new test database for this branch.
+
+Authorization entry and dedicated callback are implemented behind FACEBOOK_ENGAGEMENT_ENABLED=false. The Meta app must allow `/api/v1/integrations/facebook-engagement/oauth/callback`; Login for Business config must include requested additional permissions. No real settings changed yet. Supplemental states cannot be used through the ordinary callback to bind every returned Page.
+
+Task 2 verification: actual-grant gateway tests, cancellation/mismatch/replay tests, Prisma concurrent-consumption/CAS/role tests passed; API build passed; full configured suite 308 passed, no failures or skips. Publishing scopes and account status are untouched when interactive permissions are absent.

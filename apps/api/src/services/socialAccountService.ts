@@ -522,6 +522,11 @@ export async function completeOAuth(platformParam: string, code: string, state: 
     throw new HttpError(400, "Invalid OAuth state");
   }
 
+  // A supplemental state must never enter ordinary multi-Page binding.
+  if (oauthState.facebookEngagementSocialAccountId) {
+    throw new HttpError(400, "Use the dedicated Facebook engagement authorization callback.");
+  }
+
   if (oauthState.expiresAt <= new Date()) {
     await prisma.oauthState.delete({ where: { id: oauthState.id } }).catch(() => null);
     throw new HttpError(400, "OAuth state expired");

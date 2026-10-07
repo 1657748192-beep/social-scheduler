@@ -233,6 +233,7 @@ model SocialAccount {
   postVariants      PostVariant[]
   instagramPrivateReplyAttempts InstagramPrivateReplyAttempt[]
   instagramEngagementOAuthStates OauthState[] @relation("InstagramEngagementReauth")
+  facebookEngagementOAuthStates OauthState[] @relation("FacebookEngagementReauth")
   instagramReceivedComments InstagramReceivedComment[]
   instagramReceivedThreads InstagramReceivedThread[]
   instagramReceptionState InstagramReceptionState?
@@ -395,6 +396,9 @@ model OauthState {
   state        String    @unique
   authorizationLinkId String? @map("authorization_link_id") @db.Uuid
   instagramEngagementSocialAccountId String? @map("instagram_engagement_social_account_id") @db.Uuid
+  facebookEngagementSocialAccountId String? @map("facebook_engagement_social_account_id") @db.Uuid
+  facebookExpectedTokenHash String? @map("facebook_expected_token_hash")
+  facebookExpectedPageId String? @map("facebook_expected_page_id")
   codeVerifier String?   @map("code_verifier")
   redirectUri  String    @map("redirect_uri")
   scopes       String[]
@@ -404,6 +408,7 @@ model OauthState {
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   authorizationLink OauthAuthorizationLink? @relation(fields: [authorizationLinkId], references: [id], onDelete: SetNull)
   instagramEngagementSocialAccount SocialAccount? @relation("InstagramEngagementReauth", fields: [instagramEngagementSocialAccountId], references: [id], onDelete: Cascade)
+  facebookEngagementSocialAccount SocialAccount? @relation("FacebookEngagementReauth", fields: [facebookEngagementSocialAccountId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId, platform, createdAt])
   @@index([expiresAt])

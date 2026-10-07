@@ -21,6 +21,22 @@ import {
   startOAuthSchema
 } from "../services/socialAccountService";
 import { HttpError } from "../utils/errors";
+import { facebookEngagementAuthorizationService, startFacebookEngagementAuthorization } from '../services/facebookEngagementAuthorization';
+
+export async function startFacebookEngagementOAuthController(req:Request,res:Response) {
+  const result=await startFacebookEngagementAuthorization(req.user!.id,req.params.workspaceId,req.params.socialAccountId);
+  return res.json(result);
+}
+export async function facebookEngagementOAuthCallbackController(req:Request,res:Response) {
+  const state=typeof req.query.state==='string'?req.query.state:undefined;
+  if(!state)throw new HttpError(400,'Missing Facebook authorization state.');
+  try {
+    await facebookEngagementAuthorizationService().complete(state,typeof req.query.code==='string'?req.query.code:undefined,typeof req.query.error==='string'?req.query.error:undefined);
+    return res.redirect(`${config.WEB_APP_URL}/social-accounts?facebookEngagement=connected`);
+  } catch {
+    return res.redirect(`${config.WEB_APP_URL}/social-accounts?facebookEngagement=error`);
+  }
+}
 
 export async function startOAuthController(req: Request, res: Response) {
   const query = startOAuthSchema.parse(req.query);
