@@ -15,6 +15,8 @@ import {
 } from "../../lib/api";
 import { formatChinaDateTime } from "../../lib/chinaTime";
 import { getActiveWorkspaceId, setActiveWorkspaceId } from "../../lib/activeWorkspace";
+import { supportedPlatformIds } from "../../lib/platformCounts";
+import { filterPublishedPosts, getPlatformAccounts } from "../../lib/publishedPostFilters";
 import { useLanguage } from "../LanguageProvider";
 import { TikTokPostMetricsPanel } from "./TikTokPostMetricsPanel";
 
@@ -375,6 +377,10 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
   const { t, locale } = useLanguage();
   const [workspaceId, setWorkspaceId] = useState("");
   const [platform, setPlatform] = useState<ComposerPlatform | "all">("all");
+  const [accountId, setAccountId] = useState("all");
+  const [accounts, setAccounts] = useState<SocialAccount[]>([]);
+  const [accountsError, setAccountsError] = useState<string | null>(null);
+  const requestSequence = useRef(0);
   const [posts, setPosts] = useState<PublishedPost[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -386,6 +392,10 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
   }, [workspaces]);
 
   function selectWorkspace(nextWorkspaceId: string) {
+    setAccountId("all");
+    setAccounts([]);
+    setPosts([]);
+    requestSequence.current += 1;
     setActiveWorkspaceId(nextWorkspaceId);
     setWorkspaceId(nextWorkspaceId);
   }
@@ -396,6 +406,7 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
   }, []);
 
   const loadPosts = useCallback(async () => {
+    const sequence = ++requestSequence.current;
     if (!workspaceId) {
       setPosts([]);
       return;
@@ -403,27 +414,43 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
 
     setIsLoading(true);
     setError(null);
+    setAccountsError(null);
 
     try {
-      const response = await apiRequest<PublishedPost[]>(
-        `/workspaces/${workspaceId}/published-posts`,
-        { token }
-      );
-      setPosts(response);
+      const [postResult, accountResult] = await Promise.allSettled([
+        apiRequest<PublishedPost[]>(`/workspaces/${workspaceId}/published-posts`, { token }),
+        apiRequest<SocialAccount[]>(`/workspaces/${workspaceId}/social-accounts`, { token })
+      ]);
+      if (sequence !== requestSequence.current) return;
+      if (accountResult.status === "fulfilled") {
+        setAccounts(accountResult.value);
+        setAccountId(current => current === "all" || accountResult.value.some(account => account.id === current && account.status !== "disconnected") ? current : "all");
+      } else {
+        setAccounts([]);
+        setAccountId("all");
+        setAccountsError(t("无法读取绑定账号，请刷新重试；仍可按平台查看帖子。", "Unable to load connected accounts. Refresh to retry; platform filtering remains available."));
+      }
+      if (postResult.status === "rejected") throw postResult.reason;
+      setPosts(postResult.value);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : t("无法读取已发布帖子", "Unable to load published posts"));
+      if (sequence === requestSequence.current) setError(requestError instanceof Error ? requestError.message : t("无法读取已发布帖子", "Unable to load published posts"));
     } finally {
-      setIsLoading(false);
+      if (sequence === requestSequence.current) setIsLoading(false);
     }
   }, [token, workspaceId]);
 
   useEffect(() => {
+    setAccountId("all");
+    setAccounts([]);
+    setPosts([]);
     void loadPosts();
+    return () => { requestSequence.current += 1; };
   }, [loadPosts]);
 
+  const platformAccounts = useMemo(() => getPlatformAccounts(accounts, platform), [accounts, platform]);
   const filteredPosts = useMemo(
-    () => (platform === "all" ? posts : posts.filter((post) => post.platform === platform)),
-    [platform, posts]
+    () => filterPublishedPosts(posts, platform, accountId),
+    [platform, accountId, posts]
   );
   const publishedPlatformCount = useMemo(
     () => new Set(posts.map((post) => post.platform)).size,
@@ -452,13 +479,20 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
           </label>
           <label className="field">
             <span>{t("平台", "Platform")}</span>
-            <select onChange={(event) => setPlatform(event.target.value as ComposerPlatform | "all")} value={platform}>
+            <select onChange={(event) => { setPlatform(event.target.value as ComposerPlatform | "all"); setAccountId("all"); }} value={platform}>
               <option value="all">{t("全部平台", "All platforms")}</option>
-              {Object.entries(platformLabels).map(([key, label]) => (
+              {supportedPlatformIds.map((key) => (
                 <option key={key} value={key}>
-                  {label}
+                  {platformLabels[key]}
                 </option>
               ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>{t("账号", "Account")}</span>
+            <select disabled={platform === "all" || isLoading || !platformAccounts.length} onChange={(event) => setAccountId(event.target.value)} value={accountId}>
+              <option value="all">{platform === "all" ? t("请先选择平台", "Select a platform first") : t("全部账号", "All accounts")}</option>
+              {platformAccounts.map(account => <option key={account.id} value={account.id}>{account.displayName}</option>)}
             </select>
           </label>
           <button className="button secondary published-refresh-button" disabled={isLoading} onClick={loadPosts} type="button">
@@ -483,13 +517,14 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
       </section>
 
       {error ? <p className="error">{error}</p> : null}
+      {accountsError ? <p className="error">{accountsError}</p> : null}
 
       {isLoading && !posts.length ? <p className="muted">{t("正在读取已发布帖子…", "Loading published posts...")}</p> : null}
 
       {!isLoading && !filteredPosts.length ? (
         <section className="published-post-empty">
-          <h2>{t("还没有已发布的帖子", "No published posts yet")}</h2>
-          <p>{t("完成一次立即发布或定时发布后，记录会自动显示在这里。", "Records appear here after publishing now or scheduling a post.")}</p>
+          <h2>{posts.length || platform !== "all" || accountId !== "all" ? t("当前筛选下暂无帖子", "No posts match these filters") : t("还没有已发布的帖子", "No published posts yet")}</h2>
+          <p>{platform !== "all" || accountId !== "all" ? t("可以切换平台或选择全部账号查看其他发布记录。", "Change the platform or select all accounts to view other records.") : t("完成一次立即发布或定时发布后，记录会自动显示在这里。", "Records appear here after publishing now or scheduling a post.")}</p>
           <Link className="button" href="/composer">
             {t("新建内容", "New content")}
           </Link>
