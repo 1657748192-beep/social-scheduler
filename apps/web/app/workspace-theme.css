@@ -165,7 +165,7 @@
 .software-shell .dashboard-overview-sidebar .panel { padding: 20px; }
 .software-shell .dashboard-overview-sidebar h2 { margin: 0; font-size: 16px; }
 .software-shell .dashboard-account-list { list-style: none; padding: 0; margin: 18px 0; display: grid; gap: 16px; max-height: 340px; overflow-y: auto; }
-.software-shell .dashboard-account-list li { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.software-shell .dashboard-account-list li { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 10px; align-items: center; }
 .software-shell .dashboard-account-identity { display: grid; gap: 4px; min-width: 0; }
 .software-shell .dashboard-account-identity strong { font-size: 13px; overflow-wrap: anywhere; }
 .software-shell .dashboard-account-identity small { font-size: 11px; color: var(--muted); }
@@ -237,6 +237,10 @@
 .software-shell .dashboard-upcoming-content img, .software-shell .dashboard-thumbnail-placeholder { width: 52px; height: 52px; flex: 0 0 52px; border-radius: 9px; object-fit: cover; }
 .software-shell .dashboard-thumbnail-placeholder { display: grid; place-items: center; background: #edf6f1; color: #79958a; font-size: 24px; }
 .software-shell .dashboard-platform { font-weight: 600; }
+.official-platform-logo { display: inline-flex; flex: 0 0 40px; width: 40px; height: 40px; align-items: center; justify-content: center; background: transparent !important; border: 0; border-radius: 0; box-shadow: none; }
+.official-platform-logo img { display: block; width: 28px; height: 28px; object-fit: contain; }
+.software-shell .channel-card-icon.official-platform-logo { width: 56px; height: 56px; }
+.software-shell .channel-card-icon.official-platform-logo img { width: 36px; height: 36px; }
 .software-shell .dashboard-content-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #edf2ef; margin: -6px 0 14px; }
 .software-shell .dashboard-content-tabs { display: flex; gap: 22px; overflow-x: auto; min-width: 0; }
 .software-shell .dashboard-content-tabs button { appearance: none; border: 0; border-radius: 0; border-bottom: 3px solid transparent; background: transparent; color: #718079; font: inherit; font-size: 13px; padding: 14px 0 12px; white-space: nowrap; cursor: pointer; }

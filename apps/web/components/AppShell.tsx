@@ -13,6 +13,7 @@ import {
 import { getActiveWorkspaceChangeEvent, getActiveWorkspaceId } from "../lib/activeWorkspace";
 import { countConnectedSupportedPlatforms } from "../lib/platformCounts";
 import { LanguageToggle, useLanguage, type AppLocale } from "./LanguageProvider";
+import { PlatformLogo } from "./PlatformLogo";
 
 type AppShellProps = {
   title: string;
@@ -407,9 +408,7 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
                     onClick={() => openChannel(provider, account)}
                     type="button"
                   >
-                    <span className={`channel-icon ${provider.platform}`}>
-                      {channelInitial(provider.platform)}
-                    </span>
+                    <PlatformLogo platform={provider.platform} className="channel-icon" />
                     <span className="channel-copy">
                       <strong>{provider.displayName}</strong>
                       <small>{channelStatusText(account, provider, t)}</small>
@@ -540,9 +539,7 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
                       onClick={() => openChannel(provider, connected ? undefined : account)}
                       type="button"
                     >
-                      <span className={`channel-card-icon ${provider.platform}`}>
-                        {channelInitial(provider.platform)}
-                      </span>
+                      <PlatformLogo platform={provider.platform} className="channel-card-icon" />
                       <strong>{provider.displayName}</strong>
                       <small>{channelDescription(provider.platform, locale)}</small>
                       <em>{connected ? t("重新授权", "Reconnect") : actionText}</em>

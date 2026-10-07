@@ -12,7 +12,8 @@ test("overview renders real counts and schedule status with existing management 
   const html = render(data);
   for (const value of [">124<", ">103<", "Actual title", "Actual caption", "real-account", "Publishing", "Instagram", "11:00", 'href="/calendar"', 'href="/posts"', 'href="/drafts"']) assert.ok(html.includes(value), value);
   assert.ok(!html.includes("20%"));
-  assert.ok(!html.includes("<img"));
+  assert.ok(html.includes("dashboard-thumbnail-placeholder"));
+  assert.ok(html.includes('alt="Instagram"'));
 });
 test("loading and failed reads never display invented zeros or successful empty state", () => {
   for (const html of [render(null, true), render(null, false, true)]) {

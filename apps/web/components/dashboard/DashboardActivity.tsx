@@ -5,6 +5,7 @@ import { startDashboardOverviewRequest } from "../../lib/dashboardOverviewReques
 import { subscribeDashboardClock } from "../../lib/dashboardClock";
 import { platformLabel, scheduleStatusLabel } from "../../lib/labels";
 import { DashboardContentPanel } from "./DashboardContent";
+import { PlatformLogo } from "../PlatformLogo";
 export { DashboardContentView } from "./DashboardContent";
 
 type ViewProps = { data: DashboardOverview | null; loading: boolean; failed: boolean; locale: "zh-CN" | "en"; timezone: string; userName?: string; now?: Date | null; children?: React.ReactNode; contentPanel?: React.ReactNode };
@@ -41,7 +42,7 @@ export function DashboardOverviewView({ data, loading, failed, locale, timezone,
           <tbody>{data.upcoming.map(item => <tr key={item.id}>
             <td><time dateTime={item.scheduledAt}>{new Date(item.scheduledAt).toLocaleString(locale, { timeZone: safeTimezone, month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })}</time></td>
             <td><div className="dashboard-upcoming-content">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" loading="lazy" /> : <span className="dashboard-thumbnail-placeholder" aria-hidden="true">▤</span>}<div><strong>{item.title || item.text || t("未命名内容", "Untitled content")}</strong><small>{item.text}</small>{item.accountName ? <small>{item.accountName}</small> : null}</div></div></td>
-            <td><span className={`dashboard-platform ${item.platform}`}>{platformLabel(item.platform)}</span></td>
+            <td><PlatformLogo platform={item.platform} /></td>
             <td><span className="status-pill ready">{scheduleStatusLabel(item.status, locale)}</span></td>
             <td><a className="text-button" href="/calendar">{t("查看排程", "View schedule")}</a></td>
           </tr>)}</tbody>

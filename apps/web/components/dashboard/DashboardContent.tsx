@@ -4,6 +4,7 @@ import { type CalendarSchedule, type DraftPost } from "../../lib/api";
 import { calendarDate, contentRowsForTab, type ContentGroup, type DashboardContentTab } from "../../lib/dashboardContent";
 import { startDashboardResourceRequest } from "../../lib/dashboardOverviewRequest";
 import { platformLabel, scheduleStatusLabel } from "../../lib/labels";
+import { PlatformLogo } from "../PlatformLogo";
 
 const tabs = [
   ["upcoming", "即将发布", "Upcoming"], ["calendar", "日历视图", "Calendar"], ["drafts", "草稿", "Drafts"],
@@ -18,7 +19,7 @@ type Props = {
 
 function Platforms({ group }: { group: ContentGroup }) {
   const platforms = [...new Set(group.records.map(record => record.platform).filter(Boolean))];
-  return <div className="dashboard-platforms">{platforms.map(platform => <span key={platform} className={`dashboard-platform-badge ${platform}`} title={platformLabel(platform)}>{platformLabel(platform)}</span>)}</div>;
+  return <div className="dashboard-platforms">{platforms.map(platform => <PlatformLogo key={platform} platform={platform} />)}</div>;
 }
 
 export function DashboardContentView({ schedules, drafts, activeTab, locale, timezone, loading, failed, month, onTabChange, onMonthChange }: Props) {

@@ -1,6 +1,7 @@
 import React from "react";
 import type { SocialAccount } from "../../lib/api";
 import { accountStatusLabel, platformLabel } from "../../lib/labels";
+import { PlatformLogo } from "../PlatformLogo";
 
 type Props = { accounts: SocialAccount[]; locale: "zh-CN" | "en"; loading: boolean; failed?: boolean };
 
@@ -23,9 +24,7 @@ export function DashboardSidebar({ accounts, locale, loading, failed = false }: 
           <ul className="dashboard-account-list">
             {accounts.map(account => (
               <li key={account.id}>
-                <span className={`channel-icon ${account.platform}`} aria-label={platformLabel(account.platform)}>
-                  {account.platform === "instagram" ? "IG" : account.platform === "tiktok" ? "♪" : platformLabel(account.platform).slice(0, 1)}
-                </span>
+                <PlatformLogo platform={account.platform} className="channel-icon" />
                 <span className="dashboard-account-identity"><strong>{account.displayName}</strong><small>{platformLabel(account.platform)}</small></span>
                 <span className="dashboard-account-state" data-connected={account.status === "active"}>
                   {accountStatusLabel(account.status, locale)}
