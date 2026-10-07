@@ -12,6 +12,18 @@
     "db:deploy": "npm run db:deploy -w apps/api",
     "lint": "npm run lint -w apps/api && npm run lint -w apps/web"
   },
+  "overrides": {
+    "deepmerge-ts": "8.0.2",
+    "shell-quote": "1.11.0",
+    "qs": "6.16.0",
+    "next": {
+      "postcss": "8.5.29",
+      "sharp": "0.35.5"
+    },
+    "cos-js-sdk-v5": {
+      "@xmldom/xmldom": "0.8.15"
+    }
+  },
   "devDependencies": {
     "concurrently": "^9.1.2"
   }

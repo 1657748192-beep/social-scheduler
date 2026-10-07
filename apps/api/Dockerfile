@@ -5,7 +5,7 @@ FROM base AS deps
 COPY package*.json ./
 COPY apps/api/package*.json apps/api/
 COPY apps/web/package*.json apps/web/
-RUN npm install
+RUN npx --yes --package npm@11.18.0 npm ci
 
 FROM deps AS build
 COPY apps/api apps/api

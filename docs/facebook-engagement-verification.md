@@ -66,3 +66,5 @@ Regression tests observed RED then GREEN for provider expiry, signed mixed batch
 Final configured test run: 332 passed, 0 failed, 0 skipped. Independent test database enabled TikTok Sandbox isolation tests too; missing test configuration is not waived. API build passed. Production environment and real Meta access are not tested here.
 
 Dependency audit also reports existing runtime/tooling alerts, including critical classifications for Next.js/proxy-addr/shell-quote. These packages were not upgraded in this feature branch; the three newly added development-test packages are not listed in that report. Dependency remediation needs a separately scoped compatibility/security assessment before production rollout; no automatic audit fix was run.
+
+Subsequent dependency remediation (2026-10-07): see [dependency-security-verification.md](dependency-security-verification.md). The refreshed local audit reports 0 vulnerabilities; 336 configured tests and API/web builds pass. This supersedes the earlier audit state above, not the deployment gate. Clean Alpine container verification, production rollout, and real Meta end-to-end checks remain pending.
