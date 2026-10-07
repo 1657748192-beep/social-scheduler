@@ -401,7 +401,7 @@ export default function DashboardPage() {
     <AppShell
       title={t("控制台", "Dashboard")}
       subtitle={t("工作区、成员、账号绑定与发布准备", "Workspaces, members, account connections, and publishing readiness")}
-      userLabel={user ? `${user.name} - ${user.email}` : "正在加载账号"}
+      userLabel={user?.name}
     >
       <div className="dashboard">
         {error ? <p className="error">{error}</p> : null}

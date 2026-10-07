@@ -96,6 +96,17 @@
 }
 .software-shell .software-topbar h1 { font-size: 24px; letter-spacing: -.7px; line-height: 1.3; color: #152e25; }
 .software-shell .software-topbar p { font-size: 13px; margin-top: 4px; }
+.software-shell .account-menu { position: relative; }
+.software-shell .account-menu-trigger { display: flex; align-items: center; gap: 9px; border: 0; background: transparent; color: var(--text); cursor: pointer; min-height: 42px; padding: 4px 6px; border-radius: 8px; font: inherit; font-weight: 600; }
+.software-shell .account-menu-trigger:hover { background: #f0f7f3; }
+.software-shell .account-menu-trigger:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.software-shell .account-avatar { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex: 0 0 32px; border-radius: 50%; background: #09ad75; color: white; font-size: 16px; }
+.software-shell .account-menu-name { max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+.software-shell .account-menu-chevron { color: var(--muted); }
+.software-shell .account-menu-popup { position: absolute; z-index: 50; right: 0; top: calc(100% + 8px); min-width: 160px; padding: 6px; background: white; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 28px rgb(21 62 47 / 12%); }
+.software-shell .account-menu-popup button { width: 100%; text-align: left; padding: 10px 12px; background: transparent; border: 0; border-radius: 6px; cursor: pointer; color: #b42318; font: inherit; }
+.software-shell .account-menu-popup button:hover { background: #fff1f0; }
+.software-shell .account-menu-popup button:disabled { opacity: .6; cursor: wait; }
 .software-shell .software-content { width: min(1440px, 100%); padding: 28px 30px 40px; margin: 0 auto; }
 .software-shell .software-content.wide { width: 100%; }
 .software-shell .software-main { grid-template-columns: minmax(0, 1fr); }

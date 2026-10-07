@@ -22,3 +22,19 @@ test("sidebar retains channel management and sign-out without the platform progr
   assert.match(html, /退出登录/);
   assert.match(html, /页面内容/);
 });
+
+test("topbar has account dropdown beside composer instead of channel/calendar shortcuts", () => {
+  (globalThis as typeof globalThis & { React: typeof React }).React = React;
+  const router = { back() {}, forward() {}, refresh() {}, push() {}, replace() {}, prefetch: async () => {} };
+  const html = renderToStaticMarkup(React.createElement(AppRouterContext.Provider, { value: router },
+    React.createElement(PathnameContext.Provider, { value: "/dashboard" },
+      React.createElement(LanguageProvider, null,
+        React.createElement(AppShell, { title: "控制台", userLabel: "Andy peng", children: null })))));
+  const header = html.match(/<header[\s\S]*?<\/header>/)![0];
+  assert.doesNotMatch(header, /连接渠道|查看日历/);
+  assert.match(header, /新建内容/);
+  assert.match(header, /Andy peng/);
+  assert.match(header, /aria-expanded="false"/);
+  assert.match(header, /account-avatar[^>]*>A</);
+  assert.doesNotMatch(header, /退出账号/);
+});

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   apiRequest,
+  type CurrentUser,
   type OAuthProviderStatus,
   type OAuthStartResponse,
   type SocialAccount,
@@ -13,6 +14,7 @@ import {
 import { getActiveWorkspaceChangeEvent, getActiveWorkspaceId } from "../lib/activeWorkspace";
 import { LanguageToggle, useLanguage, type AppLocale } from "./LanguageProvider";
 import { PlatformLogo } from "./PlatformLogo";
+import { AccountMenu } from "./AccountMenu";
 
 type AppShellProps = {
   title: string;
@@ -162,6 +164,19 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
   const [isChannelModalOpen, setIsChannelModalOpen] = useState(false);
   const [channelActionError, setChannelActionError] = useState<string | null>(null);
   const [disconnectingChannelId, setDisconnectingChannelId] = useState<string | null>(null);
+  const [currentUserName, setCurrentUserName] = useState("");
+  const accountName = userLabel?.trim() || currentUserName || t("账号", "Account");
+
+  useEffect(() => {
+    if (userLabel?.trim()) return;
+    const token = localStorage.getItem("social_scheduler_token");
+    if (!token) return;
+    let mounted = true;
+    apiRequest<CurrentUser>("/auth/me", { token }).then(user => {
+      if (mounted) setCurrentUserName(user.name?.trim() || "");
+    }).catch(() => null);
+    return () => { mounted = false; };
+  }, [userLabel]);
 
   useEffect(() => {
     const refreshWorkspace = () => setWorkspaceRefresh((current) => current + 1);
@@ -453,15 +468,10 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
           </div>
           <div className="topbar-actions">
             <LanguageToggle compact />
-            <Link className="button secondary" href="/dashboard#social-channels">
-              {t("连接渠道", "Connect channels")}
-            </Link>
-            <Link className="button secondary" href="/calendar">
-              {t("查看日历", "View calendar")}
-            </Link>
             <Link className="button" href="/composer">
               {t("新建内容", "New content")}
             </Link>
+            <AccountMenu name={accountName} signOutLabel={t("退出账号", "Sign out")} onSignOut={signOut} />
           </div>
         </header>
 
