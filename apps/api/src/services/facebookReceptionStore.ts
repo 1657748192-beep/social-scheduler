@@ -83,6 +83,24 @@ export function createFacebookReceptionStore(db:PrismaClient){
     async latestInbound(socialAccountId:string,counterpartyId:string){
       return (await db.facebookReceivedThread.findUnique({where:{socialAccountId_counterpartyId:{socialAccountId,counterpartyId}}}))?.lastInboundAt??null;
     },
+    async listReceivedConversations(socialAccountId:string){
+      const rows=await db.facebookReceivedThread.findMany({where:{socialAccountId},orderBy:{updatedAt:'desc'},take:100});
+      return rows.map(row=>({id:'local:'+row.id,counterpartyId:row.counterpartyId,updatedAt:row.updatedAt.toISOString()}));
+    },
+    async getReceivedConversation(socialAccountId:string,id:string){
+      if(!/^local:[0-9a-f-]{36}$/i.test(id))return null;
+      const row=await db.facebookReceivedThread.findFirst({where:{id:id.slice(6),socialAccountId}});
+      return row?{id,counterpartyId:row.counterpartyId,updatedAt:row.updatedAt.toISOString()}:null;
+    },
+    async listReceivedMessages(socialAccountId:string,id:string,after?:string){
+      if(!/^local:[0-9a-f-]{36}$/i.test(id))throw new Error('Invalid received conversation.');
+      const thread=await db.facebookReceivedThread.findFirst({where:{id:id.slice(6),socialAccountId}});
+      if(!thread)throw new Error('Received conversation not found.');
+      if(after && !/^[0-9a-f-]{36}$/i.test(after))throw new Error('Invalid received cursor.');
+      if(after && !await db.facebookReceivedMessage.findFirst({where:{id:after,threadId:thread.id}}))throw new Error('Received cursor not found.');
+      const rows=await db.facebookReceivedMessage.findMany({where:{threadId:thread.id},orderBy:[{occurredAt:'desc'},{id:'desc'}],take:51,...(after?{cursor:{id:after},skip:1}:{})});
+      return {items:rows.slice(0,50).map(row=>({id:row.providerMessageId,conversationId:id,senderId:row.senderId,recipientId:row.recipientId,text:row.text??'',inbound:row.inbound,timestamp:row.occurredAt.toISOString()})),nextCursor:rows.length>50?rows[49].id:null};
+    },
     async cleanup(now:Date){
       const cutoff=new Date(now.getTime()-90*86400000);
       await db.$transaction(async tx=>{

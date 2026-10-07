@@ -6,6 +6,8 @@ import { AppShell } from "../../components/AppShell";
 import { DashboardSidebar } from "../../components/dashboard/DashboardSidebar";
 import { DashboardActivity } from "../../components/dashboard/DashboardActivity";
 import { TikTokAccountStatsPanel } from "../../components/channels/TikTokAccountStatsPanel";
+import { FacebookEngagementStatus } from '../social/FacebookEngagementStatus';
+import { useFacebookEnabled } from '../social/useFacebookEnabled';
 import { TikTokSandboxPanel } from "../../components/channels/TikTokSandboxPanel";
 import {
   apiRequest,
@@ -104,6 +106,7 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([]);
   const [socialAccounts, setSocialAccounts] = useState<SocialAccount[]>([]);
+  const facebookEnabled=useFacebookEnabled(token);
   const [accountsWorkspaceId, setAccountsWorkspaceId] = useState<string | null>(null);
   const [oauthStatuses, setOAuthStatuses] = useState<OAuthProviderStatus[]>([]);
   const [authorizationLinks, setAuthorizationLinks] = useState<
@@ -584,6 +587,7 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
                 {account.platform === "tiktok" && token && selectedWorkspace ? (
                   <TikTokAccountStatsPanel key={`${selectedWorkspace.id}:${account.id}:${account.status}:${token}`} token={token} workspaceId={selectedWorkspace.id} accountId={account.id} />
                 ) : null}
+                {account.platform==='facebook' && facebookEnabled && token && selectedWorkspace?<FacebookEngagementStatus key={`${selectedWorkspace.id}:${account.id}:${token}`} token={token} workspaceId={selectedWorkspace.id} socialAccountId={account.id} canManage={canManageMembers}/>:null}
               </div>
             ))}
             {!socialAccounts.length ? (

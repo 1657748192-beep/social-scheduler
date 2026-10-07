@@ -11,7 +11,9 @@ test("published-post interaction UI is limited to Social Scheduler's own Instagr
   assert.match(manager, /post\.platform\s*===\s*"instagram"/);
   assert.match(manager, /post\.providerPostId/);
   assert.match(manager, /instagram\/posts/);
-  assert.doesNotMatch(manager, /facebook.*comments|comments.*facebook/i);
+  const instagramPanel=manager.slice(manager.indexOf('export function InstagramPostEngagementPanel'),manager.indexOf('export function PublishedPostManager'));
+  assert.match(instagramPanel,/instagram\/posts/);
+  assert.doesNotMatch(instagramPanel, /facebook.*comments|comments.*facebook/i);
 });
 
 test("post interaction UI loads on expansion, paginates, refreshes, and requires explicit manual sends", () => {

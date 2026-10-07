@@ -19,6 +19,8 @@ import { supportedPlatformIds } from "../../lib/platformCounts";
 import { filterPublishedPosts, getPlatformAccounts } from "../../lib/publishedPostFilters";
 import { useLanguage } from "../LanguageProvider";
 import { TikTokPostMetricsPanel } from "./TikTokPostMetricsPanel";
+import { FacebookPostComments } from './FacebookPostComments';
+import { useFacebookEnabled } from '../social/useFacebookEnabled';
 
 type PublishedPostManagerProps = {
   token: string;
@@ -374,6 +376,7 @@ function getMediaReuseStatus(post: PublishedPost, now: number, locale: "zh-CN" |
 }
 
 export function PublishedPostManager({ token, workspaces }: PublishedPostManagerProps) {
+  const facebookEnabled=useFacebookEnabled(token);
   const { t, locale } = useLanguage();
   const [workspaceId, setWorkspaceId] = useState("");
   const [platform, setPlatform] = useState<ComposerPlatform | "all">("all");
@@ -620,6 +623,7 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
                 {post.platform === "tiktok" ? (
                   <TikTokPostMetricsPanel key={`${workspaceId}:${post.id}:${token}`} token={token} workspaceId={workspaceId} scheduleId={post.id} />
                 ) : null}
+                {post.platform==='facebook' && facebookEnabled?<FacebookPostComments key={`${workspaceId}:${post.id}:${token}`} token={token} workspaceId={workspaceId} scheduleId={post.id} providerPostId={post.providerPostId} role={workspaceRole}/>:null}
               </div>
             </article>
           );

@@ -40,3 +40,9 @@ Task 4: webhook HTTP tests and PostgreSQL isolation/replay/order/lease/echo/rete
 Subscription operations preserve pre-existing fields and track only fields added by this feature. Cross-workspace shared Page bindings prevent premature release. Ordinary Facebook Page binding acquires the same per-Page advisory lock as subscription removal. Local disconnect and pending-release creation share a transaction; remote failures are retried at most five times for 24 hours using a temporary encrypted token, with no message content. Rebinding cancels old release work and erases its token. All new received data cascades with the removed account.
 
 Task 5 verification: three lifecycle behavior tests and PostgreSQL multi-binding/rebind/disconnect integration test passed; full configured suite 320 passed, no failures or skips; API build passed. Real Meta subscription writes have not been performed.
+
+## UI integration stage
+
+Facebook is conditionally available in the shared inbox, leaving Instagram selected by default. Page capability panels and post comments use bilingual messages and official platform artwork. Requests are generation-scoped, sends are guarded against duplication, and unknown sends explicitly require verification without retry. Signed locally received conversations are account-scoped and can only reply within a verified inbound window. Subscription status queries actual subscribed fields rather than treating metadata permission as subscription proof.
+
+Ten focused service/UI tests passed. API and web builds passed. UI tests exercise production request guards and rendered views, not full browser interactions; real end-to-end browser and Meta delivery verification remain pending. The old Instagram source assertion was narrowed to its own component because Facebook is now an intentionally supported separate panel.
