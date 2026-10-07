@@ -22,3 +22,9 @@ Created independent `facebook_engagement_test` on the same disposable local cont
 Authorization entry and dedicated callback are implemented behind FACEBOOK_ENGAGEMENT_ENABLED=false. The Meta app must allow `/api/v1/integrations/facebook-engagement/oauth/callback`; Login for Business config must include requested additional permissions. No real settings changed yet. Supplemental states cannot be used through the ordinary callback to bind every returned Page.
 
 Task 2 verification: actual-grant gateway tests, cancellation/mismatch/replay tests, Prisma concurrent-consumption/CAS/role tests passed; API build passed; full configured suite 308 passed, no failures or skips. Publishing scopes and account status are untouched when interactive permissions are absent.
+
+## Scoped endpoints stage
+
+Added authenticated Page capability, comments, conversations/messages and manual reply endpoints, plus an authenticated feature-status endpoint. Replies validate comment post association or Page conversation participants before sending. Viewer writes denied; owner/admin/editor can reply. Future inbound timestamps cannot open a messaging window. Unknown provider-send outcomes are preserved without retry. The feature remains disabled by default; no real message sent.
+
+Task 3: four service behavior tests passed; API build passed; full configured suite before the added policy characterization case: 311 passed, no failures or skips.

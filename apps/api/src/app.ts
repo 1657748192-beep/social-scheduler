@@ -13,6 +13,7 @@ import { composerRoutes } from "./routes/composerRoutes";
 import { healthRoutes } from "./routes/healthRoutes";
 import { createInstagramWebhookRouter } from "./routes/instagramWebhookRoutes";
 import { instagramEngagementRoutes } from "./routes/instagramEngagementRoutes";
+import { facebookEngagementRoutes } from './routes/facebookEngagementRoutes';
 import { instagramReceptionService } from "./services/instagramReception";
 import { tiktokPostMetricsRoutes } from "./routes/tiktokPostMetricsRoutes";
 import { scheduleRoutes } from "./routes/scheduleRoutes";
@@ -52,6 +53,7 @@ export function createApp() {
   app.use("/api/v1", composerRoutes);
   app.use("/api/v1", scheduleRoutes);
   app.use("/api/v1", instagramEngagementRoutes);
+  app.use('/api/v1',facebookEngagementRoutes);
   app.use("/api/v1", tiktokPostMetricsRoutes);
 
   app.use(notFoundHandler);

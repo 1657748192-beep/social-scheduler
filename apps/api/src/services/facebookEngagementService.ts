@@ -1,0 +1,81 @@
+import type { FacebookEngagementClient } from '../integrations/social/facebookEngagement';
+import { FacebookEngagementError } from '../integrations/social/facebookEngagement';
+import { isFacebookMessagingWindowOpen } from '../integrations/social/facebookMessagingPolicy';
+import type { FacebookCapability } from '../integrations/social/facebookEngagementTypes';
+import { HttpError } from '../utils/errors';
+
+export type FacebookRequestContext={userId:string;workspaceId:string;socialAccountId:string};
+type Account={id:string;workspaceId:string;platform:string;accountType:string|null;providerAccountId:string;status:string;credential:{accessTokenEncrypted:string;scopes:string[]}|null};
+type Post={id:string;workspaceId:string;status:string;postVariant:{platform:string;socialAccountId:string|null};publishJobs:Array<{status:string;providerPostId:string|null;rawResponse?:unknown}>};
+export function createFacebookEngagementService(deps:{enabled():boolean;apiVersion:string;requireMembership(userId:string,workspaceId:string):Promise<{role:string}>;
+  getAccount(workspaceId:string,socialAccountId:string):Promise<Account|null>;getPost(workspaceId:string,scheduleId:string):Promise<Post|null>;
+  decrypt(value:string):string;createClient(input:{pageId:string;accessToken:string;apiVersion:string}):FacebookEngagementClient;now():Date;
+  latestInbound?(socialAccountId:string,counterpartyId:string):Promise<Date|null>;
+}) {
+  async function authorize(ctx:FacebookRequestContext,write=false){
+    if(!deps.enabled())throw new HttpError(404,'Facebook engagement is not enabled.');
+    const member=await deps.requireMembership(ctx.userId,ctx.workspaceId);
+    if(write && !['owner','admin','editor'].includes(member.role))throw new HttpError(403,'Your workspace role cannot reply.');
+  }
+  async function account(ctx:FacebookRequestContext){
+    const value=await deps.getAccount(ctx.workspaceId,ctx.socialAccountId);
+    if(!value?.credential || value.id!==ctx.socialAccountId || value.workspaceId!==ctx.workspaceId || value.platform!=='facebook' || value.accountType!=='page' || value.status!=='active')throw new HttpError(404,'Connected Facebook Page not found.');
+    return value;
+  }
+  const client=(value:Account)=>deps.createClient({pageId:value.providerAccountId,accessToken:deps.decrypt(value.credential!.accessTokenEncrypted),apiVersion:deps.apiVersion});
+  async function allowed(api:FacebookEngagementClient,capability:FacebookCapability){
+    const status=(await api.inspectCapabilities())[capability];
+    if(status.status!=='available')throw new HttpError(status.status==='missing'?403:503,status.status==='missing'?'Facebook permission is missing; use supplemental authorization.':'Facebook permission could not be verified; retry later.');
+  }
+  async function provider<T>(action:()=>Promise<T>):Promise<T>{
+    try{return await action();}catch(error){
+      if(error instanceof FacebookEngagementError)throw new HttpError(['permission_missing','task_missing','access_level'].includes(error.kind)?403:error.kind==='authorization_invalid'?401:502,error.message);
+      throw error;
+    }
+  }
+  async function published(ctx:FacebookRequestContext,scheduleId:string){
+    const post=await deps.getPost(ctx.workspaceId,scheduleId);
+    if(!post || post.id!==scheduleId || post.workspaceId!==ctx.workspaceId || post.status!=='published' || post.postVariant.platform!=='facebook')throw new HttpError(404,'Published Facebook post not found.');
+    if(!post.postVariant.socialAccountId)throw new HttpError(409,'The original Facebook Page is no longer connected.');
+    const linked={...ctx,socialAccountId:post.postVariant.socialAccountId};
+    const value=await account(linked),job=post.publishJobs.find(item=>item.status==='succeeded');
+    if(!job?.providerPostId || (job.rawResponse && typeof job.rawResponse==='object' && 'simulated' in job.rawResponse && job.rawResponse.simulated===true))throw new HttpError(409,'Real Facebook post ID is unavailable.');
+    return {value,postId:job.providerPostId,api:client(value)};
+  }
+  return {
+    async getCapabilities(ctx:FacebookRequestContext){await authorize(ctx);return provider(()=>clientFromContext(ctx));},
+    async listComments(ctx:FacebookRequestContext,scheduleId:string,after?:string){
+      await authorize(ctx);const {api,postId}=await published(ctx,scheduleId);
+      return provider(async()=>{await allowed(api,'readComments');return api.listComments(postId,after);});
+    },
+    async replyToComment(ctx:FacebookRequestContext,scheduleId:string,commentId:string,text:string){
+      await authorize(ctx,true);const {api,postId}=await published(ctx,scheduleId);
+      return provider(async()=>{await allowed(api,'replyComments');const comment=await api.getComment(commentId);
+        if(comment.postId!==postId || comment.id!==commentId)throw new HttpError(404,'Comment does not belong to this Facebook post.');
+        return api.replyComment(commentId,text);});
+    },
+    async listConversations(ctx:FacebookRequestContext,after?:string){
+      await authorize(ctx);const api=client(await account(ctx));
+      return provider(async()=>{await allowed(api,'readMessages');return api.listConversations(after);});
+    },
+    async listMessages(ctx:FacebookRequestContext,conversationId:string,after?:string){
+      await authorize(ctx);const api=client(await account(ctx));
+      return provider(async()=>{await allowed(api,'readMessages');await api.getConversation(conversationId);return api.listMessages(conversationId,after);});
+    },
+    async replyToConversation(ctx:FacebookRequestContext,conversationId:string,text:string){
+      await authorize(ctx,true);const value=await account(ctx),api=client(value);
+      return provider(async()=>{
+        await allowed(api,'replyMessages');await allowed(api,'readMessages');
+        const conversation=await api.getConversation(conversationId),messages=await api.listMessages(conversationId);
+        const now=deps.now();
+        const times=messages.items.filter(message=>message.inbound && message.senderId===conversation.counterpartyId && message.recipientId===value.providerAccountId)
+          .map(message=>new Date(message.timestamp)).filter(time=>Number.isFinite(time.getTime()) && time<=now);
+        if(deps.latestInbound){const local=await deps.latestInbound(value.id,conversation.counterpartyId);if(local && local<=now)times.push(local);}
+        const latest=times.sort((a,b)=>b.getTime()-a.getTime())[0]??null;
+        if(!isFacebookMessagingWindowOpen(latest,now))throw new HttpError(409,'The verified 24-hour reply window is closed or unknown; use the official inbox.');
+        return api.sendMessage(conversation.counterpartyId,text);
+      });
+    }
+  };
+  async function clientFromContext(ctx:FacebookRequestContext){return client(await account(ctx)).inspectCapabilities();}
+}

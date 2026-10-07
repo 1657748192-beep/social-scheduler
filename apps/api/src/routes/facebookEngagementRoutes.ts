@@ -1,0 +1,14 @@
+import { Router } from 'express';
+import { requireAuth } from '../middleware/auth';
+import { asyncHandler } from '../utils/asyncHandler';
+import * as controller from '../controllers/facebookEngagementController';
+export const facebookEngagementRoutes=Router();
+facebookEngagementRoutes.get('/integrations/facebook-engagement/status',requireAuth,controller.facebookEngagementStatusController);
+const account='/workspaces/:workspaceId/social-accounts/:socialAccountId/facebook';
+const post='/workspaces/:workspaceId/facebook/posts/:scheduleId/comments';
+facebookEngagementRoutes.get(`${account}/capabilities`,requireAuth,asyncHandler(controller.facebookCapabilitiesController));
+facebookEngagementRoutes.get(`${account}/conversations`,requireAuth,asyncHandler(controller.facebookConversationsController));
+facebookEngagementRoutes.get(`${account}/conversations/:conversationId/messages`,requireAuth,asyncHandler(controller.facebookMessagesController));
+facebookEngagementRoutes.post(`${account}/conversations/:conversationId/replies`,requireAuth,asyncHandler(controller.facebookMessageReplyController));
+facebookEngagementRoutes.get(post,requireAuth,asyncHandler(controller.facebookCommentsController));
+facebookEngagementRoutes.post(`${post}/:commentId/replies`,requireAuth,asyncHandler(controller.facebookCommentReplyController));

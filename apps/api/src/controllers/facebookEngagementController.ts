@@ -1,0 +1,14 @@
+import type { Request,Response } from 'express';
+import { z } from 'zod';
+import { config } from '../config';
+import { facebookEngagementService as service } from '../services/facebookEngagement';
+const context=(req:Request)=>({userId:req.user!.id,workspaceId:req.params.workspaceId,socialAccountId:req.params.socialAccountId??''});
+const cursor=(req:Request)=>z.object({after:z.string().min(1).max(8192).optional()}).parse(req.query).after;
+const message=(req:Request)=>z.object({text:z.string().trim().min(1).max(2000)}).strict().parse(req.body).text;
+export const facebookEngagementStatusController=(_req:Request,res:Response)=>res.json({enabled:config.FACEBOOK_ENGAGEMENT_ENABLED});
+export const facebookCapabilitiesController=async(req:Request,res:Response)=>res.json(await service.getCapabilities(context(req)));
+export const facebookCommentsController=async(req:Request,res:Response)=>res.json(await service.listComments(context(req),req.params.scheduleId,cursor(req)));
+export const facebookCommentReplyController=async(req:Request,res:Response)=>res.json(await service.replyToComment(context(req),req.params.scheduleId,req.params.commentId,message(req)));
+export const facebookConversationsController=async(req:Request,res:Response)=>res.json(await service.listConversations(context(req),cursor(req)));
+export const facebookMessagesController=async(req:Request,res:Response)=>res.json(await service.listMessages(context(req),req.params.conversationId,cursor(req)));
+export const facebookMessageReplyController=async(req:Request,res:Response)=>res.json(await service.replyToConversation(context(req),req.params.conversationId,message(req)));
