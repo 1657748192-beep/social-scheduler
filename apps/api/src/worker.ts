@@ -18,11 +18,14 @@ import { hasRemainingPublishAttempts, persistConfirmedPublishResult } from "./in
 import { instagramReceptionStore } from "./services/instagramReception";
 import { runReceptionCleanup } from "./services/instagramReceptionRetention";
 import { processFacebookReceptionBatch,facebookReceptionStore } from './services/facebookReception';
+import { facebookSubscriptionCoordinator } from './services/facebookSubscription';
 
 const facebookReceptionTimer=setInterval(()=>{void processFacebookReceptionBatch().catch(()=>console.error('Facebook reception batch failed.'));},5000);
 facebookReceptionTimer.unref();
 const facebookRetentionTimer=setInterval(()=>{if(config.FACEBOOK_ENGAGEMENT_ENABLED)void facebookReceptionStore.cleanup(new Date()).catch(()=>console.error('Facebook reception cleanup failed.'));},3600000);
 facebookRetentionTimer.unref();
+const facebookSubscriptionTimer=setInterval(()=>{if(config.FACEBOOK_ENGAGEMENT_ENABLED)void facebookSubscriptionCoordinator.retryPending().catch(()=>console.error('Facebook subscription cleanup failed.'));},60000);
+facebookSubscriptionTimer.unref();
 
 const retryableJobStatuses = ["waiting", "retrying"] as const;
 const runnableScheduleStatuses = ["scheduled", "locked"] as const;
@@ -364,6 +367,7 @@ worker.on("failed", async (job, error) => {
 async function shutdown() {
   clearInterval(facebookReceptionTimer);
   clearInterval(facebookRetentionTimer);
+  clearInterval(facebookSubscriptionTimer);
   console.log("Shutting down worker");
   clearInterval(cleanupTimer);
   clearInterval(receptionCleanupTimer);

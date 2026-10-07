@@ -23,6 +23,7 @@ import { encryptToken } from "../utils/tokenCrypto";
 import { HttpError } from "../utils/errors";
 import { removeOAuthStateIfPresent } from "./oauthStateCleanup";
 import { requireWorkspaceManager, requireWorkspaceMembership } from "./workspaceService";
+import { lockFacebookPage,facebookSubscriptionCoordinator } from './facebookSubscription';
 
 export const startOAuthSchema = z.object({
   workspaceId: z.string().uuid()
@@ -644,7 +645,8 @@ export async function completeOAuth(platformParam: string, code: string, state: 
         | Awaited<ReturnType<typeof tx.socialAccount.upsert>>
         | null = null;
 
-      for (const page of facebookPages) {
+      for (const page of [...facebookPages].sort((a,b)=>a.providerAccountId.localeCompare(b.providerAccountId))) {
+        await lockFacebookPage(tx,page.providerAccountId);
         const account = await tx.socialAccount.upsert({
           where: {
             workspaceId_platform_providerAccountId: {
@@ -885,6 +887,10 @@ export async function disconnectSocialAccount(
 
   if (!account) {
     throw new HttpError(404, "Social account not found");
+  }
+
+  if(account.platform==='facebook' && account.accountType==='page' && config.FACEBOOK_ENGAGEMENT_ENABLED){
+    return facebookSubscriptionCoordinator.disconnect(account.id);
   }
 
   return prisma.$transaction(async (tx) => {

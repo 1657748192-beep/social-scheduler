@@ -148,8 +148,19 @@ export function createFacebookEngagementClient(input: {
       const fields=app.subscribed_fields;
       return Array.isArray(fields) && ['feed','messages'].every(field => fields.includes(field)) ? {status:'available'} : {status:'missing',reason:'Page comment/message subscriptions are incomplete.'};
     },
-    async subscribe(): Promise<boolean> {
-      const raw=await request(`${id(input.pageId)}/subscribed_apps`,{},'POST',new URLSearchParams({subscribed_fields:'feed,messages'}).toString());
+    async getSubscribedFields(): Promise<string[]> {
+      if(!input.appId)throw new FacebookEngagementError('invalid_response');
+      const raw=await request(`${id(input.pageId)}/subscribed_apps`,{fields:'id,subscribed_fields'});
+      if(!Array.isArray(raw.data))throw new FacebookEngagementError('invalid_response');
+      const app=raw.data.find(item=>record(item).id===input.appId);
+      if(!app)return [];
+      const fields=record(app).subscribed_fields;
+      if(!Array.isArray(fields) || !fields.every(field=>typeof field==='string'))throw new FacebookEngagementError('invalid_response');
+      return fields as string[];
+    },
+    async subscribe(fields:string[]=['feed','messages']): Promise<boolean> {
+      if(!fields.length || !fields.every(field=>/^[a-z_]{1,100}$/.test(field)))throw new Error('Invalid Page subscription fields.');
+      const raw=await request(`${id(input.pageId)}/subscribed_apps`,{},'POST',new URLSearchParams({subscribed_fields:[...new Set(fields)].join(',')}).toString());
       if (raw.success !== true) throw new FacebookEngagementError('invalid_response');
       return true;
     },

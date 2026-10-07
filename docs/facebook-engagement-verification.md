@@ -34,3 +34,9 @@ Task 3: four service behavior tests passed; API build passed; full configured su
 Added a signed raw-body callback before JSON parsing, database-backed event queue, per-account comment/message storage, claim leases and 90-day cleanup. Active Page bindings receive separate copies; deleting a local binding cascades only its data. Message echoes do not update the inbound reply window. Edits use notification time rather than original comment creation time. Exhausted crashed claims transition to failed; completed events clear their payload.
 
 Task 4: webhook HTTP tests and PostgreSQL isolation/replay/order/lease/echo/retention test passed; full configured suite 316 passed, no failures or skips. API build passed. No real Meta webhook delivery verified yet.
+
+## Page subscription lifecycle stage
+
+Subscription operations preserve pre-existing fields and track only fields added by this feature. Cross-workspace shared Page bindings prevent premature release. Ordinary Facebook Page binding acquires the same per-Page advisory lock as subscription removal. Local disconnect and pending-release creation share a transaction; remote failures are retried at most five times for 24 hours using a temporary encrypted token, with no message content. Rebinding cancels old release work and erases its token. All new received data cascades with the removed account.
+
+Task 5 verification: three lifecycle behavior tests and PostgreSQL multi-binding/rebind/disconnect integration test passed; full configured suite 320 passed, no failures or skips; API build passed. Real Meta subscription writes have not been performed.

@@ -246,6 +246,17 @@ model SocialAccount {
   @@map("social_accounts")
 }
 
+model FacebookPageSubscriptionState {
+  pageId String @id
+  ownedFields String[]
+  pendingRelease Boolean @default(false)
+  releaseTokenEncrypted String?
+  releaseExpiresAt DateTime?
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now())
+  @@map("facebook_page_subscription_states")
+}
+
 model FacebookReceivedEvent {
   id String @id @default(uuid()) @db.Uuid
   socialAccountId String @db.Uuid

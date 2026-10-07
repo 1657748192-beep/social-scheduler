@@ -22,6 +22,7 @@ import {
 } from "../services/socialAccountService";
 import { HttpError } from "../utils/errors";
 import { facebookEngagementAuthorizationService, startFacebookEngagementAuthorization } from '../services/facebookEngagementAuthorization';
+import { ensureFacebookPageSubscription } from '../services/facebookSubscription';
 
 export async function startFacebookEngagementOAuthController(req:Request,res:Response) {
   const result=await startFacebookEngagementAuthorization(req.user!.id,req.params.workspaceId,req.params.socialAccountId);
@@ -31,7 +32,9 @@ export async function facebookEngagementOAuthCallbackController(req:Request,res:
   const state=typeof req.query.state==='string'?req.query.state:undefined;
   if(!state)throw new HttpError(400,'Missing Facebook authorization state.');
   try {
-    await facebookEngagementAuthorizationService().complete(state,typeof req.query.code==='string'?req.query.code:undefined,typeof req.query.error==='string'?req.query.error:undefined);
+    const completed=await facebookEngagementAuthorizationService().complete(state,typeof req.query.code==='string'?req.query.code:undefined,typeof req.query.error==='string'?req.query.error:undefined);
+    // Subscription failure does not roll back or invalidate publishing authorization.
+    await ensureFacebookPageSubscription(completed.socialAccountId).catch(()=>null);
     return res.redirect(`${config.WEB_APP_URL}/social-accounts?facebookEngagement=connected`);
   } catch {
     return res.redirect(`${config.WEB_APP_URL}/social-accounts?facebookEngagement=error`);
