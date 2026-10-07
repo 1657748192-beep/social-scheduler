@@ -30,5 +30,11 @@ test('Page subscription coordination unlinks locally and preserves other fields'
     const reconnected=await db.socialAccount.create({data:{workspaceId,platform:'facebook',accountType:'page',providerAccountId:pageId,displayName:'Test',credential:{create:{accessTokenEncrypted:'enc:new',scopes:['pages_manage_metadata']}}}});
     const before=writes;await coordinator.retryPending();assert.equal(writes,before);assert.equal((await db.facebookPageSubscriptionState.findUniqueOrThrow({where:{pageId}})).releaseTokenEncrypted,null);
     rejectWrite=false;await coordinator.disconnect(reconnected.id);assert.deepEqual(fields,['mention']);
+    await db.facebookPageSubscriptionState.update({where:{pageId},data:{pendingRelease:true,releaseTokenEncrypted:'enc:expired',releaseExpiresAt:new Date(0),nextAttemptAt:new Date(0)}});
+    const expiryWrites=writes;await coordinator.retryPending(false);
+    assert.equal((await db.facebookPageSubscriptionState.findUniqueOrThrow({where:{pageId}})).releaseTokenEncrypted,null);
+    assert.equal(writes,expiryWrites);
+    await db.facebookPageSubscriptionState.update({where:{pageId},data:{pendingRelease:true,releaseTokenEncrypted:'enc:unexpired',releaseExpiresAt:new Date(Date.now()+86400000),nextAttemptAt:new Date(0)}});
+    await coordinator.retryPending(false);assert.equal(writes,expiryWrites);
   }finally{await db.user.deleteMany({where:{id:userId}});await db.facebookPageSubscriptionState.deleteMany({where:{pageId}});await db.$disconnect();}
 });

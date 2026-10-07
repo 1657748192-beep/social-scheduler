@@ -14,6 +14,7 @@ export function FacebookInbox({token,workspaces}:{token:string;workspaces:Worksp
   const [error,setError]=useState<string|null>(null),[notice,setNotice]=useState(''),[loading,setLoading]=useState(false),[sending,setSending]=useState(false),[readAt,setReadAt]=useState('');
   const guard=useRef(createFacebookRequestGuard());guard.current.reset(`${token}:${workspaceId}:${accountId}:${conversationId}`);
   const accountGuard=useRef(createFacebookRequestGuard());accountGuard.current.reset(`${token}:${workspaceId}`);
+  const conversationGuard=useRef(createFacebookRequestGuard());conversationGuard.current.reset(`${token}:${workspaceId}:${accountId}`);
   const workspace=workspaces.find(value=>value.id===workspaceId),base=facebookAccountPath(workspaceId,accountId);
   useEffect(()=>{setWorkspaceId(current=>getActiveWorkspaceId(workspaces,current));},[workspaces]);
   useEffect(()=>{
@@ -25,7 +26,7 @@ export function FacebookInbox({token,workspaces}:{token:string;workspaces:Worksp
   },[workspaceId,token]);
   async function readConversations(after?:string){
     if(!accountId)return;setLoading(true);
-    try{const result=await guard.current.run('conversations',()=>apiRequest<FacebookPage<FacebookConversation>>(base+'/conversations'+(after?'?after='+encodeURIComponent(after):''),{token}));
+    try{const result=await conversationGuard.current.run('conversations',()=>apiRequest<FacebookPage<FacebookConversation>>(base+'/conversations'+(after?'?after='+encodeURIComponent(after):''),{token}));
       if(result.current){setConversations(current=>after?[...current,...result.value.items]:result.value.items);setConversationCursor(result.value.nextCursor);if(!after)setConversationId(current=>result.value.items.some(item=>item.id===current)?current:result.value.items[0]?.id??'');setError(null);}}
     catch(e){setError(e instanceof Error?e.message:t('会话读取失败，保留上次数据。','Conversations unavailable; keeping previous data.'));}finally{setLoading(false);}
   }

@@ -1,7 +1,7 @@
 import type { FacebookEngagementClient } from '../integrations/social/facebookEngagement';
 import { FacebookEngagementError } from '../integrations/social/facebookEngagement';
 import { isFacebookMessagingWindowOpen } from '../integrations/social/facebookMessagingPolicy';
-import type { FacebookCapability, FacebookConversation, FacebookMessage, FacebookPage } from '../integrations/social/facebookEngagementTypes';
+import type { FacebookCapability, FacebookComment, FacebookConversation, FacebookMessage, FacebookPage } from '../integrations/social/facebookEngagementTypes';
 import { HttpError } from '../utils/errors';
 
 export type FacebookRequestContext={userId:string;workspaceId:string;socialAccountId:string};
@@ -14,6 +14,7 @@ export function createFacebookEngagementService(deps:{enabled():boolean;apiVersi
   getReceivedConversation?(socialAccountId:string,id:string):Promise<FacebookConversation|null>;
   listReceivedConversations?(socialAccountId:string):Promise<FacebookConversation[]>;
   listReceivedMessages?(socialAccountId:string,id:string,after?:string):Promise<FacebookPage<FacebookMessage>>;
+  listReceivedComments?(socialAccountId:string,postId:string,ids:string[],includeRecent:boolean):Promise<FacebookComment[]>;
 }) {
   async function authorize(ctx:FacebookRequestContext,write=false){
     if(!deps.enabled())throw new HttpError(404,'Facebook engagement is not enabled.');
@@ -32,7 +33,7 @@ export function createFacebookEngagementService(deps:{enabled():boolean;apiVersi
   }
   async function provider<T>(action:()=>Promise<T>):Promise<T>{
     try{return await action();}catch(error){
-      if(error instanceof FacebookEngagementError)throw new HttpError(['permission_missing','task_missing','access_level'].includes(error.kind)?403:error.kind==='authorization_invalid'?401:502,error.message);
+      if(error instanceof FacebookEngagementError)throw new HttpError(['permission_missing','task_missing','access_level'].includes(error.kind)?403:error.kind==='authorization_invalid'?409:502,error.message);
       throw error;
     }
   }
@@ -48,8 +49,12 @@ export function createFacebookEngagementService(deps:{enabled():boolean;apiVersi
   return {
     async getCapabilities(ctx:FacebookRequestContext){await authorize(ctx);return provider(()=>clientFromContext(ctx));},
     async listComments(ctx:FacebookRequestContext,scheduleId:string,after?:string){
-      await authorize(ctx);const {api,postId}=await published(ctx,scheduleId);
-      return provider(async()=>{await allowed(api,'readComments');return api.listComments(postId,after);});
+      await authorize(ctx);const {api,postId,value}=await published(ctx,scheduleId);
+      return provider(async()=>{await allowed(api,'readComments');const page=await api.listComments(postId,after);
+        const local=await deps.listReceivedComments?.(value.id,postId,page.items.map(item=>item.id),!after)??[];
+        const merged=new Map(page.items.map(item=>[item.id,item]));
+        for(const item of local){if(item.deleted)merged.delete(item.id);else merged.set(item.id,item);}
+        return {...page,items:[...merged.values()].sort((a,b)=>Date.parse(b.timestamp)-Date.parse(a.timestamp))};});
     },
     async replyToComment(ctx:FacebookRequestContext,scheduleId:string,commentId:string,text:string){
       await authorize(ctx,true);const {api,postId}=await published(ctx,scheduleId);
@@ -68,7 +73,13 @@ export function createFacebookEngagementService(deps:{enabled():boolean;apiVersi
       return provider(async()=>{await allowed(api,'readMessages');if(conversationId.startsWith('local:')){
         await received(ctx,conversationId);if(!deps.listReceivedMessages)throw new HttpError(503,'Received messages are unavailable.');
         return deps.listReceivedMessages(ctx.socialAccountId,conversationId,after);
-      }await api.getConversation(conversationId);return api.listMessages(conversationId,after);});
+      }const conversation=await api.getConversation(conversationId),page=await api.listMessages(conversationId,after);
+      const local=!after && deps.listReceivedConversations?(await deps.listReceivedConversations(ctx.socialAccountId)).find(item=>item.counterpartyId===conversation.counterpartyId):null;
+      if(!local || !deps.listReceivedMessages)return page;
+      const receivedPage=await deps.listReceivedMessages(ctx.socialAccountId,local.id);
+      const merged=new Map(page.items.map(item=>[item.id,item]));
+      for(const item of receivedPage.items)merged.set(item.id,{...item,conversationId});
+      return {...page,items:[...merged.values()].sort((a,b)=>Date.parse(b.timestamp)-Date.parse(a.timestamp))};});
     },
     async replyToConversation(ctx:FacebookRequestContext,conversationId:string,text:string){
       await authorize(ctx,true);const value=await account(ctx),api=client(value);

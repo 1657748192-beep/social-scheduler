@@ -16,7 +16,7 @@ export function createFacebookWebhookRouter(options:{enabled():boolean;appSecret
     if(!timingSafeEqual(expected,Buffer.from(supplied.slice(7),'hex')))return res.sendStatus(403);
     let parsed:ReturnType<typeof parseFacebookWebhook>;
     try{parsed=parseFacebookWebhook(JSON.parse(req.body.toString('utf8')));}catch{return res.sendStatus(400);}
-    try{await options.onEvents(parsed.events);return res.sendStatus(200);}catch{return res.sendStatus(503);}
+    try{await options.onEvents(parsed.events);return res.sendStatus(parsed.invalid?503:200);}catch{return res.sendStatus(503);}
   });
   return router;
 }

@@ -4,11 +4,14 @@ import { createFacebookEngagementService } from '../src/services/facebookEngagem
 import { createFacebookEngagementClient } from '../src/integrations/social/facebookEngagement';
 const context={userId:'user',workspaceId:'workspace',socialAccountId:'account'};
 function fixture(){
-  let role='editor',exists=true,postId:string|null='100_200',parent='100_200',blocked=false;
-  let inbound='2026-10-07T00:00:00Z',sends=0,recipient='',uncertain=false,local=false;
+  let role='editor',exists=true,postId:string|null='100_200',parent='100_200',blocked=false,invalid=false;
+  let inbound='2026-10-07T00:00:00Z',sends=0,recipient='',uncertain=false,local=false,remote=false;
   const account={id:'account',workspaceId:'workspace',platform:'facebook',accountType:'page',providerAccountId:'100',status:'active',credential:{accessTokenEncrypted:'encrypted',scopes:['pages_read_engagement','pages_read_user_content','pages_manage_engagement','pages_messaging','pages_manage_metadata']}};
   const api=createFacebookEngagementClient({pageId:'100',accessToken:'token',apiVersion:'v20.0',appId:'app',appSecret:'secret',fetchImpl:(async url=>{
     const path=new URL(String(url)).pathname;
+    if(invalid && path.endsWith('/100/conversations'))return Response.json({error:{code:190,message:'expired'}});
+    if(remote && path.endsWith('/100/conversations'))return Response.json({data:[{id:'thread',updated_time:inbound,participants:{data:[{id:'100'},{id:'customer'}]}}]});
+    if(remote && path.endsWith('/100_200/comments'))return Response.json({data:[{id:'comment',message:'stale',created_time:inbound}]});
     if(path.endsWith('/debug_token'))return Response.json({data:{is_valid:true,type:'PAGE',app_id:'app',scopes:account.credential.scopes}});
     if(path.endsWith('/me'))return Response.json({id:'100'});
     if(path.endsWith('/comment'))return Response.json({id:'comment',object:{id:parent},message:'hello',created_time:inbound});
@@ -24,7 +27,7 @@ function fixture(){
     getReceivedConversation:async(accountId,id)=>local && accountId==='account' && id==='local:thread'?{id,counterpartyId:'customer',updatedAt:inbound}:null,
     listReceivedConversations:async()=>local?[{id:'local:thread',counterpartyId:'customer',updatedAt:inbound}]:[],
     listReceivedMessages:async()=>({items:[{id:'received',conversationId:'local:thread',senderId:'customer',recipientId:'100',inbound:true,text:'hello',timestamp:inbound}],nextCursor:null})});
-  return {service,account,block:()=>{blocked=true;},disconnect:()=>{exists=false;},viewer:()=>{role='viewer';},missingPost:()=>{postId=null;},wrongParent:()=>{parent='100_other';},old:()=>{inbound='2026-10-05T00:00:00Z';},future:()=>{inbound='2026-10-08T00:00:00Z';},uncertain:()=>{uncertain=true;},local:()=>{local=true;},sends:()=>sends,recipient:()=>recipient};
+  return {service,account,remote:()=>{remote=true;},invalid:()=>{invalid=true;},block:()=>{blocked=true;},disconnect:()=>{exists=false;},viewer:()=>{role='viewer';},missingPost:()=>{postId=null;},wrongParent:()=>{parent='100_other';},old:()=>{inbound='2026-10-05T00:00:00Z';},future:()=>{inbound='2026-10-08T00:00:00Z';},uncertain:()=>{uncertain=true;},local:()=>{local=true;},sends:()=>sends,recipient:()=>recipient};
 }
 test('workspaceAndTargetIsolation',async()=>{
   const f=fixture();f.block();await assert.rejects(f.service.listConversations(context));
@@ -34,6 +37,13 @@ test('workspaceAndTargetIsolation',async()=>{
 });
 test('capabilitiesReportActualSubscriptionNotJustPermission',async()=>{
   const f=fixture();assert.equal((await f.service.getCapabilities(context)).subscription.status,'missing');
+});
+test('expiredProviderTokenDoesNotInvalidateApplicationLogin',async()=>{
+  const f=fixture();f.invalid();await assert.rejects(f.service.listConversations(context),(e:any)=>e.statusCode===409);
+});
+test('remoteConversationIncludesWebhookOnlyMessages',async()=>{
+  const f=fixture();f.local();f.remote();const conversations=await f.service.listConversations(context);assert.equal(conversations.items.length,1);
+  const messages=await f.service.listMessages(context,conversations.items[0].id);assert.ok(messages.items.some(message=>message.id==='received'));
 });
 test('replyNeedsVerifiedTargetAndWindow',async()=>{
   const f=fixture();f.wrongParent();await assert.rejects(f.service.replyToComment(context,'schedule','comment','reply'));assert.equal(f.sends(),0);

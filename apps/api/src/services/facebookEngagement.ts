@@ -12,6 +12,7 @@ export const facebookEngagementService=createFacebookEngagementService({enabled:
   getReceivedConversation:(accountId,id)=>facebookReceptionStore.getReceivedConversation(accountId,id),
   listReceivedConversations:accountId=>facebookReceptionStore.listReceivedConversations(accountId),
   listReceivedMessages:(accountId,id,after)=>facebookReceptionStore.listReceivedMessages(accountId,id,after),
+  listReceivedComments:(accountId,postId,ids,includeRecent)=>facebookReceptionStore.listReceivedComments(accountId,postId,ids,includeRecent),
   getAccount:(workspaceId,socialAccountId)=>prisma.socialAccount.findFirst({where:{id:socialAccountId,workspaceId,platform:'facebook',accountType:'page',status:'active'},include:{credential:true}}),
   getPost:(workspaceId,scheduleId)=>prisma.schedule.findFirst({where:{id:scheduleId,workspaceId,status:'published'},include:{postVariant:true,publishJobs:{where:{status:'succeeded'},orderBy:{updatedAt:'desc'},take:1}}}),
   createClient:input=>createFacebookEngagementClient({...input,appId:config.FACEBOOK_CLIENT_ID,appSecret:config.FACEBOOK_CLIENT_SECRET})});

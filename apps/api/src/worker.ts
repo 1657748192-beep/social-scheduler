@@ -22,9 +22,9 @@ import { facebookSubscriptionCoordinator } from './services/facebookSubscription
 
 const facebookReceptionTimer=setInterval(()=>{void processFacebookReceptionBatch().catch(()=>console.error('Facebook reception batch failed.'));},5000);
 facebookReceptionTimer.unref();
-const facebookRetentionTimer=setInterval(()=>{if(config.FACEBOOK_ENGAGEMENT_ENABLED)void facebookReceptionStore.cleanup(new Date()).catch(()=>console.error('Facebook reception cleanup failed.'));},3600000);
+const facebookRetentionTimer=setInterval(()=>{void facebookReceptionStore.cleanup(new Date()).catch(()=>console.error('Facebook reception cleanup failed.'));},3600000);
 facebookRetentionTimer.unref();
-const facebookSubscriptionTimer=setInterval(()=>{if(config.FACEBOOK_ENGAGEMENT_ENABLED)void facebookSubscriptionCoordinator.retryPending().catch(()=>console.error('Facebook subscription cleanup failed.'));},60000);
+const facebookSubscriptionTimer=setInterval(()=>{void facebookSubscriptionCoordinator.retryPending(config.FACEBOOK_ENGAGEMENT_ENABLED).catch(()=>console.error('Facebook subscription cleanup failed.'));},60000);
 facebookSubscriptionTimer.unref();
 
 const retryableJobStatuses = ["waiting", "retrying"] as const;

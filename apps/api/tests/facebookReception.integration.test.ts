@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { createFacebookReceptionStore } from '../src/services/facebookReceptionStore';
 import type { FacebookReceivedEventInput } from '../src/services/facebookWebhookService';
+import {createFacebookEngagementService} from '../src/services/facebookEngagementService';
 
 test('Facebook durable reception isolates accounts, orders comments and recovers leases',async t=>{
   const url=process.env.FACEBOOK_TEST_DATABASE_URL;if(!url){t.skip('Independent FACEBOOK_TEST_DATABASE_URL required');return;}
@@ -23,6 +24,12 @@ test('Facebook durable reception isolates accounts, orders comments and recovers
     const deletion={...event,eventKey:'delete',deleted:true,text:undefined,occurredAt:new Date(now.getTime()+1).toISOString()};
     await store.enqueue([deletion]);await drain();await store.enqueue([{...event,eventKey:'stale-edit',text:'stale'}]);await drain();
     assert.ok((await db.facebookReceivedComment.findMany()).every(row=>row.deleted && row.text===null));
+    const service=createFacebookEngagementService({enabled:()=>true,apiVersion:'v20.0',requireMembership:async()=>({role:'owner'}),now:()=>now,decrypt:value=>value,
+      getAccount:async()=>({id:accountId,workspaceId,platform:'facebook',accountType:'page',status:'active',providerAccountId:'100',credential:{accessTokenEncrypted:'fake',scopes:[]}}),
+      getPost:async()=>({id:'schedule',workspaceId,status:'published',postVariant:{platform:'facebook',socialAccountId:accountId},publishJobs:[{status:'succeeded',providerPostId:'100_1'}]}),
+      listReceivedComments:(account,post)=>store.listReceivedComments(account,post),
+      createClient:()=>({inspectCapabilities:async()=>({readComments:{status:'available'}}),listComments:async()=>({items:[{id:'c1',postId:'100_1',text:'stale Graph',timestamp:now.toISOString()}],nextCursor:null})}) as any});
+    assert.deepEqual((await service.listComments({userId,workspaceId,socialAccountId:accountId},'schedule')).items,[]);
     const message:FacebookReceivedEventInput={pageId:'100',eventKey:'message',kind:'message',providerId:'m1',senderId:'customer',recipientId:'100',text:'hi',occurredAt:now.toISOString(),isEcho:false};
     await store.enqueue([message]);const claimTime=new Date();const first=await store.claimBatch(claimTime,50);assert.equal(first.length,2);
     const reclaimed=await store.claimBatch(new Date(claimTime.getTime()+61000),50);assert.equal(reclaimed.length,2);

@@ -87,6 +87,12 @@ export function createFacebookReceptionStore(db:PrismaClient){
       const rows=await db.facebookReceivedThread.findMany({where:{socialAccountId},orderBy:{updatedAt:'desc'},take:100});
       return rows.map(row=>({id:'local:'+row.id,counterpartyId:row.counterpartyId,updatedAt:row.updatedAt.toISOString()}));
     },
+    async listReceivedComments(socialAccountId:string,postId:string,ids:string[]=[],includeRecent=true){
+      const matched=ids.length?await db.facebookReceivedComment.findMany({where:{socialAccountId,postId,providerCommentId:{in:ids}}}):[];
+      const recent=includeRecent?await db.facebookReceivedComment.findMany({where:{socialAccountId,postId},orderBy:{occurredAt:'desc'},take:100}):[];
+      const rows=new Map([...matched,...recent].map(row=>[row.providerCommentId,row]));
+      return [...rows.values()].map(row=>({id:row.providerCommentId,postId:row.postId,text:row.text??'',senderId:row.senderId??undefined,senderName:row.senderName??undefined,timestamp:row.occurredAt.toISOString(),deleted:row.deleted}));
+    },
     async getReceivedConversation(socialAccountId:string,id:string){
       if(!/^local:[0-9a-f-]{36}$/i.test(id))return null;
       const row=await db.facebookReceivedThread.findFirst({where:{id:id.slice(6),socialAccountId}});

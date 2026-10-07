@@ -56,3 +56,13 @@ After explicit deployment approval: identify the exact release commit and curren
 Rollback: switch back to retained old images and keep the feature off; leave additive tables in place. Do not drop columns/tables or restore the production backup automatically, because writes after the backup must not be lost. A restore needs separate downtime and data-recovery authorization.
 
 Before enabling: confirm the Meta app, Page ID, test user role and actual permissions/Advanced Access. Configure the dedicated supplemental OAuth redirect and signed `/api/v1/webhooks/facebook` callback; verify app-level feed/messages subscriptions and Page-level subscriptions independently. A server verify-token value alone is not delivery evidence. Test only the agreed Page/account. Real comments/messages and outbound reply recipient/text require user confirmation. Record Graph reads, Webhook delivery, persisted data, UI reads and official inbox receipts; only then record end-to-end success or use it for review video.
+
+## Independent review and fix pass
+
+Fresh read-only review of `e15b559..aad634e` plus `7e6f6eb` found six Important issues and no Critical/Minor findings. All six were addressed: provider token errors now return 409, mixed batches persist valid events before a retry response, local retention/token expiry run with the feature off, received comment edits/tombstones reconcile Graph comments, received messages merge into verified Graph conversations, and Page conversation requests use a scope independent of selected message threads.
+
+Regression tests observed RED then GREEN for provider expiry, signed mixed batches, disabled remote cleanup, processed comment tombstones through the service output, remote conversations with Webhook-only messages and actual React Page-selection effects. Added react-test-renderer matching the installed React version solely as a development test dependency; its deprecation warning is visible, so full browser verification is still required. Application-session 401 handling remains unchanged and is separately tested.
+
+Final configured test run: 332 passed, 0 failed, 0 skipped. Independent test database enabled TikTok Sandbox isolation tests too; missing test configuration is not waived. API build passed. Production environment and real Meta access are not tested here.
+
+Dependency audit also reports existing runtime/tooling alerts, including critical classifications for Next.js/proxy-addr/shell-quote. These packages were not upgraded in this feature branch; the three newly added development-test packages are not listed in that report. Dependency remediation needs a separately scoped compatibility/security assessment before production rollout; no automatic audit fix was run.

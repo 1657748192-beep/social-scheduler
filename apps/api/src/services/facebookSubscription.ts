@@ -39,10 +39,11 @@ export function createFacebookSubscriptionCoordinator(db:PrismaClient,encrypt:(v
       const scoped=createFacebookSubscriptionService({withAccount:async(id,run)=>{const outcome=await withAccount(id,run,true);removed=outcome.removed;return outcome.result;},createClient});
       await scoped.release(accountId);return removed!;
     },
-    async retryPending(){
+    async retryPending(allowRemote=true){
       const now=new Date();
       // Temporary encrypted Page token only: no message body, 5 retries / 24-hour maximum.
       await db.facebookPageSubscriptionState.updateMany({where:{pendingRelease:true,OR:[{attempts:{gte:5}},{releaseExpiresAt:{lte:now}}]},data:{pendingRelease:false,releaseTokenEncrypted:null,releaseExpiresAt:null}});
+      if(!allowRemote)return;
       for(const candidate of await db.facebookPageSubscriptionState.findMany({where:{pendingRelease:true,nextAttemptAt:{lte:now}},take:25})){
         await db.$transaction(async tx=>{
           await lockFacebookPage(tx,candidate.pageId);
