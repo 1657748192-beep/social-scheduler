@@ -14,6 +14,8 @@ import { healthRoutes } from "./routes/healthRoutes";
 import { createInstagramWebhookRouter } from "./routes/instagramWebhookRoutes";
 import { instagramEngagementRoutes } from "./routes/instagramEngagementRoutes";
 import { facebookEngagementRoutes } from './routes/facebookEngagementRoutes';
+import { createFacebookWebhookRouter } from './routes/facebookWebhookRoutes';
+import { facebookReceptionStore } from './services/facebookReception';
 import { instagramReceptionService } from "./services/instagramReception";
 import { tiktokPostMetricsRoutes } from "./routes/tiktokPostMetricsRoutes";
 import { scheduleRoutes } from "./routes/scheduleRoutes";
@@ -39,6 +41,8 @@ export function createApp() {
       onEvent: event => instagramReceptionService.receive(event)
     })
   );
+  app.use('/api/v1/webhooks/facebook',createFacebookWebhookRouter({enabled:()=>config.FACEBOOK_ENGAGEMENT_ENABLED,appSecret:config.FACEBOOK_CLIENT_SECRET,
+    verifyToken:config.FACEBOOK_WEBHOOK_VERIFY_TOKEN,onEvents:events=>facebookReceptionStore.enqueue(events)}));
   app.use(express.json({ limit: "1mb" }));
   morgan.token("safe-url", req => safeRequestLogUrl(req.url ?? ""));
   app.use(morgan(":method :safe-url :status :response-time ms"));

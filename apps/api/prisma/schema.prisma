@@ -234,12 +234,87 @@ model SocialAccount {
   instagramPrivateReplyAttempts InstagramPrivateReplyAttempt[]
   instagramEngagementOAuthStates OauthState[] @relation("InstagramEngagementReauth")
   facebookEngagementOAuthStates OauthState[] @relation("FacebookEngagementReauth")
+  facebookReceivedEvents FacebookReceivedEvent[]
+  facebookReceivedComments FacebookReceivedComment[]
+  facebookReceivedThreads FacebookReceivedThread[]
+  facebookReceptionState FacebookReceptionState?
   instagramReceivedComments InstagramReceivedComment[]
   instagramReceivedThreads InstagramReceivedThread[]
   instagramReceptionState InstagramReceptionState?
 
   @@unique([workspaceId, platform, providerAccountId])
   @@map("social_accounts")
+}
+
+model FacebookReceivedEvent {
+  id String @id @default(uuid()) @db.Uuid
+  socialAccountId String @db.Uuid
+  eventKey String
+  payload Json?
+  status String @default("pending")
+  attempts Int @default(0)
+  claimToken String?
+  leaseUntil DateTime?
+  nextAttemptAt DateTime @default(now())
+  receivedAt DateTime @default(now())
+  lastError String?
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  @@unique([socialAccountId, eventKey])
+  @@index([status, nextAttemptAt])
+  @@map("facebook_received_events")
+}
+
+model FacebookReceivedComment {
+  id String @id @default(uuid()) @db.Uuid
+  socialAccountId String @db.Uuid
+  providerCommentId String
+  postId String
+  text String?
+  senderId String?
+  senderName String?
+  deleted Boolean @default(false)
+  occurredAt DateTime
+  receivedAt DateTime @default(now())
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  @@unique([socialAccountId, providerCommentId])
+  @@index([socialAccountId, postId, occurredAt])
+  @@map("facebook_received_comments")
+}
+
+model FacebookReceivedThread {
+  id String @id @default(uuid()) @db.Uuid
+  socialAccountId String @db.Uuid
+  counterpartyId String
+  lastInboundAt DateTime?
+  updatedAt DateTime @default(now())
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  messages FacebookReceivedMessage[]
+  @@unique([socialAccountId, counterpartyId])
+  @@map("facebook_received_threads")
+}
+
+model FacebookReceivedMessage {
+  id String @id @default(uuid()) @db.Uuid
+  threadId String @db.Uuid
+  providerMessageId String
+  senderId String
+  recipientId String
+  text String?
+  inbound Boolean
+  occurredAt DateTime
+  receivedAt DateTime @default(now())
+  thread FacebookReceivedThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  @@unique([threadId, providerMessageId])
+  @@index([receivedAt])
+  @@map("facebook_received_messages")
+}
+
+model FacebookReceptionState {
+  socialAccountId String @id @db.Uuid
+  revision BigInt @default(0)
+  lastReceivedAt DateTime?
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  @@map("facebook_reception_states")
 }
 
 model InstagramReceivedComment {

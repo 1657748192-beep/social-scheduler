@@ -28,3 +28,9 @@ Task 2 verification: actual-grant gateway tests, cancellation/mismatch/replay te
 Added authenticated Page capability, comments, conversations/messages and manual reply endpoints, plus an authenticated feature-status endpoint. Replies validate comment post association or Page conversation participants before sending. Viewer writes denied; owner/admin/editor can reply. Future inbound timestamps cannot open a messaging window. Unknown provider-send outcomes are preserved without retry. The feature remains disabled by default; no real message sent.
 
 Task 3: four service behavior tests passed; API build passed; full configured suite before the added policy characterization case: 311 passed, no failures or skips.
+
+## Durable webhook stage
+
+Added a signed raw-body callback before JSON parsing, database-backed event queue, per-account comment/message storage, claim leases and 90-day cleanup. Active Page bindings receive separate copies; deleting a local binding cascades only its data. Message echoes do not update the inbound reply window. Edits use notification time rather than original comment creation time. Exhausted crashed claims transition to failed; completed events clear their payload.
+
+Task 4: webhook HTTP tests and PostgreSQL isolation/replay/order/lease/echo/retention test passed; full configured suite 316 passed, no failures or skips. API build passed. No real Meta webhook delivery verified yet.
