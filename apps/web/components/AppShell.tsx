@@ -11,7 +11,6 @@ import {
   type Workspace
 } from "../lib/api";
 import { getActiveWorkspaceChangeEvent, getActiveWorkspaceId } from "../lib/activeWorkspace";
-import { countConnectedSupportedPlatforms } from "../lib/platformCounts";
 import { LanguageToggle, useLanguage, type AppLocale } from "./LanguageProvider";
 import { PlatformLogo } from "./PlatformLogo";
 
@@ -237,11 +236,6 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
   const sidebarProviders = channelProviders.filter((provider) =>
     sidebarChannelOrder.includes(provider.platform)
   );
-  const connectedPlatformCount = countConnectedSupportedPlatforms(
-    channels,
-    channelProviders.map((provider) => provider.platform)
-  );
-  const totalChannelCount = channelProviders.length;
   const channelItems = useMemo(
     () =>
       channelProviders.map((provider) => ({
@@ -442,26 +436,6 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
             </button>
           </div>
         </section>
-
-        <div className="channel-progress">
-          <div className="row">
-            <strong>{t("已连接平台数量", "Connected platforms")}</strong>
-            <span>
-              {connectedPlatformCount}/{totalChannelCount}
-            </span>
-          </div>
-          <div className="progress-track">
-            <span
-              style={{
-                width: `${Math.min(
-                  (connectedPlatformCount / Math.max(totalChannelCount, 1)) * 100,
-                  100
-                )}%`
-              }}
-            />
-          </div>
-          <small className="channel-progress-note">{t("同一平台的账号数量不限", "No limit on accounts per platform")}</small>
-        </div>
 
         <div className="software-sidebar-footer">
           <span>{userLabel || t("已登录", "Signed in")}</span>
