@@ -39,7 +39,7 @@ test("channel management hides retired OAuth providers", () => {
   const filterSupportedPlatforms = platformCounts.filterSupportedPlatforms as
     | ((providers: Array<{ platform: string }>) => Array<{ platform: string }>)
     | undefined;
-  const dashboard = readFileSync(new URL("../app/dashboard/page.tsx", import.meta.url), "utf8");
+  const dashboard = readFileSync(new URL("../components/dashboard/DashboardPageContent.tsx", import.meta.url), "utf8");
 
   assert.deepEqual(
     filterSupportedPlatforms?.([

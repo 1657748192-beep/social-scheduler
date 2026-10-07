@@ -36,7 +36,7 @@ test("shared status labels keep Chinese as the default and preserve unknown valu
 
 test("status consumers pass the active locale to shared label helpers", () => {
   const calendarDetail = readFileSync("apps/web/components/calendar/ScheduleDetailPanel.tsx", "utf8");
-  const dashboard = readFileSync("apps/web/app/dashboard/page.tsx", "utf8");
+  const dashboard = readFileSync("apps/web/components/dashboard/DashboardPageContent.tsx", "utf8");
   const invitation = readFileSync("apps/web/app/invitations/[token]/page.tsx", "utf8");
 
   assert.match(calendarDetail, /const \{ locale, t \} = useLanguage\(\)/);
@@ -49,7 +49,7 @@ test("status consumers pass the active locale to shared label helpers", () => {
 });
 
 test("publishing access states provide English labels in dashboard and admin views", () => {
-  const dashboard = readFileSync("apps/web/app/dashboard/page.tsx", "utf8");
+  const dashboard = readFileSync("apps/web/components/dashboard/DashboardPageContent.tsx", "utf8");
   const admin = readFileSync("apps/web/app/admin/page.tsx", "utf8");
 
   assert.match(dashboard, /t\("发布权限已停用", "Publishing access disabled"\)/);
@@ -64,7 +64,7 @@ test("publishing access states provide English labels in dashboard and admin vie
 });
 
 test("publishing access calls users members in dashboard and admin views", () => {
-  const dashboard = readFileSync("apps/web/app/dashboard/page.tsx", "utf8");
+  const dashboard = readFileSync("apps/web/components/dashboard/DashboardPageContent.tsx", "utf8");
   const admin = readFileSync("apps/web/app/admin/page.tsx", "utf8");
 
   assert.match(dashboard, /t\("会员发布权限已到期", "Membership publishing access expired"\)/);

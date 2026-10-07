@@ -21,6 +21,8 @@ test("sidebar keeps navigation without duplicate channel or account controls", (
   assert.doesNotMatch(sidebar, /连接通道|更多通道|退出登录|Signed in/);
   assert.match(sidebar, /帖子管理/);
   assert.match(sidebar, /排程日历/);
+  assert.match(sidebar, /href="\/social-accounts"/);
+  assert.ok(sidebar.indexOf('href="/social-accounts"') > sidebar.indexOf('href="/inbox"'));
   assert.match(html, /页面内容/);
 });
 
