@@ -33,7 +33,8 @@ export function DashboardOverviewView({ data, loading, failed, locale, timezone,
       <section className="panel dashboard-upcoming">
         <div className="row"><h2>{t("即将发布", "Upcoming publications")}</h2><a className="text-button" href="/calendar">{t("查看全部 →", "View all →")}</a></div>
         <p className="muted">{t("当前工作区 · 最近 5 条待发布记录（含发布中及逾期排程）", "Current workspace · First 5 pending records, including publishing and overdue schedules")}</p>
-        {failed ? <p className="error" role="alert">{t("无法读取内容统计，请刷新重试。", "Could not load content overview. Refresh to retry.")}</p> : loading ? <p className="muted" role="status">{t("正在读取内容…", "Loading content…")}</p> : data && !data.upcoming.length ? <p className="muted">{t("暂无待发布内容", "No pending publications")}</p> : data ? <div className="dashboard-upcoming-scroll"><table className="dashboard-upcoming-table">
+        {failed ? <p className="error" role="alert">{t("暂时无法更新内容统计，将自动重试。", "Could not update content overview. Retrying automatically.")}</p> : null}
+        {loading ? <p className="muted" role="status">{t("正在读取内容…", "Loading content…")}</p> : data && !data.upcoming.length ? <p className="muted">{t("暂无待发布内容", "No pending publications")}</p> : data ? <div className="dashboard-upcoming-scroll"><table className="dashboard-upcoming-table">
           <thead><tr>{[t("日期/时间", "Date / time"), t("内容", "Content"), t("平台", "Platform"), t("状态", "Status"), t("操作", "Actions")].map(label => <th key={label}>{label}</th>)}</tr></thead>
           <tbody>{data.upcoming.map(item => <tr key={item.id}>
             <td><time dateTime={item.scheduledAt}>{new Date(item.scheduledAt).toLocaleString(locale, { timeZone: safeTimezone, month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })}</time></td>
@@ -53,15 +54,13 @@ export function DashboardActivity({ token, workspaceId, ...props }: Omit<ViewPro
   const [now, setNow] = useState<Date | null>(null);
   useEffect(() => subscribeDashboardClock(setNow), []);
   const [result, setResult] = useState<{ workspaceId: string; token: string; data: DashboardOverview | null; failed: boolean } | null>(null);
-  const [revision, setRevision] = useState(0);
   useEffect(() => {
     if (!token || !workspaceId) return;
     setResult(null);
-    return startDashboardOverviewRequest(token, workspaceId, data => setResult({ workspaceId, token, data, failed: data === null }));
-  }, [token, workspaceId, revision]);
+    return startDashboardOverviewRequest(token, workspaceId, data => setResult(previous => ({ workspaceId, token, data: data ?? (previous?.workspaceId === workspaceId && previous.token === token ? previous.data : null), failed: data === null })), true);
+  }, [token, workspaceId]);
   const current = result?.workspaceId === workspaceId && result.token === token ? result : null;
   return <>
-    <div className="dashboard-overview-refresh"><button className="button secondary" disabled={!token || !workspaceId || !current} onClick={() => setRevision(value => value + 1)} type="button">{props.locale === "en" ? "Refresh overview" : "刷新总览"}</button></div>
     <DashboardOverviewView {...props} now={now} data={current?.data ?? null} failed={current?.failed ?? false} loading={Boolean(workspaceId) && !current} />
   </>;
 }

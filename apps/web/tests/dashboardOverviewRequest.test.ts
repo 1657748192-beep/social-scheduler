@@ -2,6 +2,50 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { startDashboardOverviewRequest } from "../lib/dashboardOverviewRequest";
 
+test("automatic overview refresh pauses when hidden, resumes on return and cleans up", async context => {
+  context.mock.timers.enable({ apis: ["setInterval"] });
+  const originalFetch = globalThis.fetch;
+  const originalDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const page = Object.assign(new EventTarget(), { visibilityState: "visible" });
+  const browser = new EventTarget();
+  Object.defineProperty(globalThis, "document", { configurable: true, value: page });
+  Object.defineProperty(globalThis, "window", { configurable: true, value: browser });
+  let calls = 0;
+  const received: unknown[] = [];
+  globalThis.fetch = async () => { calls++; return Response.json({ publishedCount: calls }); };
+  const flush = async () => { await new Promise(resolve => setTimeout(resolve, 0)); };
+  const stop = startDashboardOverviewRequest("fixture", "w", data => received.push(data), true);
+  try {
+    await flush();
+    assert.equal(calls, 1);
+    context.mock.timers.tick(60000);
+    await flush();
+    assert.deepEqual(received, [{ publishedCount: 1 }, { publishedCount: 2 }]);
+    page.visibilityState = "hidden";
+    context.mock.timers.tick(120000);
+    browser.dispatchEvent(new Event("focus"));
+    assert.equal(calls, 2);
+    const stopSingle = startDashboardOverviewRequest("fixture", "w", () => {});
+    await flush();
+    assert.equal(calls, 3);
+    stopSingle();
+    page.visibilityState = "visible";
+    page.dispatchEvent(new Event("visibilitychange"));
+    browser.dispatchEvent(new Event("focus"));
+    await flush();
+    assert.equal(calls, 4);
+    stop();
+    context.mock.timers.tick(60000);
+    browser.dispatchEvent(new Event("focus"));
+    assert.equal(calls, 4);
+  } finally {
+    stop(); globalThis.fetch = originalFetch;
+    if (originalDocument) Object.defineProperty(globalThis, "document", originalDocument); else delete (globalThis as any).document;
+    if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow); else delete (globalThis as any).window;
+  }
+});
+
 test("late workspace responses and cleanup do not replace the current overview", async () => {
   const original = globalThis.fetch;
   const responses: Array<(response: Response) => void> = [];

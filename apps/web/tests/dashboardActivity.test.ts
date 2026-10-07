@@ -20,7 +20,14 @@ test("loading and failed reads never display invented zeros or successful empty 
     assert.ok(!html.includes("No pending publications"));
   }
   assert.ok(render(null, true).includes("Loading"));
-  assert.ok(render(null, false, true).includes("Could not load"));
+  assert.ok(render(null, false, true).includes('role="alert"'));
+});
+
+test("failed background updates retain the previous overview and explain automatic retry", () => {
+  const html = render(data, false, true);
+  assert.ok(html.includes("Actual title"));
+  assert.ok(html.includes(">124<"));
+  assert.ok(html.includes("Retrying automatically"));
 });
 test("a genuine empty result keeps zero counts and explains the current workspace scope", () => {
   const html = render({ ...data, publishedCount: 0, pendingCount: 0, draftCount: 0, connectedCount: 0, upcoming: [] }, false, false, "zh-CN");
