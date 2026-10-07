@@ -28,6 +28,7 @@ import {
 import { getActiveWorkspaceId, setActiveWorkspaceId } from "../../lib/activeWorkspace";
 import { filterSupportedPlatforms } from "../../lib/platformCounts";
 import { authorizationWarning } from "../../lib/authorizationWarning";
+import { confirmAccountRemoval } from "../../lib/confirmAccountRemoval";
 import { useLanguage } from "../../components/LanguageProvider";
 
 type Translate = (chinese: string, english: string) => string;
@@ -378,14 +379,19 @@ export default function DashboardPage() {
       return;
     }
 
-    setError(null);
+    const account = socialAccounts.find((item) => item.id === accountId);
+    if (!account) return;
 
     try {
-      await apiRequest(`/workspaces/${selectedWorkspace.id}/social-accounts/${accountId}`, {
-        method: "DELETE",
-        token
+      await confirmAccountRemoval(platformLabel(account.platform), account.displayName,
+        account.status === "disconnected", locale, (message) => window.confirm(message), async () => {
+        setError(null);
+        await apiRequest(`/workspaces/${selectedWorkspace.id}/social-accounts/${accountId}`, {
+          method: "DELETE",
+          token
+        });
+        await loadWorkspaceDetails(token, selectedWorkspace.id);
       });
-      await loadWorkspaceDetails(token, selectedWorkspace.id);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "请求失败");
     }
@@ -499,16 +505,6 @@ export default function DashboardPage() {
                       >
                         {creatingAuthorizationLink === provider.platform ? t("生成中", "Generating...") : t("分享授权", "Share authorization")}
                       </button>
-                      {providerAccounts.map((account) => (
-                        <button
-                          className="button danger-button"
-                          key={account.id}
-                          onClick={() => disconnectSocialAccount(account.id)}
-                          type="button"
-                        >
-                          {account.status === "disconnected" ? t("删除记录", "Delete record") : t("解除绑定", "Disconnect")} {account.displayName}
-                        </button>
-                      ))}
                     </div>
 
                     {shareLink?.shareUrl ? (
