@@ -5,17 +5,26 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { DashboardOverviewView } from "../components/dashboard/DashboardActivity";
 import { subscribeDashboardClock } from "../lib/dashboardClock";
 
-test("greeting uses current device-local time, not the stale data fetch time", () => {
+test("greeting uses current Beijing time, not device timezone or stale data fetch time", () => {
   const cases = [[0, "夜深了"], [4, "夜深了"], [5, "早上好"], [10, "早上好"], [11, "中午好"], [12, "中午好"], [13, "下午好"], [17, "下午好"], [18, "晚上好"], [23, "晚上好"]] as const;
   for (const [hour, expected] of cases) {
     const html = renderToStaticMarkup(React.createElement(DashboardOverviewView, {
       data: { publishedCount: 1, pendingCount: 0, draftCount: 0, connectedCount: 1, upcoming: [], fetchedAt: "2000-01-01T00:00:00Z" },
-      loading: false, failed: false, locale: "zh-CN", timezone: "Pacific/Honolulu", userName: "Andy", now: new Date(2026, 9, 7, hour)
+      loading: false, failed: false, locale: "zh-CN", timezone: "Pacific/Honolulu", userName: "Andy", now: new Date(`2026-10-07T${String(hour).padStart(2, "0")}:00:00+08:00`)
     } as any));
     assert.ok(html.includes(`${expected}，Andy!`), `${hour}: ${expected}`);
     assert.ok(html.includes("2026年10月7日星期三"));
     assert.ok(!html.includes("2000年"));
   }
+});
+
+test("Beijing date crosses midnight before UTC and labels its timezone", () => {
+  const html = renderToStaticMarkup(React.createElement(DashboardOverviewView, {
+    data: null, loading: true, failed: false, locale: "zh-CN", timezone: "UTC", userName: "Andy", now: new Date("2026-10-07T16:01:00Z")
+  }));
+  assert.ok(html.includes("夜深了，Andy!"));
+  assert.ok(html.includes("2026年10月8日星期四"));
+  assert.ok(html.includes("北京时间"));
 });
 
 test("live clock updates across midnight and stops updating after cleanup", context => {

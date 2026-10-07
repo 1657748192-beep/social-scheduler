@@ -11,7 +11,7 @@ export function DashboardOverviewView({ data, loading, failed, locale, timezone,
   let safeTimezone = timezone;
   try { new Intl.DateTimeFormat("en", { timeZone: timezone }).format(); } catch { safeTimezone = "Asia/Shanghai"; }
   const date = now;
-  const hour = date?.getHours() ?? null;
+  const hour = date ? Number(new Intl.DateTimeFormat("en", { timeZone: "Asia/Shanghai", hour: "numeric", hourCycle: "h23" }).format(date)) : null;
   const greeting = hour === null ? t("你好", "Hello") : hour < 5 ? t("夜深了", "It's late") : hour < 11 ? t("早上好", "Good morning") : hour < 13 ? t("中午好", "Good afternoon") : hour < 18 ? t("下午好", "Good afternoon") : t("晚上好", "Good evening");
   const metrics = [
     { label: t("已发布内容", "Published content"), value: data?.publishedCount, detail: t("按平台发布记录计数", "Counted per platform publication"), href: "/posts", symbol: "➤" },
@@ -22,7 +22,7 @@ export function DashboardOverviewView({ data, loading, failed, locale, timezone,
   return <>
     <section className="dashboard-hero dashboard-welcome">
       <div><h2>{greeting}{userName ? `，${userName}!` : "!"}</h2><p className="muted">{t("在一个地方，轻松规划和发布你的社交媒体内容。", "Plan and publish your social content in one place.")}</p></div>
-      <div className="dashboard-welcome-date">{date ? <time dateTime={date.toISOString()}>{date.toLocaleDateString(locale, { year: "numeric", month: "long", day: "numeric", weekday: "long" })}</time> : null}<small>{t("当前工作区 · 软件内发布记录", "Current workspace · In-app publishing records")}</small></div>
+      <div className="dashboard-welcome-date">{date ? <time dateTime={date.toISOString()}>{date.toLocaleDateString(locale, { timeZone: "Asia/Shanghai", year: "numeric", month: "long", day: "numeric", weekday: "long" })}</time> : null}<small>{t("北京时间 · 当前工作区", "Beijing time · Current workspace")}</small></div>
     </section>
     <section className="metric-grid dashboard-content-metrics" aria-label={t("内容统计", "Content overview")}>
       {metrics.map((item, index) => <a className={`metric-card dashboard-content-metric metric-tone-${index}`} href={item.href} key={item.href}>
