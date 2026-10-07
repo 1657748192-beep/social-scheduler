@@ -1,0 +1,172 @@
+/* Workspace-only presentation: public branding and provider workflows stay unchanged. */
+.software-shell {
+  --bg: #f5f8fa;
+  --panel-muted: #f3f6f8;
+  --text: #182d2a;
+  --muted: #697b79;
+  --line: #e4ece9;
+  --primary: #079a66;
+  --primary-dark: #087c54;
+  --workspace-shadow: 0 4px 24px rgb(21 62 47 / 4%);
+  background: var(--bg);
+  grid-template-columns: 250px minmax(0, 1fr);
+  font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+.software-shell .software-sidebar {
+  background: linear-gradient(165deg, #092f2b, #062521 85%);
+  border-right: 1px solid #153e36;
+  padding: 24px 16px 18px;
+  gap: 20px;
+}
+.software-shell .software-brand { gap: 10px; padding: 0 8px; }
+.software-shell .software-brand strong { font-size: 17px; letter-spacing: -.4px; }
+.software-shell .software-brand span { color: #a1bdb4; margin-top: 4px; }
+.software-shell .software-mark {
+  border-radius: 13px 5px 13px 5px;
+  background: linear-gradient(145deg, #53e4a5, #0baa75);
+  box-shadow: 0 4px 16px rgb(0 190 125 / 18%);
+  color: #063d2a;
+}
+.software-shell .compose-entry {
+  border-radius: 10px;
+  background: #14b87e;
+  color: white;
+  min-height: 44px;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 10%);
+}
+.software-shell .compose-entry:hover { background: #0fa570; }
+.software-shell .software-nav { gap: 7px; }
+.software-shell .software-nav a {
+  grid-template-columns: 24px minmax(0, 1fr);
+  column-gap: 12px;
+  padding: 10px 12px;
+  min-height: 52px;
+  color: #d9e8e2;
+  border-radius: 10px;
+  transition: background .15s ease;
+}
+.software-shell .software-nav a::before {
+  content: "";
+  grid-row: 1 / 3;
+  width: 21px;
+  height: 21px;
+  background: currentColor;
+  mask: var(--nav-icon) center / contain no-repeat;
+}
+.software-nav a[href="/dashboard"] { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 10 12 3l9 7v11h-6v-7H9v7H3Z' fill='none' stroke='black' stroke-width='1.8' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.software-nav a[href="/composer"] { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M14 4H4v16h16V10M10 14l1-4 8-8 3 3-8 8Z' fill='none' stroke='black' stroke-width='1.8' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.software-nav a[href="/drafts"] { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 3h9l5 5v13H5ZM14 3v6h5M8 13h8M8 17h6' fill='none' stroke='black' stroke-width='1.8' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.software-nav a[href="/calendar"] { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 5h18v16H3ZM7 2v6M17 2v6M3 10h18M7 14h3M14 14h3M7 17h3' fill='none' stroke='black' stroke-width='1.8' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.software-nav a[href="/posts"] { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 5h18v15H3ZM3 10h18M8 10v10M11 14h7M11 17h5' fill='none' stroke='black' stroke-width='1.8' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.software-nav a[href="/inbox"] { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 4h18v14H9l-5 4v-4H3ZM7 9h10M7 13h7' fill='none' stroke='black' stroke-width='1.8' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.software-shell .software-nav a strong,
+.software-shell .software-nav a small { grid-column: 2; }
+.software-shell .software-nav a small { color: #a5beb5; font-size: 10px; font-weight: 400; }
+.software-shell .software-nav a:hover { background: #15483d; }
+.software-shell .software-nav a.active {
+  background: linear-gradient(110deg, #197553, #185140);
+  box-shadow: inset 3px 0 #60d8aa;
+  color: white;
+}
+.software-shell .software-nav a.active small { color: #cce9dd; }
+.software-shell .software-channels,
+.software-shell .software-sidebar-footer { border-color: #24493e; }
+.software-shell .channels-heading { color: #dcece5; }
+.software-shell .channel-row,
+.software-shell .channel-more,
+.software-shell .channel-row-action,
+.software-shell .software-sidebar-footer .button.secondary { background: #0d382e; border-color: #2a5748; color: #d6e9df; }
+.software-shell .channel-row.connected { background: #124533; border-color: #328661; }
+.software-shell .channel-row:hover,
+.software-shell .channel-row:hover .channel-row-main,
+.software-shell .channel-more:hover { background: #19513e; }
+.software-shell .channel-copy small,
+.software-shell .channels-empty,
+.software-shell .channel-progress-note,
+.software-shell .software-sidebar-footer span { color: #a5c3b6; }
+.software-shell .channel-progress { background: #0b3028; border-color: #295043; border-radius: 12px; }
+.software-shell .progress-track { background: #254d3f; }
+.software-shell .progress-track span { background: #44cb93; }
+.software-shell .channel-icon.more { background: #168755; }
+.software-shell .software-topbar {
+  background: rgb(255 255 255 / 94%);
+  border-color: var(--line);
+  padding: 20px 30px;
+  gap: 20px;
+}
+.software-shell .software-topbar h1 { font-size: 24px; letter-spacing: -.7px; line-height: 1.3; color: #152e25; }
+.software-shell .software-topbar p { font-size: 13px; margin-top: 4px; }
+.software-shell .software-content { width: min(1440px, 100%); padding: 28px 30px 40px; margin: 0 auto; }
+.software-shell .software-content.wide { width: 100%; }
+.software-shell .software-main { grid-template-columns: minmax(0, 1fr); }
+.software-shell :is(.software-content, .dashboard, .dashboard-layout, .panel, .metric-card) { min-width: 0; }
+.software-shell .language-toggle button.active { background: #087d54; color: white; }
+.software-shell .button {
+  border-radius: 9px;
+  padding: 11px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background .15s ease, box-shadow .15s ease;
+}
+.software-shell .button:not(.secondary):not(.danger-button) { background: var(--primary); color: #fff; box-shadow: 0 3px 10px rgb(7 154 102 / 10%); }
+.software-shell .button:not(.secondary):not(.danger-button):hover { background: var(--primary-dark); }
+.software-shell .button.secondary { background: #f1f6f3; color: #315e4d; }
+.software-shell .button.secondary:hover { background: #e3f0e9; }
+.software-shell .software-sidebar-footer .button.secondary { background: #164434; color: #e7f2ec; }
+.software-shell :is(a, button, input, textarea, select):focus-visible { outline: 3px solid #69c9a6; outline-offset: 3px; }
+.software-shell :is(.panel, .composer-panel, .calendar-main, .schedule-detail, .draft-toolbar, .draft-empty, .draft-card, .published-post-toolbar, .published-post-card, .published-post-empty) {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: white;
+  box-shadow: var(--workspace-shadow);
+}
+.software-shell :is(.panel, .composer-panel) { padding: 24px; }
+.software-shell :is(.panel h2, .composer-panel h2, .draft-toolbar h2, .published-post-toolbar h2) { font-size: 18px; letter-spacing: -.3px; }
+.software-shell .dashboard { gap: 22px; }
+.software-shell .dashboard-hero { background: linear-gradient(110deg, #e8f8ef, #f4fcf8); border: 1px solid #d5ede0; border-radius: 14px; }
+.software-shell .dashboard-hero h2 { color: #163e2e; }
+.software-shell :is(.metric-card, .draft-stats article, .published-post-stats article, .admin-metrics article) { border-radius: 12px; border: 1px solid var(--line); background: white; box-shadow: var(--workspace-shadow); padding: 20px; }
+.software-shell .metric-card { border-top: 3px solid #6bcaa0; }
+.software-shell .metric-card:nth-child(2) { border-top-color: #79b2ed; }
+.software-shell .metric-card:nth-child(3) { border-top-color: #b38bdf; }
+.software-shell .metric-card:nth-child(4) { border-top-color: #bac7c5; }
+.software-shell .metric-card strong { font-size: 30px; letter-spacing: -.8px; }
+.software-shell .metric-card span { font-size: 13px; }
+.software-shell .field :is(input, textarea, select),
+.software-shell .calendar-controls select { border-radius: 9px; border-color: #dce7e1; background: #fcfefd; color: var(--text); }
+.software-shell .field :is(input, textarea, select):focus { border-color: #39ac7e; }
+.software-shell .connected-table { border-radius: 12px; border-color: var(--line); }
+.software-shell .connected-table-head { background: #f4f8f6; color: #6b7d75; }
+.software-shell .connected-table-row { padding-top: 16px; padding-bottom: 16px; }
+.software-shell .connected-table-row:hover { background: #f9fcfa; }
+.software-shell .status-pill.ready { background: #e8f8ee; color: #16774c; }
+.software-shell :is(.provider-card, .instagram-comment, .instagram-inbox-layout) { border-radius: 12px; border-color: var(--line); }
+.software-shell :is(.instagram-metrics, .tiktok-metrics-grid > div, .published-post-meta div, .draft-meta > div) { background: #f3f8f5; border-radius: 10px; }
+.software-shell .instagram-message.own { background: #e8f7ee; border-color: #bfdfcc; }
+.software-shell .segmented { background: #f1f6f3; border-color: var(--line); border-radius: 10px; }
+.software-shell .segmented button.active { background: #087d54; color: white; }
+.software-shell .calendar-day:hover, .software-shell .calendar-hour-cell:hover { background: #f2faf5; }
+.software-shell .calendar-toolbar { border-color: var(--line); }
+.software-shell .channel-modal { border-radius: 16px; }
+.software-shell .channel-card.connected { background: #effaf3; border-color: #65b68e; }
+@media (max-width: 1100px) and (min-width: 761px) {
+  .software-shell { grid-template-columns: 228px minmax(0, 1fr); }
+  .software-shell .software-topbar { flex-wrap: wrap; padding: 18px 22px; }
+  .software-shell .software-content { padding: 22px; }
+}
+@media (max-width: 760px) {
+  .software-shell { grid-template-columns: minmax(0, 1fr); }
+  .software-shell .software-sidebar { padding: 18px 14px; gap: 14px; height: auto; position: static; }
+  .software-shell .software-nav a { justify-content: start; padding: 10px; column-gap: 8px; }
+  .software-shell .software-nav a strong { font-size: 13px; }
+  .software-shell .software-topbar { padding: 20px 16px; gap: 14px; }
+  .software-shell .software-topbar h1 { font-size: 22px; }
+  .software-shell .topbar-actions { width: 100%; gap: 8px; flex-wrap: wrap; }
+  .software-shell .topbar-actions .button { padding: 10px 12px; }
+  .software-shell .software-content { padding: 18px 14px 28px; }
+  .software-shell :is(.panel, .composer-panel) { padding: 18px; }
+  .software-shell .connected-table { overflow-x: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .software-shell *, .software-shell *::before { transition: none !important; animation: none !important; }
+}

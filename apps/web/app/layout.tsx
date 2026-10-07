@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./workspace-theme.css";
 import { LanguageProvider } from "../components/LanguageProvider";
 
 export const metadata: Metadata = {
