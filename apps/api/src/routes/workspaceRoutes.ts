@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { dashboardOverviewController } from "../controllers/dashboardOverviewController";
 import {
   acceptInvitationController,
   createInvitationController,
@@ -16,6 +17,8 @@ import { requireAuth } from "../middleware/auth";
 import { asyncHandler } from "../utils/asyncHandler";
 
 export const workspaceRoutes = Router();
+
+workspaceRoutes.get("/workspaces/:workspaceId/dashboard-overview", requireAuth, asyncHandler(dashboardOverviewController));
 
 workspaceRoutes.get("/workspaces", requireAuth, asyncHandler(listWorkspacesController));
 workspaceRoutes.post("/workspaces", requireAuth, asyncHandler(createWorkspaceController));

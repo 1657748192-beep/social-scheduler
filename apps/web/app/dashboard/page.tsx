@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "../../components/AppShell";
 import { DashboardSidebar } from "../../components/dashboard/DashboardSidebar";
+import { DashboardActivity } from "../../components/dashboard/DashboardActivity";
 import { TikTokAccountStatsPanel } from "../../components/channels/TikTokAccountStatsPanel";
 import { TikTokSandboxPanel } from "../../components/channels/TikTokSandboxPanel";
 import {
@@ -183,12 +184,6 @@ export default function DashboardPage() {
   const connectedAccounts = socialAccounts.filter((account) => account.status === "active");
   const supportedOAuthStatuses = filterSupportedPlatforms(oauthStatuses);
   const pendingInvitations = invitations.filter((invitation) => invitation.status === "pending");
-  const dashboardStats = [
-    { label: t("工作区", "Workspaces"), value: workspaces.length, detail: selectedWorkspace?.plan ?? "MVP" },
-    { label: t("已连接渠道", "Connected channels"), value: connectedAccounts.length, detail: t("可用于排程", "Ready for scheduling") },
-    { label: t("团队成员", "Team members"), value: members.length, detail: t("含所有者", "Including owner") },
-    { label: t("待处理邀请", "Pending invitations"), value: pendingInvitations.length, detail: t("等待加入", "Waiting to join") }
-  ];
   const bindingProviderAccounts = bindingProvider
     ? connectedAccounts.filter((account) => account.platform === bindingProvider.platform)
     : [];
@@ -405,21 +400,14 @@ export default function DashboardPage() {
       <div className="dashboard">
         {error ? <p className="error">{error}</p> : null}
 
-        <section className="dashboard-hero">
-          <div>
-            <p className="section-kicker">{t("运营总览", "Overview")}</p>
-            <h2>{selectedWorkspace?.name ?? t("选择一个工作区", "Select a workspace")}</h2>
-            <p className="muted">{t("把账号授权、成员协作、内容排程放在同一个工作台里处理。", "Manage account authorization, team collaboration, and content scheduling in one workspace.")}</p>
-          </div>
-          <div className="hero-actions">
-            <a className="button secondary" href="#social-channels">
-              {t("管理渠道", "Manage channels")}
-            </a>
-            <a className="button" href="/composer">
-              {t("新建内容", "New content")}
-            </a>
-          </div>
-        </section>
+        <DashboardActivity token={token} workspaceId={selectedWorkspaceId} locale={locale} timezone={selectedWorkspace?.timezone ?? "Asia/Shanghai"} userName={user?.name}>
+          <DashboardSidebar
+            accounts={accountsWorkspaceId === selectedWorkspaceId ? socialAccounts : []}
+            locale={locale}
+            loading={accountsWorkspaceId !== selectedWorkspaceId}
+            failed={Boolean(error) && accountsWorkspaceId !== selectedWorkspaceId}
+          />
+        </DashboardActivity>
 
         {selectedWorkspace?.publishingAccessExpiresAt ||
         selectedWorkspace?.publishingAccessStatus === "disabled" ||
@@ -452,17 +440,6 @@ export default function DashboardPage() {
           </section>
         ) : null}
 
-        <section className="metric-grid" aria-label={t("运营指标", "Overview metrics")}>
-          {dashboardStats.map((item) => (
-            <article className="metric-card" key={item.label}>
-              <span>{item.label}</span>
-              <strong>{item.value}</strong>
-              <small>{item.detail}</small>
-            </article>
-          ))}
-        </section>
-
-        <div className="dashboard-overview-grid">
         <section className="panel channel-management" id="social-channels">
           <div className="row">
             <div>
@@ -608,13 +585,6 @@ export default function DashboardPage() {
           </div>
         </section>
 
-          <DashboardSidebar
-            accounts={accountsWorkspaceId === selectedWorkspaceId ? socialAccounts : []}
-            locale={locale}
-            loading={accountsWorkspaceId !== selectedWorkspaceId}
-            failed={Boolean(error) && accountsWorkspaceId !== selectedWorkspaceId}
-          />
-        </div>
 
         <div className="dashboard-layout">
           <section className="panel workspace-panel">

@@ -209,3 +209,37 @@
 @media (prefers-reduced-motion: reduce) {
   .software-shell *, .software-shell *::before { transition: none !important; animation: none !important; }
 }
+.software-shell .dashboard-overview-refresh { display: flex; justify-content: flex-end; }
+.software-shell .dashboard-welcome { background: transparent; border: 0; box-shadow: none; padding: 0; }
+.software-shell .dashboard-welcome-date { display: grid; gap: 8px; text-align: right; font-size: 13px; font-weight: 600; }
+.software-shell .dashboard-welcome-date small { color: var(--text-secondary); font-weight: 400; }
+.software-shell .dashboard-content-metric { display: flex; align-items: center; gap: 14px; text-decoration: none; color: inherit; }
+.software-shell .dashboard-content-metric > div { display: grid; gap: 4px; min-width: 0; }
+.software-shell .dashboard-content-metric strong { font-size: 28px; }
+.software-shell .dashboard-content-metric small { font-size: 11px; color: #718079; }
+.software-shell .metric-symbol { display: grid; place-items: center; flex: 0 0 48px; width: 48px; height: 48px; border-radius: 50%; background: #e5faf1; color: #079a66; font-size: 27px; }
+.software-shell .metric-tone-1 .metric-symbol { background: #e9f3ff; color: #2585df; }
+.software-shell .metric-tone-2 .metric-symbol { background: #f3eaff; color: #9354e3; }
+.software-shell .metric-tone-3 .metric-symbol { background: #edf1f6; color: #586575; }
+.software-shell .dashboard-upcoming { padding: 22px; }
+.software-shell .dashboard-upcoming h2 { font-size: 18px; color: #137752; }
+.software-shell .dashboard-upcoming > .muted { font-size: 12px; }
+.software-shell .dashboard-upcoming-scroll { overflow-x: auto; }
+.software-shell .dashboard-upcoming-table { border-collapse: collapse; width: 100%; min-width: 600px; text-align: left; font-size: 12px; }
+.software-shell .dashboard-upcoming-table th { color: #6a7772; background: #f6f9f8; font-weight: 500; padding: 12px 8px; }
+.software-shell .dashboard-upcoming-table td { padding: 14px 8px; border-bottom: 1px solid #edf2ef; vertical-align: middle; }
+.software-shell .dashboard-upcoming-table td:first-child { width: 90px; }
+.software-shell .dashboard-upcoming-table td:last-child { white-space: nowrap; }
+.software-shell .dashboard-upcoming-content { display: flex; gap: 12px; align-items: center; }
+.software-shell .dashboard-upcoming-content > div { display: grid; gap: 3px; max-width: 230px; }
+.software-shell .dashboard-upcoming-content strong, .software-shell .dashboard-upcoming-content small { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+.software-shell .dashboard-upcoming-content small { color: #7b8982; }
+.software-shell .dashboard-upcoming-content img, .software-shell .dashboard-thumbnail-placeholder { width: 52px; height: 52px; flex: 0 0 52px; border-radius: 9px; object-fit: cover; }
+.software-shell .dashboard-thumbnail-placeholder { display: grid; place-items: center; background: #edf6f1; color: #79958a; font-size: 24px; }
+.software-shell .dashboard-platform { font-weight: 600; }
+@media (max-width: 760px) {
+  .software-shell .dashboard-welcome-date { text-align: left; }
+  .software-shell .dashboard-content-metric { padding: 15px; gap: 10px; }
+  .software-shell .metric-symbol { flex-basis: 38px; width: 38px; height: 38px; }
+  .software-shell .dashboard-upcoming { padding: 16px; }
+}

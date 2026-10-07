@@ -201,6 +201,18 @@ export type Workspace = {
   publishingAccessStatus?: "active" | "disabled" | "expired";
 };
 
+export type DashboardOverview = {
+  publishedCount: number;
+  pendingCount: number;
+  draftCount: number;
+  connectedCount: number;
+  fetchedAt: string;
+  upcoming: Array<{
+    id: string; scheduledAt: string; status: string; platform: string;
+    title: string | null; text: string; accountName: string | null; thumbnailUrl: string | null;
+  }>;
+};
+
 export type WorkspaceMember = {
   id: string;
   userId: string;
