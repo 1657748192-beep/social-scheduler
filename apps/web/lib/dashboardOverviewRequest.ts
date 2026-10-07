@@ -1,6 +1,10 @@
 import { apiRequest, type DashboardOverview } from "./api";
 
 export function startDashboardOverviewRequest(token: string, workspaceId: string, receive: (data: DashboardOverview | null) => void, autoRefresh = false) {
+  return startDashboardResourceRequest<DashboardOverview>(token, `/workspaces/${encodeURIComponent(workspaceId)}/dashboard-overview`, receive, autoRefresh);
+}
+
+export function startDashboardResourceRequest<T>(token: string, path: string, receive: (data: T | null) => void, autoRefresh = false) {
   let canceled = false;
   let pending = false;
   const documentTarget = typeof document !== "undefined" ? document : null;
@@ -8,7 +12,7 @@ export function startDashboardOverviewRequest(token: string, workspaceId: string
   const refresh = () => {
     if (canceled || pending || (autoRefresh && documentTarget?.visibilityState === "hidden")) return;
     pending = true;
-    apiRequest<DashboardOverview>(`/workspaces/${encodeURIComponent(workspaceId)}/dashboard-overview`, { token })
+    apiRequest<T>(path, { token })
     .then(data => { if (!canceled) receive(data); })
     .catch(() => { if (!canceled) receive(null); })
     .finally(() => { pending = false; });

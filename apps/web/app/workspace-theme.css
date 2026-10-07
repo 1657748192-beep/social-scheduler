@@ -237,9 +237,39 @@
 .software-shell .dashboard-upcoming-content img, .software-shell .dashboard-thumbnail-placeholder { width: 52px; height: 52px; flex: 0 0 52px; border-radius: 9px; object-fit: cover; }
 .software-shell .dashboard-thumbnail-placeholder { display: grid; place-items: center; background: #edf6f1; color: #79958a; font-size: 24px; }
 .software-shell .dashboard-platform { font-weight: 600; }
+.software-shell .dashboard-content-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #edf2ef; margin: -6px 0 14px; }
+.software-shell .dashboard-content-tabs { display: flex; gap: 22px; overflow-x: auto; min-width: 0; }
+.software-shell .dashboard-content-tabs button { appearance: none; border: 0; border-radius: 0; border-bottom: 3px solid transparent; background: transparent; color: #718079; font: inherit; font-size: 13px; padding: 14px 0 12px; white-space: nowrap; cursor: pointer; }
+.software-shell .dashboard-content-tabs button[aria-selected="true"] { color: #137752; font-weight: 700; border-bottom-color: #11b981; }
+.software-shell .dashboard-content-tabs button:focus-visible { outline: 2px solid #079a66; outline-offset: -2px; }
+.software-shell .dashboard-view-all { white-space: nowrap; font-size: 12px; }
+.software-shell .dashboard-content-scope { font-size: 12px; margin: 0 0 14px; }
+.software-shell .dashboard-platforms { display: flex; flex-wrap: wrap; gap: 5px; max-width: 150px; }
+.software-shell .dashboard-platform-badge { display: inline-flex; border-radius: 6px; padding: 4px 6px; background: #edf1f6; color: #32465a; font-size: 10px; font-weight: 700; }
+.software-shell .dashboard-platform-badge.instagram { color: #9b287e; background: #fcebf7; }
+.software-shell .dashboard-platform-badge.facebook { color: #1765b2; background: #eaf3ff; }
+.software-shell .dashboard-platform-badge.youtube { color: #ba263b; background: #fff0f1; }
+.software-shell .dashboard-platform-badge.tiktok { color: #172b33; background: #edf3f4; }
+.software-shell .dashboard-platform-badge.pinterest { color: #a72433; background: #fff0f1; }
+.software-shell .dashboard-platform-badge.linkedin { color: #12658e; background: #e8f6fc; }
+.software-shell .dashboard-content-statuses { display: grid; gap: 5px; }
+.software-shell .dashboard-content-statuses .status-pill { width: fit-content; font-size: 10px; white-space: normal; }
+.software-shell .dashboard-content-statuses .status-pill.failed { color: #b73440; background: #fff0f1; }
+.software-shell .dashboard-calendar-toolbar { display: flex; justify-content: center; align-items: center; gap: 20px; margin: 8px 0 16px; }
+.software-shell .dashboard-mini-calendar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid #edf2ef; border-left: 1px solid #edf2ef; }
+.software-shell .dashboard-calendar-weekday { padding: 10px 2px; text-align: center; background: #f6f9f8; font-size: 12px; color: #718079; }
+.software-shell .dashboard-calendar-day, .software-shell .dashboard-calendar-blank { min-height: 90px; border-bottom: 1px solid #edf2ef; border-right: 1px solid #edf2ef; padding: 6px; min-width: 0; }
+.software-shell .dashboard-calendar-blank { background: #fafcfb; }
+.software-shell .dashboard-calendar-day > span { font-size: 11px; color: #718079; }
+.software-shell .dashboard-calendar-day a { display: block; background: #e8f8f0; color: #137752; border-radius: 4px; margin-top: 5px; padding: 5px; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-decoration: none; }
+.software-shell .dashboard-calendar-day small { display: block; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 760px) {
   .software-shell .dashboard-welcome-date { text-align: left; }
   .software-shell .dashboard-content-metric { padding: 15px; gap: 10px; }
   .software-shell .metric-symbol { flex-basis: 38px; width: 38px; height: 38px; }
   .software-shell .dashboard-upcoming { padding: 16px; }
+  .software-shell .dashboard-content-toolbar { flex-wrap: wrap; }
+  .software-shell .dashboard-content-tabs { gap: 18px; width: 100%; }
+  .software-shell .dashboard-view-all { margin-left: auto; margin-bottom: 8px; }
+  .software-shell .dashboard-calendar-day, .software-shell .dashboard-calendar-blank { min-height: 70px; padding: 3px; }
 }

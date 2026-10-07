@@ -1,6 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { startDashboardOverviewRequest } from "../lib/dashboardOverviewRequest";
+import * as resourceRequests from "../lib/dashboardOverviewRequest";
+
+test("content resource refresh uses its own authenticated endpoint and ignores canceled responses", async () => {
+  const start = (resourceRequests as any).startDashboardResourceRequest;
+  assert.equal(typeof start, "function");
+  const originalFetch = globalThis.fetch;
+  let resolveResponse: (value: Response) => void = () => {};
+  const received: unknown[] = [];
+  globalThis.fetch = async (url, options) => {
+    assert.ok(String(url).endsWith("/workspaces/w/composer/drafts"));
+    assert.equal((options?.headers as Record<string, string>).Authorization, "Bearer fixture");
+    return new Promise(resolve => { resolveResponse = resolve; });
+  };
+  try {
+    const stop = start("fixture", "/workspaces/w/composer/drafts", (data: unknown) => received.push(data), false);
+    stop();
+    resolveResponse(Response.json([]));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(received, []);
+  } finally { globalThis.fetch = originalFetch; }
+});
 
 test("automatic overview refresh pauses when hidden, resumes on return and cleans up", async context => {
   context.mock.timers.enable({ apis: ["setInterval"] });

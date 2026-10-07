@@ -4,9 +4,11 @@ import type { DashboardOverview } from "../../lib/api";
 import { startDashboardOverviewRequest } from "../../lib/dashboardOverviewRequest";
 import { subscribeDashboardClock } from "../../lib/dashboardClock";
 import { platformLabel, scheduleStatusLabel } from "../../lib/labels";
+import { DashboardContentPanel } from "./DashboardContent";
+export { DashboardContentView } from "./DashboardContent";
 
-type ViewProps = { data: DashboardOverview | null; loading: boolean; failed: boolean; locale: "zh-CN" | "en"; timezone: string; userName?: string; now?: Date | null; children?: React.ReactNode };
-export function DashboardOverviewView({ data, loading, failed, locale, timezone, userName, now = null, children }: ViewProps) {
+type ViewProps = { data: DashboardOverview | null; loading: boolean; failed: boolean; locale: "zh-CN" | "en"; timezone: string; userName?: string; now?: Date | null; children?: React.ReactNode; contentPanel?: React.ReactNode };
+export function DashboardOverviewView({ data, loading, failed, locale, timezone, userName, now = null, children, contentPanel }: ViewProps) {
   const t = (zh: string, en: string) => locale === "en" ? en : zh;
   let safeTimezone = timezone;
   try { new Intl.DateTimeFormat("en", { timeZone: timezone }).format(); } catch { safeTimezone = "Asia/Shanghai"; }
@@ -30,7 +32,7 @@ export function DashboardOverviewView({ data, loading, failed, locale, timezone,
       </a>)}
     </section>
     <div className="dashboard-overview-grid">
-      <section className="panel dashboard-upcoming">
+      {contentPanel ?? <section className="panel dashboard-upcoming">
         <div className="row"><h2>{t("即将发布", "Upcoming publications")}</h2><a className="text-button" href="/calendar">{t("查看全部 →", "View all →")}</a></div>
         <p className="muted">{t("当前工作区 · 最近 5 条待发布记录（含发布中及逾期排程）", "Current workspace · First 5 pending records, including publishing and overdue schedules")}</p>
         {failed ? <p className="error" role="alert">{t("暂时无法更新内容统计，将自动重试。", "Could not update content overview. Retrying automatically.")}</p> : null}
@@ -44,7 +46,7 @@ export function DashboardOverviewView({ data, loading, failed, locale, timezone,
             <td><a className="text-button" href="/calendar">{t("查看排程", "View schedule")}</a></td>
           </tr>)}</tbody>
         </table></div> : null}
-      </section>
+      </section>}
       {children}
     </div>
   </>;
@@ -61,6 +63,6 @@ export function DashboardActivity({ token, workspaceId, ...props }: Omit<ViewPro
   }, [token, workspaceId]);
   const current = result?.workspaceId === workspaceId && result.token === token ? result : null;
   return <>
-    <DashboardOverviewView {...props} now={now} data={current?.data ?? null} failed={current?.failed ?? false} loading={Boolean(workspaceId) && !current} />
+    <DashboardOverviewView {...props} contentPanel={<DashboardContentPanel token={token} workspaceId={workspaceId} locale={props.locale} timezone={props.timezone} />} now={now} data={current?.data ?? null} failed={current?.failed ?? false} loading={Boolean(workspaceId) && !current} />
   </>;
 }
