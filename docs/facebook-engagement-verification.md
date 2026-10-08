@@ -68,3 +68,18 @@ Final configured test run: 332 passed, 0 failed, 0 skipped. Independent test dat
 Dependency audit also reports existing runtime/tooling alerts, including critical classifications for Next.js/proxy-addr/shell-quote. These packages were not upgraded in this feature branch; the three newly added development-test packages are not listed in that report. Dependency remediation needs a separately scoped compatibility/security assessment before production rollout; no automatic audit fix was run.
 
 Subsequent dependency remediation (2026-10-07): see [dependency-security-verification.md](dependency-security-verification.md). The refreshed local audit reports 0 vulnerabilities; 336 configured tests and API/web builds pass. This supersedes the earlier audit state above, not the deployment gate. Clean Alpine container verification, production rollout, and real Meta end-to-end checks remain pending.
+
+## Production deployment — 2026-10-08
+
+User approved deployment and subsequently approved transfer via the existing GitHub repository's independent branch. Server tracked files were clean at `e15b559`; untracked environment backups were preserved. Fast-forwarded to `da6fdaeb26c00ce2c153caa3bbdf6a1a081029c8` without reset or cleanup.
+
+- Restricted backup directory: `/opt/social-scheduler-releases/facebook-da6fdae-20261008` (0700). Original environment/Compose files and previous commit retained. PostgreSQL custom dump approximately 1.1 MB; archive listing passed and full restoration into independent `facebook_restore_da6fdae_20261008` completed with `pg_restore --exit-on-error`. Verification database retained; production data was not overwritten.
+- Previous API/worker/web images tagged `social-scheduler-<service>:before-facebook-da6fdae` for rollback.
+- Background Linux builds of all three application images completed with exit 0. Candidate Node v22.23.3 passed proxy-trust and Sharp in-memory PNG smoke checks. Facebook flag was false.
+- Three additive migrations applied successfully: `20261007000000_facebook_engagement_oauth`, `20261007000100_facebook_reception`, `20261007000200_facebook_subscription_state`.
+- API/worker/web updated. PostgreSQL, Redis and reverse proxy were not restarted. Main application containers remained running during post-deployment checks.
+- Public health returned `ok:true`, database `ok`, Redis `PONG`; `/dashboard`, `/posts`, `/inbox`, `/social-accounts` returned HTTP 200. These are availability checks, not authenticated browser/end-to-end publishing tests.
+- Unauthenticated Facebook status endpoint returned 401. Both API and worker had `FACEBOOK_ENGAGEMENT_ENABLED=false`; API retained TikTok Sandbox enabled. Production `.env` and `.env.sandbox.local` byte comparisons against backups matched.
+- Recent API/worker log error/fatal/panic keyword counts were 0; this is a limited log smoke check, not proof of all behavior.
+
+Remaining enablement gate: authenticated UI checks, agreed Meta Page/role/permissions, supplemental redirect and webhook configuration, actual provider reads/delivery and manually approved replies. No real Facebook messages or comments were sent and no Meta settings were changed during deployment.
