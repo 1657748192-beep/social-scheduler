@@ -83,3 +83,13 @@ User approved deployment and subsequently approved transfer via the existing Git
 - Recent API/worker log error/fatal/panic keyword counts were 0; this is a limited log smoke check, not proof of all behavior.
 
 Remaining enablement gate: authenticated UI checks, agreed Meta Page/role/permissions, supplemental redirect and webhook configuration, actual provider reads/delivery and manually approved replies. No real Facebook messages or comments were sent and no Meta settings were changed during deployment.
+
+## Supplemental login configuration isolation — 2026-10-08
+
+Supplemental authorization now reads `FACEBOOK_ENGAGEMENT_LOGIN_CONFIG_ID`; ordinary publishing continues to read `FACEBOOK_LOGIN_CONFIG_ID`. The new variable defaults to blank, in which case supplemental authorization uses explicit scopes rather than the publishing configuration. API and worker Compose environments expose the independent variable. A real service/Prisma integration test observed RED (publishing configuration incorrectly selected), then GREEN after isolation; the configured suite passed 337 tests with no failures or skips and API build passed. Read-only review found no blocking issues. This isolation change is not yet deployed.
+
+Meta app `1013567811268870`: enabled test preparation for `pages_manage_engagement`, `pages_read_user_content`, and `pages_manage_metadata`; added the Messenger use case, with `pages_messaging` showing ready for testing. These are preparation statuses, not approval or token grants. Enabled the Webhook configuration entry without saving a callback or subscribing any fields.
+
+Created separate user-token, standard-login configuration `Social Scheduler Engagement`, ID `1119177347324881`, selecting `pages_manage_engagement`, `pages_manage_metadata`, `pages_manage_posts`, `pages_messaging`, `pages_read_engagement`, `pages_read_user_content`, and `pages_show_list`. Existing `Social Scheduler Page Publish`, ID `1748083276619458`, remained in the configuration list and was not edited. App remains unpublished.
+
+Appended `https://app.bufferhelp.com/api/v1/integrations/facebook-engagement/oauth/callback` to the OAuth redirect whitelist. Reload confirmed persistence of all three redirects, including existing Facebook and Instagram callbacks. HTTPS/strict matching settings were not changed. New server environment value, Webhook verification, user supplemental consent and real provider reads/delivery remain pending; no customer message or comment was sent.

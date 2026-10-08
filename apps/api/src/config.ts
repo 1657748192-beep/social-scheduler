@@ -52,6 +52,7 @@ const envSchema = z.object({
   FACEBOOK_CLIENT_ID: z.string().optional().default(""),
   FACEBOOK_CLIENT_SECRET: z.string().optional().default(""),
   FACEBOOK_LOGIN_CONFIG_ID: z.string().optional().default(""),
+  FACEBOOK_ENGAGEMENT_LOGIN_CONFIG_ID: z.string().optional().default(""),
   FACEBOOK_OAUTH_SCOPES: z.string().optional().default("public_profile"),
   FACEBOOK_GRAPH_API_VERSION: z.string().regex(/^v\d+\.\d+$/).default("v20.0"),
   FACEBOOK_ENGAGEMENT_ENABLED: z.string().optional().default("false").transform(value => value === "true"),
