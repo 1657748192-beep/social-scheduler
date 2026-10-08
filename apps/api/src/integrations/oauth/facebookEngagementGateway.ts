@@ -3,6 +3,33 @@ import type { FacebookOAuthGrant } from '../../services/facebookEngagementOAuth'
 import { normalizeFacebookPageExpiry } from '../social/facebookPageValidation';
 
 const record=(value:unknown):Record<string,unknown>=>typeof value==='object' && value!==null && !Array.isArray(value) ? value as Record<string,unknown> : {};
+// Never log arbitrary exception messages, URLs, provider payloads, or OAuth secrets.
+export function summarizeFacebookAuthorizationFailure(error:unknown):Record<string,string|number> {
+  if(!(error instanceof HttpError))return {reason:'unknown'};
+  const reasons:Record<string,string>={
+    'Invalid or consumed Facebook authorization state.':'invalid_state',
+    'Facebook authorization was cancelled or expired; existing connection unchanged.':'cancelled_or_expired',
+    'Facebook engagement is not enabled.':'feature_disabled',
+    'Connected Page is no longer available.':'page_unavailable',
+    'Page authorization changed; restart supplemental authorization.':'credential_changed',
+    'Page authorization changed; existing connection unchanged.':'credential_save_conflict',
+    'The selected Page or original permissions were not retained; existing connection unchanged.':'original_permissions_not_retained',
+    'Selected Page and its tasks were not returned; existing connection unchanged.':'page_not_returned',
+    'Facebook did not verify the actual Page permissions; existing connection unchanged.':'page_grant_unverified',
+    'Facebook Page identity does not match.':'page_identity_mismatch',
+    'Facebook did not return an access token.':'token_not_returned',
+    'Facebook did not return Page authorization details.':'page_details_missing',
+    'Facebook authorization is not configured.':'not_configured'
+  };
+  const result:Record<string,string|number>={reason:reasons[error.message]??'unknown'};
+  if(Number.isSafeInteger(error.statusCode) && error.statusCode>=400 && error.statusCode<=599)result.status=error.statusCode;
+  const details=record(error.details);
+  if(['oauth/access_token','me/accounts','debug_token','me'].includes(String(details.stage)) && ['provider_rejected','transport_failed'].includes(String(details.reason))){
+    result.stage=String(details.stage);result.reason=String(details.reason);
+    for(const key of ['providerCode','providerSubcode'])if(typeof details[key]==='number' && Number.isSafeInteger(details[key]) && (details[key] as number)>=0)result[key]=details[key] as number;
+  }
+  return result;
+}
 export async function exchangeFacebookEngagementGrant(input:{appId:string;appSecret:string;apiVersion:string;code:string;redirectUri:string;pageId:string;fetchImpl?:typeof fetch}):Promise<FacebookOAuthGrant> {
   if(!/^v\d+\.\d+$/.test(input.apiVersion) || !input.appId || !input.appSecret)throw new HttpError(503,'Facebook authorization is not configured.');
   const fetcher=input.fetchImpl??fetch;
@@ -12,9 +39,15 @@ export async function exchangeFacebookEngagementGrant(input:{appId:string;appSec
     let response:Response;
     try{response=await fetcher(url,{method:body?'POST':'GET',redirect:'error',signal:AbortSignal.timeout(10000),
       headers:{Authorization:`Bearer ${token}`,...(body?{'Content-Type':'application/x-www-form-urlencoded'}:{})},body:body?.toString()});}
-    catch{throw new HttpError(502,'Facebook authorization request failed; existing connection unchanged.');}
+    catch{throw new HttpError(502,'Facebook authorization request failed; existing connection unchanged.',{stage:path,reason:'transport_failed'});}
     const payload=record(await response.json().catch(()=>null));
-    if(!response.ok || payload.error)throw new HttpError(502,'Facebook rejected the authorization request; existing connection unchanged.');
+    if(!response.ok || payload.error){
+      const failure=record(payload.error);
+      const numeric=(value:unknown)=>typeof value==='number' && Number.isSafeInteger(value) && value>=0 ? value : undefined;
+      throw new HttpError(502,'Facebook rejected the authorization request; existing connection unchanged.',{stage:path,reason:'provider_rejected',
+        ...(numeric(failure.code)!==undefined?{providerCode:numeric(failure.code)}:{}),
+        ...(numeric(failure.error_subcode)!==undefined?{providerSubcode:numeric(failure.error_subcode)}:{})});
+    }
     return payload;
   }
   const user=await request('oauth/access_token',`${input.appId}|${input.appSecret}`,{},new URLSearchParams({client_id:input.appId,client_secret:input.appSecret,code:input.code,redirect_uri:input.redirectUri}));

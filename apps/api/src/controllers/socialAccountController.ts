@@ -23,6 +23,7 @@ import {
 import { HttpError } from "../utils/errors";
 import { facebookEngagementAuthorizationService, startFacebookEngagementAuthorization } from '../services/facebookEngagementAuthorization';
 import { ensureFacebookPageSubscription } from '../services/facebookSubscription';
+import { summarizeFacebookAuthorizationFailure } from '../integrations/oauth/facebookEngagementGateway';
 
 export async function startFacebookEngagementOAuthController(req:Request,res:Response) {
   const result=await startFacebookEngagementAuthorization(req.user!.id,req.params.workspaceId,req.params.socialAccountId);
@@ -36,7 +37,8 @@ export async function facebookEngagementOAuthCallbackController(req:Request,res:
     // Subscription failure does not roll back or invalidate publishing authorization.
     await ensureFacebookPageSubscription(completed.socialAccountId).catch(()=>null);
     return res.redirect(`${config.WEB_APP_URL}/social-accounts?facebookEngagement=connected`);
-  } catch {
+  } catch (error) {
+    console.warn('facebook_engagement_oauth_failed',summarizeFacebookAuthorizationFailure(error));
     return res.redirect(`${config.WEB_APP_URL}/social-accounts?facebookEngagement=error`);
   }
 }
