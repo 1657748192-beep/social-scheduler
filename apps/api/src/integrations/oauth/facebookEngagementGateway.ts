@@ -25,7 +25,7 @@ export function summarizeFacebookAuthorizationFailure(error:unknown):Record<stri
   const result:Record<string,string|number>={reason:reasons[error.message]??'unknown'};
   if(Number.isSafeInteger(error.statusCode) && error.statusCode>=400 && error.statusCode<=599)result.status=error.statusCode;
   const details=record(error.details);
-  if(['oauth/access_token','me/accounts','debug_token','me'].includes(String(details.stage)) && ['provider_rejected','transport_failed'].includes(String(details.reason))){
+  if(['oauth/access_token','me/accounts','debug_token','me','selected_page'].includes(String(details.stage)) && ['provider_rejected','transport_failed'].includes(String(details.reason))){
     result.stage=String(details.stage);result.reason=String(details.reason);
     for(const key of ['providerCode','providerSubcode'])if(typeof details[key]==='number' && Number.isSafeInteger(details[key]) && (details[key] as number)>=0)result[key]=details[key] as number;
   }
@@ -39,18 +39,18 @@ export function summarizeFacebookAuthorizationFailure(error:unknown):Record<stri
 export async function exchangeFacebookEngagementGrant(input:{appId:string;appSecret:string;apiVersion:string;code:string;redirectUri:string;pageId:string;fetchImpl?:typeof fetch}):Promise<FacebookOAuthGrant> {
   if(!/^v\d+\.\d+$/.test(input.apiVersion) || !input.appId || !input.appSecret)throw new HttpError(503,'Facebook authorization is not configured.');
   const fetcher=input.fetchImpl??fetch;
-  async function request(path:string,token:string,params:Record<string,string>={},body?:URLSearchParams){
+  async function request(path:string,token:string,params:Record<string,string>={},body?:URLSearchParams,stage=path){
     const url=new URL(`https://graph.facebook.com/${input.apiVersion}/${path}`);
     for(const [key,value] of Object.entries(params))url.searchParams.set(key,value);
     let response:Response;
     try{response=await fetcher(url,{method:body?'POST':'GET',redirect:'error',signal:AbortSignal.timeout(10000),
       headers:{Authorization:`Bearer ${token}`,...(body?{'Content-Type':'application/x-www-form-urlencoded'}:{})},body:body?.toString()});}
-    catch{throw new HttpError(502,'Facebook authorization request failed; existing connection unchanged.',{stage:path,reason:'transport_failed'});}
+    catch{throw new HttpError(502,'Facebook authorization request failed; existing connection unchanged.',{stage,reason:'transport_failed'});}
     const payload=record(await response.json().catch(()=>null));
     if(!response.ok || payload.error){
       const failure=record(payload.error);
       const numeric=(value:unknown)=>typeof value==='number' && Number.isSafeInteger(value) && value>=0 ? value : undefined;
-      throw new HttpError(502,'Facebook rejected the authorization request; existing connection unchanged.',{stage:path,reason:'provider_rejected',
+      throw new HttpError(502,'Facebook rejected the authorization request; existing connection unchanged.',{stage,reason:'provider_rejected',
         ...(numeric(failure.code)!==undefined?{providerCode:numeric(failure.code)}:{}),
         ...(numeric(failure.error_subcode)!==undefined?{providerSubcode:numeric(failure.error_subcode)}:{})});
     }
@@ -67,6 +67,14 @@ export async function exchangeFacebookEngagementGrant(input:{appId:string;appSec
     const paging=record(pages.paging),cursor=record(paging.cursors).after;
     if(!paging.next || typeof cursor!=='string' || cursor===after)break;
     after=cursor;
+  }
+  if(!selected){
+    // Meta documents direct access-token retrieval for an already-known Page ID.
+    // This lookup is scoped to the original binding and still requires actual tasks,
+    // a verified Page token for this app, matching identity, and retained scopes.
+    const page=await request(encodeURIComponent(input.pageId),user.access_token,{fields:'id,access_token,permitted_tasks'},undefined,'selected_page');
+    if(page.id && page.id!==input.pageId)throw new HttpError(400,'Facebook Page identity does not match.');
+    if(page.id===input.pageId)selected={...page,tasks:page.permitted_tasks};
   }
   if(!selected || typeof selected.access_token!=='string' || !selected.access_token || !Array.isArray(selected.tasks) || !selected.tasks.length){
     const reason=!selected?'selected_page_missing':typeof selected.access_token!=='string' || !selected.access_token?'page_token_missing':'page_tasks_missing';
