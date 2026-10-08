@@ -5,6 +5,24 @@ import * as gateway from '../src/integrations/oauth/facebookEngagementGateway';
 import { HttpError } from '../src/utils/errors';
 const json=(value:unknown)=>new Response(JSON.stringify(value));
 const settings={appId:'app',appSecret:'secret',apiVersion:'v20.0'};
+for(const fixture of [
+  {page:undefined,reason:'selected_page_missing'},
+  {page:{id:'100',tasks:['MODERATE']},reason:'page_token_missing'},
+  {page:{id:'100',access_token:'private-page-token'},reason:'page_tasks_missing'}
+])test(`Facebook incomplete Page grant distinguishes ${fixture.reason} and actual permission status`,async()=>{
+  await assert.rejects(exchangeFacebookEngagementGrant({...settings,code:'private-code',redirectUri:'https://example.test/callback',pageId:'100',fetchImpl:(async(url)=>{
+    const path=new URL(String(url)).pathname;
+    if(path.endsWith('/oauth/access_token'))return json({access_token:'private-user-token'});
+    if(path.endsWith('/me/accounts'))return json({data:fixture.page?[fixture.page]:[]});
+    assert.ok(path.endsWith('/me/permissions'));
+    return json({data:[{permission:'pages_show_list',status:'granted'},{permission:'pages_messaging',status:'declined'},{permission:'private-permission',status:'private-status'}]});
+  }) as typeof fetch}),error=>{
+    const safe=gateway.summarizeFacebookAuthorizationFailure(error);
+    assert.deepEqual(safe,{reason:fixture.reason,status:400,stage:'me/accounts',pages_show_list:'granted',pages_messaging:'declined'});
+    assert.ok(!JSON.stringify(error).includes('private-'));
+    return true;
+  });
+});
 test('callback diagnostic strips arbitrary error fields and categorizes retained-permission failure',()=>{
   const summarize=(gateway as unknown as {summarizeFacebookAuthorizationFailure?:(error:unknown)=>unknown}).summarizeFacebookAuthorizationFailure;
   assert.equal(typeof summarize,'function');

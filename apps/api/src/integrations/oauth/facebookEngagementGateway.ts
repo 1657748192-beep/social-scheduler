@@ -3,6 +3,7 @@ import type { FacebookOAuthGrant } from '../../services/facebookEngagementOAuth'
 import { normalizeFacebookPageExpiry } from '../social/facebookPageValidation';
 
 const record=(value:unknown):Record<string,unknown>=>typeof value==='object' && value!==null && !Array.isArray(value) ? value as Record<string,unknown> : {};
+const diagnosticScopes=['pages_show_list','pages_read_engagement','pages_manage_posts','pages_manage_metadata','pages_read_user_content','pages_manage_engagement','pages_messaging'];
 // Never log arbitrary exception messages, URLs, provider payloads, or OAuth secrets.
 export function summarizeFacebookAuthorizationFailure(error:unknown):Record<string,string|number> {
   if(!(error instanceof HttpError))return {reason:'unknown'};
@@ -27,6 +28,11 @@ export function summarizeFacebookAuthorizationFailure(error:unknown):Record<stri
   if(['oauth/access_token','me/accounts','debug_token','me'].includes(String(details.stage)) && ['provider_rejected','transport_failed'].includes(String(details.reason))){
     result.stage=String(details.stage);result.reason=String(details.reason);
     for(const key of ['providerCode','providerSubcode'])if(typeof details[key]==='number' && Number.isSafeInteger(details[key]) && (details[key] as number)>=0)result[key]=details[key] as number;
+  }
+  if(details.stage==='me/accounts' && ['selected_page_missing','page_token_missing','page_tasks_missing'].includes(String(details.reason))){
+    result.stage='me/accounts';result.reason=String(details.reason);
+    const permissions=record(details.permissions);
+    for(const scope of diagnosticScopes)if(['granted','declined','expired'].includes(String(permissions[scope])))result[scope]=String(permissions[scope]);
   }
   return result;
 }
@@ -62,7 +68,19 @@ export async function exchangeFacebookEngagementGrant(input:{appId:string;appSec
     if(!paging.next || typeof cursor!=='string' || cursor===after)break;
     after=cursor;
   }
-  if(!selected || typeof selected.access_token!=='string' || !selected.access_token || !Array.isArray(selected.tasks) || !selected.tasks.length)throw new HttpError(400,'Selected Page and its tasks were not returned; existing connection unchanged.');
+  if(!selected || typeof selected.access_token!=='string' || !selected.access_token || !Array.isArray(selected.tasks) || !selected.tasks.length){
+    const reason=!selected?'selected_page_missing':typeof selected.access_token!=='string' || !selected.access_token?'page_token_missing':'page_tasks_missing';
+    // Read current grants only for diagnosis; failure cannot replace the original Page credential.
+    const permissions:Record<string,string>={};
+    try {
+      const grants=await request('me/permissions',user.access_token);
+      if(Array.isArray(grants.data))for(const value of grants.data){
+        const grant=record(value);
+        if(typeof grant.permission==='string' && diagnosticScopes.includes(grant.permission) && typeof grant.status==='string' && ['granted','declined','expired'].includes(grant.status))permissions[grant.permission]=grant.status;
+      }
+    } catch { /* An optional diagnostic read must not mask the original failure. */ }
+    throw new HttpError(400,'Selected Page and its tasks were not returned; existing connection unchanged.',{stage:'me/accounts',reason,permissions});
+  }
   const data=record((await request('debug_token',`${input.appId}|${input.appSecret}`,{input_token:selected.access_token})).data);
   if(data.is_valid!==true || data.app_id!==input.appId || data.type!=='PAGE' || (data.profile_id && data.profile_id!==input.pageId) || !Array.isArray(data.scopes) || !data.scopes.every(scope=>typeof scope==='string'))throw new HttpError(400,'Facebook did not verify the actual Page permissions; existing connection unchanged.');
   const granular=Array.isArray(data.granular_scopes)?data.granular_scopes.map(record):[];
