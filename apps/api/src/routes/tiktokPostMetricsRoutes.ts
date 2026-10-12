@@ -8,6 +8,7 @@ import { queryTikTokPostMetrics } from "../integrations/social/tiktokPostMetrics
 import { getTikTokAccountAccessToken } from "../integrations/social/tiktokCredentialService";
 import { createTikTokAccountStatsService } from "../services/tiktokAccountStatsService";
 import { queryTikTokAccountStats } from "../integrations/social/tiktokAccountStats";
+import { resolveTikTokPublishedVideo } from "../integrations/social/tiktokPublishedVideo";
 
 const getMetrics = createTikTokPostMetricsService({
   requireMembership: requireWorkspaceMembership,
@@ -19,6 +20,11 @@ const getMetrics = createTikTokPostMetricsService({
     }
   }),
   // Scope is checked locally by the metrics service; don't pass optional scopes to the publishing status resolver.
+  findAccount: (workspaceId, providerAccountId) => prisma.socialAccount.findFirst({
+    where: { workspaceId, providerAccountId, platform: "tiktok", status: { in: ["active", "token_expired"] } },
+    select: { id: true, workspaceId: true, platform: true, providerAccountId: true, status: true, credential: { select: { scopes: true } } }
+  }),
+  resolveVideo: resolveTikTokPublishedVideo,
   getAccessToken: (accountId) => getTikTokAccountAccessToken(accountId),
   queryMetrics: queryTikTokPostMetrics
 });

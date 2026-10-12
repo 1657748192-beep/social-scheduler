@@ -31,3 +31,11 @@ Protected backup: /opt/social-scheduler-releases/tiktok-production-178471e-20261
 The initial immediate-start health check returned 502. A subsequent independent public check returned exit 0 with ok=true, database=ok and redis=PONG.
 
 Existing account tokens still need real TikTok user consent; scope configuration alone does not grant access. The software's current browser session is expired and the login form is empty. Account-specific consent and live metrics verification remain pending user login/authorization.
+
+## Reconnected published-account recovery
+
+On 2026-10-12 the user approved recovery of old TikTok publications after deleting and rebinding the same account. List and metrics reads now resolve removed accounts only through the saved successful publish response's platform and TikTok provider account ID, within the same workspace. Username, caption and old local row IDs are never recovery evidence. Existing mismatched links fail closed. No history or account-link writes and no schema migration.
+
+The published-list mapper also retains linked non-Instagram account metadata rather than discarding it. Historical publish-task IDs use the existing read-only status-fetch integration with the recovered production account; metrics still require video.list and a real numeric public video ID. Missing identity, revoked accounts or unresolved videos remain unavailable instead of invented counts.
+
+Test-first removed-account and task-resolution cases failed before implementation. API build passed. Final full API/web suite with the independent test database: 357 passed, 0 failed, 0 skipped. Read-only security review found no blocking issue. Direct helper tests cover current display name, existing links, invalid links, malformed snapshots and missing recovered rows. Live deployment verification pending.

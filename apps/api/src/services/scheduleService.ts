@@ -14,6 +14,7 @@ import { HttpError } from "../utils/errors";
 import { withResolvedMediaUrl } from "./mediaStorageService";
 import { requireWorkspaceMembership, requireWorkspacePublishingAccess } from "./workspaceService";
 import { instagramAccountLinkState } from "./instagramPostAccountIdentity";
+import { resolveTikTokPostAccount } from "./tiktokPostAccountIdentity";
 
 const writableRoles: WorkspaceRole[] = ["owner", "admin", "editor"];
 const activeScheduleStatuses = ["scheduled", "locked"] as const;
@@ -81,6 +82,7 @@ const publishedPostInclude = {
           displayName: true,
           platform: true,
           providerAccountId: true,
+          workspaceId: true,
           status: true,
           avatarUrl: true,
           credential: { select: { scopes: true } }
@@ -355,7 +357,14 @@ export async function listPublishedPosts(userId: string, workspaceId: string) {
             credential: { select: { scopes: true } } }
         })
       : null;
-    const connectedAccount = linkedIsExact ? linkedAccount : restoredAccount;
+    const connectedAccount = schedule.postVariant.platform === "tiktok"
+      ? await resolveTikTokPostAccount(workspaceId, linkedAccount, publishJob?.rawResponse,
+          (workspaceId, providerAccountId) => prisma.socialAccount.findFirst({
+            where: { workspaceId, platform: "tiktok", providerAccountId, status: { in: ["active", "token_expired"] } },
+            select: { id: true, workspaceId: true, displayName: true, platform: true, providerAccountId: true, status: true, avatarUrl: true,
+              credential: { select: { scopes: true } } }
+          }))
+      : schedule.postVariant.platform === "instagram" ? (linkedIsExact ? linkedAccount : restoredAccount) : linkedAccount;
     const scopes = connectedAccount?.credential?.scopes ?? [];
     const providerPostId = publishJob?.providerPostId ?? null;
     const publishedAt = publishJob?.updatedAt ?? schedule.updatedAt;

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { queryTikTokPostMetrics } from "../src/integrations/social/tiktokPostMetrics";
-import { createTikTokPostMetricsService } from "../src/services/tiktokPostMetricsService";
+import { createTikTokPostMetricsService, type TikTokMetricsPost } from "../src/services/tiktokPostMetricsService";
 
 const videoId = "7523456789012345678";
 function post() {
@@ -122,4 +122,83 @@ test("a scope error from TikTok stays local to data and preserves publishing sta
   assert.deepEqual(await service("user", "workspace", "schedule"), { status: "permission_missing" });
   assert.equal(record.postVariant.socialAccount.status, "active");
   assert.deepEqual(record.postVariant.socialAccount.credential.scopes, ["video.publish", "video.list"]);
+});
+
+test("a removed account uses only the exact same-workspace reconnected identity", async () => {
+  const record: TikTokMetricsPost = post();
+  record.postVariant.socialAccount = null;
+  const service = createTikTokPostMetricsService({
+    requireMembership: async () => {}, findPost: async () => record,
+    findAccount: async (workspaceId: string, providerAccountId: string) => {
+      assert.equal(workspaceId, "workspace"); assert.equal(providerAccountId, "creator");
+      return { ...post().postVariant.socialAccount, id: "reconnected" };
+    },
+    getAccessToken: async accountId => { assert.equal(accountId, "reconnected"); return "token"; },
+    queryMetrics: async () => ({ status: "ok", viewCount: 8, likeCount: 2, commentCount: 0, shareCount: 0 })
+  });
+  assert.equal((await service("user", "workspace", "schedule")).status, "ok");
+  assert.equal(record.postVariant.socialAccount, null, "read does not rewrite history");
+});
+
+test("reconnected production posts resolve a saved publish task before reading metrics", async () => {
+  const record: TikTokMetricsPost = post();
+  record.postVariant.socialAccount = null;
+  record.publishJobs[0].providerPostId = "v_pub_url~saved-task";
+  const service = createTikTokPostMetricsService({
+    requireMembership: async () => {}, findPost: async () => record,
+    findAccount: async () => post().postVariant.socialAccount,
+    getAccessToken: async () => "token",
+    resolveVideo: async (token: string, publishId: string) => {
+      assert.equal(token, "token"); assert.equal(publishId, "v_pub_url~saved-task");
+      return { status: "ok" as const, videoId };
+    },
+    queryMetrics: async (_token, id) => {
+      assert.equal(id, videoId); return { status: "ok", viewCount: 8, likeCount: 2, commentCount: 0, shareCount: 0 };
+    }
+  });
+  assert.equal((await service("user", "workspace", "schedule")).status, "ok");
+});
+
+test("legacy names and malformed identities never recover a removed account", async () => {
+  for (const rawResponse of [{ creatorUsername: "creator" }, { platform: "tiktok", tiktokAccountId: "" },
+    { platform: "tiktok", tiktokAccountId: 123 }, { platform: "instagram", tiktokAccountId: "creator" }]) {
+    const record: TikTokMetricsPost = post(); record.postVariant.socialAccount = null;
+    record.publishJobs[0].rawResponse = rawResponse;
+    const service = createTikTokPostMetricsService({
+      requireMembership: async () => {}, findPost: async () => record,
+      findAccount: async () => { assert.fail("no trustworthy provider identity"); },
+      getAccessToken: async () => { assert.fail("no verified account"); }, queryMetrics: async () => { assert.fail("no verified account"); }
+    });
+    assert.deepEqual(await service("user", "workspace", "schedule"), { status: "account_unavailable" });
+  }
+});
+
+test("restored accounts from other workspaces, platforms, identities or revoked grants are rejected", async () => {
+  for (const change of [{ workspaceId: "other" }, { platform: "instagram" }, { providerAccountId: "other" }, { status: "disconnected" }]) {
+    const record: TikTokMetricsPost = post(); record.postVariant.socialAccount = null;
+    const service = createTikTokPostMetricsService({
+      requireMembership: async () => {}, findPost: async () => record,
+      findAccount: async () => ({ ...post().postVariant.socialAccount, ...change }),
+      getAccessToken: async () => { assert.fail("must not access unverified credentials"); },
+      queryMetrics: async () => { assert.fail("must not read another account's video"); }
+    });
+    assert.deepEqual(await service("user", "workspace", "schedule"), { status: "account_unavailable" });
+  }
+});
+
+test("a restored account still needs video.list and status lookup failures never invent counts", async () => {
+  const restored = post().postVariant.socialAccount;
+  const record: TikTokMetricsPost = post(); record.postVariant.socialAccount = null;
+  let resolves = 0;
+  const service = createTikTokPostMetricsService({
+    requireMembership: async () => {}, findPost: async () => record, findAccount: async () => restored,
+    getAccessToken: async () => "token",
+    resolveVideo: async () => { resolves++; return { status: "video_id_missing" }; },
+    queryMetrics: async () => { assert.fail("no valid video ID or grant"); }
+  });
+  restored.credential.scopes = ["video.publish"];
+  assert.deepEqual(await service("user", "workspace", "schedule"), { status: "permission_missing" });
+  restored.credential.scopes.push("video.list"); record.publishJobs[0].providerPostId = "v_pub_url~saved-task";
+  assert.deepEqual(await service("user", "workspace", "schedule"), { status: "video_id_missing" });
+  assert.equal(resolves, 1);
 });
