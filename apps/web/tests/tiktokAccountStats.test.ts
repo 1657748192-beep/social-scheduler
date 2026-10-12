@@ -37,3 +37,22 @@ test("account data offers optional supplemental authorization without fetching s
   assert.doesNotMatch(html, /user.info.stats|video.list|同一个 TikTok 账号/);
   assert.doesNotMatch(html, /<dt>/);
 });
+
+test("both actual data grants hide supplemental authorization across fresh renders", async () => {
+  const { LanguageProvider } = await import("../components/LanguageProvider");
+  for (let render = 0; render < 2; render++) {
+    const html = renderToStaticMarkup(React.createElement(LanguageProvider, null,
+      React.createElement(TikTokAccountStatsPanel, { token: "test", workspaceId: "w", accountId: "a", onAuthorize: () => {}, grantedScopes: ["user.info.basic", "video.publish", "user.info.stats", "video.list"] })));
+    assert.doesNotMatch(html, /补充数据授权/);
+    assert.match(html, /查看账号数据/);
+  }
+});
+
+test("missing either data grant retains supplemental authorization", async () => {
+  const { LanguageProvider } = await import("../components/LanguageProvider");
+  for (const grantedScopes of [[], ["user.info.stats"], ["video.list"], ["video.publish"]]) {
+    const html = renderToStaticMarkup(React.createElement(LanguageProvider, null,
+      React.createElement(TikTokAccountStatsPanel, { token: "test", workspaceId: "w", accountId: "a", onAuthorize: () => {}, grantedScopes })));
+    assert.match(html, /补充数据授权/);
+  }
+});

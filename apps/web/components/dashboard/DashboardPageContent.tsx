@@ -585,7 +585,7 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
                   )}
                 </span>
                 {account.platform === "tiktok" && token && selectedWorkspace ? (
-                  <TikTokAccountStatsPanel key={`${selectedWorkspace.id}:${account.id}:${account.status}:${token}`} token={token} workspaceId={selectedWorkspace.id} accountId={account.id} onAuthorize={canManageMembers && account.status === "active" ? () => void connectSocialAccount("tiktok") : undefined} />
+                  <TikTokAccountStatsPanel key={`${selectedWorkspace.id}:${account.id}:${account.status}:${token}`} token={token} workspaceId={selectedWorkspace.id} accountId={account.id} grantedScopes={account.credential?.scopes ?? []} onAuthorize={canManageMembers && account.status === "active" ? () => void connectSocialAccount("tiktok") : undefined} />
                 ) : null}
                 {account.platform==='facebook' && facebookEnabled && token && selectedWorkspace?<FacebookEngagementStatus key={`${selectedWorkspace.id}:${account.id}:${token}`} token={token} workspaceId={selectedWorkspace.id} socialAccountId={account.id} canManage={canManageMembers}/>:null}
               </div>

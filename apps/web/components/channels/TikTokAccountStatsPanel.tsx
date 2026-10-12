@@ -26,7 +26,7 @@ export function TikTokAccountStatsSummary({ result, t }: { result: TikTokAccount
   return <p className="notice">{messages[result.status]}</p>;
 }
 
-export function TikTokAccountStatsPanel({ token, workspaceId, accountId, onAuthorize }: { token: string; workspaceId: string; accountId: string; onAuthorize?: () => void }) {
+export function TikTokAccountStatsPanel({ token, workspaceId, accountId, onAuthorize, grantedScopes = [] }: { token: string; workspaceId: string; accountId: string; onAuthorize?: () => void; grantedScopes?: string[] }) {
   const { t } = useLanguage();
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -50,7 +50,7 @@ export function TikTokAccountStatsPanel({ token, workspaceId, accountId, onAutho
     }
   }
   return <section className="tiktok-account-stats" aria-label={t("TikTok 账号数据", "TikTok account statistics")}>
-    {onAuthorize ? <div>
+    {onAuthorize && !(grantedScopes.includes("user.info.stats") && grantedScopes.includes("video.list")) ? <div>
       <button type="button" className="button secondary" onClick={onAuthorize}>{t("补充数据授权", "Authorize data access")}</button>
     </div> : null}
     <button type="button" className="button secondary" aria-expanded={expanded} onClick={() => {
