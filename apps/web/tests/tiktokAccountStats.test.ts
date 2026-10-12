@@ -28,3 +28,14 @@ test("account data starts collapsed and does not fetch on initial render", async
     assert.doesNotMatch(html, /<dt>/);
   } finally { globalThis.fetch = original; }
 });
+
+test("account data offers optional supplemental authorization without fetching statistics", async () => {
+  const { LanguageProvider } = await import("../components/LanguageProvider");
+  const html = renderToStaticMarkup(React.createElement(LanguageProvider, null,
+    React.createElement(TikTokAccountStatsPanel, { token: "test", workspaceId: "w", accountId: "a", onAuthorize: () => {} })));
+  assert.match(html, /补充数据授权/);
+  assert.match(html, /user.info.stats/);
+  assert.match(html, /video.list/);
+  assert.match(html, /同一个 TikTok 账号/);
+  assert.doesNotMatch(html, /<dt>/);
+});

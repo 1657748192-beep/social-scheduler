@@ -17,7 +17,7 @@ export function TikTokMetricsSummary({ result, t }: { result: TikTokPostMetrics;
     </div>;
   }
   const messages: Record<Exclude<TikTokPostMetrics["status"], "ok">, string> = {
-    permission_missing: t("尚未开通帖子数据权限（video.list）。需管理员完成 TikTok 权限审批后，再补充授权；此提示不影响原有发布功能。", "Post data permission (video.list) is not enabled. After the administrator obtains TikTok approval, authorize this additional permission. This notice does not affect existing publishing."),
+    permission_missing: t("此账号当前授权尚未包含帖子数据权限（video.list）。请到“社交账号”点击“补充数据授权”，使用此帖原发布账号完成授权；此提示不影响原有发布功能。", "This account's current authorization does not include video.list. Use Authorize data access in Social accounts with the original publishing account. This notice does not affect existing publishing."),
     authorization_required: t("暂时无法获取有效授权，请到连接渠道检查此账号授权后重试。", "A valid authorization is unavailable. Check this account in connected channels and retry."),
     rate_limited: t("TikTok 请求过于频繁，请稍后手动刷新。", "TikTok is rate limiting requests. Refresh later."),
     temporarily_unavailable: t("TikTok 数据暂时不可用，请稍后重试。", "TikTok data is temporarily unavailable. Try again later."),

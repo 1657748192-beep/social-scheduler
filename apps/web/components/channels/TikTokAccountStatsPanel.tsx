@@ -16,7 +16,7 @@ export function TikTokAccountStatsSummary({ result, t }: { result: TikTokAccount
     <p className="muted">{t("读取时间", "Fetched at")}: <time dateTime={result.fetchedAt}>{new Date(result.fetchedAt).toLocaleString()}</time>{t(" · 平台数据可能存在延迟", " · Platform counts may be delayed")}</p>
   </div>;
   const messages = {
-    permission_missing: t("尚未开通账号统计权限（user.info.stats）。管理员完成 TikTok 权限审批后，请为该账号补充授权；此提示不影响原有发布功能。", "Account statistics permission (user.info.stats) is not enabled. After TikTok approval, authorize the additional permission for this account. This notice does not affect existing publishing."),
+    permission_missing: t("此账号当前授权尚未包含账号统计权限（user.info.stats）。请由工作区管理员点击“补充数据授权”，使用同一个 TikTok 账号完成授权；此提示不影响原有发布功能。", "This account's current authorization does not include user.info.stats. Ask a workspace administrator to use Authorize data access with the same TikTok account. This notice does not affect existing publishing."),
     authorization_required: t("暂时无法获取有效授权，请检查此账号连接后重试。", "A valid authorization is unavailable. Check this account connection and retry."),
     rate_limited: t("TikTok 请求过于频繁，请稍后刷新。", "TikTok is rate limiting requests. Refresh later."),
     temporarily_unavailable: t("TikTok 数据暂时不可用，请稍后重试。", "TikTok data is temporarily unavailable. Try again later."),
@@ -26,7 +26,7 @@ export function TikTokAccountStatsSummary({ result, t }: { result: TikTokAccount
   return <p className="notice">{messages[result.status]}</p>;
 }
 
-export function TikTokAccountStatsPanel({ token, workspaceId, accountId }: { token: string; workspaceId: string; accountId: string }) {
+export function TikTokAccountStatsPanel({ token, workspaceId, accountId, onAuthorize }: { token: string; workspaceId: string; accountId: string; onAuthorize?: () => void }) {
   const { t } = useLanguage();
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -50,6 +50,10 @@ export function TikTokAccountStatsPanel({ token, workspaceId, accountId }: { tok
     }
   }
   return <section className="tiktok-account-stats" aria-label={t("TikTok 账号数据", "TikTok account statistics")}>
+    {onAuthorize ? <div>
+      <button type="button" className="button secondary" onClick={onAuthorize}>{t("补充数据授权", "Authorize data access")}</button>
+      <p className="muted">{t("读取账号统计（user.info.stats）和公开视频数据（video.list）。请使用同一个 TikTok 账号完成授权，并保留原有发布权限。", "Read account statistics (user.info.stats) and public video data (video.list). Authorize with the same TikTok account and retain existing publishing permissions.")}</p>
+    </div> : null}
     <button type="button" className="button secondary" aria-expanded={expanded} onClick={() => {
       setExpanded(!expanded);
       if (!expanded && !result && !loading) void load();

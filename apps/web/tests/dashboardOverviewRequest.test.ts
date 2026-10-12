@@ -98,7 +98,7 @@ test("failed reads remain unavailable and a subsequent refresh can return genuin
   try {
     startDashboardOverviewRequest("fixture", "w", data => results.push(data));
     await new Promise(resolve => setTimeout(resolve, 0));
-    assert.deepEqual(results, [null]);
+    assert.deepEqual(results.slice(), [null]);
     startDashboardOverviewRequest("fixture", "w", data => results.push(data));
     await new Promise(resolve => setTimeout(resolve, 0));
     assert.deepEqual(results, [null, { publishedCount: 0 }]);
