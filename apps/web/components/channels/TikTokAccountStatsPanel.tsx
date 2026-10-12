@@ -52,7 +52,6 @@ export function TikTokAccountStatsPanel({ token, workspaceId, accountId, onAutho
   return <section className="tiktok-account-stats" aria-label={t("TikTok 账号数据", "TikTok account statistics")}>
     {onAuthorize ? <div>
       <button type="button" className="button secondary" onClick={onAuthorize}>{t("补充数据授权", "Authorize data access")}</button>
-      <p className="muted">{t("读取账号统计（user.info.stats）和公开视频数据（video.list）。请使用同一个 TikTok 账号完成授权，并保留原有发布权限。", "Read account statistics (user.info.stats) and public video data (video.list). Authorize with the same TikTok account and retain existing publishing permissions.")}</p>
     </div> : null}
     <button type="button" className="button secondary" aria-expanded={expanded} onClick={() => {
       setExpanded(!expanded);
