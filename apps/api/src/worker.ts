@@ -15,17 +15,6 @@ import { refreshDueTikTokAccounts } from "./integrations/social/tiktokCredential
 import { checkDueFacebookPages } from "./integrations/social/facebookPageCredentialService";
 import { authorizationRefreshIntervalsMs, runAuthorizationChecks, type AuthorizationProvider } from "./integrations/social/authorizationRefreshWorker";
 import { hasRemainingPublishAttempts, persistConfirmedPublishResult } from "./integrations/social/publishOutcomeError";
-import { instagramReceptionStore } from "./services/instagramReception";
-import { runReceptionCleanup } from "./services/instagramReceptionRetention";
-import { processFacebookReceptionBatch,facebookReceptionStore } from './services/facebookReception';
-import { facebookSubscriptionCoordinator } from './services/facebookSubscription';
-
-const facebookReceptionTimer=setInterval(()=>{void processFacebookReceptionBatch().catch(()=>console.error('Facebook reception batch failed.'));},5000);
-facebookReceptionTimer.unref();
-const facebookRetentionTimer=setInterval(()=>{void facebookReceptionStore.cleanup(new Date()).catch(()=>console.error('Facebook reception cleanup failed.'));},3600000);
-facebookRetentionTimer.unref();
-const facebookSubscriptionTimer=setInterval(()=>{void facebookSubscriptionCoordinator.retryPending(config.FACEBOOK_ENGAGEMENT_ENABLED).catch(()=>console.error('Facebook subscription cleanup failed.'));},60000);
-facebookSubscriptionTimer.unref();
 
 const retryableJobStatuses = ["waiting", "retrying"] as const;
 const runnableScheduleStatuses = ["scheduled", "locked"] as const;
@@ -225,16 +214,6 @@ const cleanupTimer = setInterval(
   () => void runMediaCleanup(),
   config.MEDIA_CLEANUP_INTERVAL_HOURS * 60 * 60 * 1000
 );
-let receptionCleanupRunning = false;
-async function cleanReception() {
-  if (receptionCleanupRunning) return;
-  receptionCleanupRunning = true;
-  try { await runReceptionCleanup(instagramReceptionStore, config.INSTAGRAM_RECEPTION_RETENTION_DAYS); }
-  catch { console.error("Instagram reception cleanup temporarily unavailable"); }
-  finally { receptionCleanupRunning = false; }
-}
-void cleanReception();
-const receptionCleanupTimer = setInterval(() => void cleanReception(), 24 * 60 * 60 * 1000);
 
 async function runPinterestRefresh() {
   try {
@@ -365,12 +344,8 @@ worker.on("failed", async (job, error) => {
 });
 
 async function shutdown() {
-  clearInterval(facebookReceptionTimer);
-  clearInterval(facebookRetentionTimer);
-  clearInterval(facebookSubscriptionTimer);
   console.log("Shutting down worker");
   clearInterval(cleanupTimer);
-  clearInterval(receptionCleanupTimer);
   clearInterval(pinterestRefreshTimer);
   clearInterval(instagramRefreshTimer);
   authorizationTimers.forEach(clearInterval);

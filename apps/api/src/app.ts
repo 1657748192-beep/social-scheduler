@@ -11,16 +11,12 @@ import { adminRoutes } from "./routes/adminRoutes";
 import { authRoutes } from "./routes/authRoutes";
 import { composerRoutes } from "./routes/composerRoutes";
 import { healthRoutes } from "./routes/healthRoutes";
-import { createInstagramWebhookRouter } from "./routes/instagramWebhookRoutes";
 import { instagramEngagementRoutes } from "./routes/instagramEngagementRoutes";
-import { facebookEngagementRoutes } from './routes/facebookEngagementRoutes';
-import { createFacebookWebhookRouter } from './routes/facebookWebhookRoutes';
-import { facebookReceptionStore } from './services/facebookReception';
-import { instagramReceptionService } from "./services/instagramReception";
 import { tiktokPostMetricsRoutes } from "./routes/tiktokPostMetricsRoutes";
 import { scheduleRoutes } from "./routes/scheduleRoutes";
 import { socialAccountRoutes } from "./routes/socialAccountRoutes";
 import { workspaceRoutes } from "./routes/workspaceRoutes";
+import { removedMetaEngagement } from './middleware/removedMetaEngagement';
 
 export function createApp() {
   const app = express();
@@ -32,18 +28,7 @@ export function createApp() {
       credentials: true
     })
   );
-  app.use(
-    "/api/v1/webhooks/instagram",
-    createInstagramWebhookRouter({
-      verifyToken: config.INSTAGRAM_WEBHOOK_VERIFY_TOKEN,
-      appSecret: config.INSTAGRAM_CLIENT_SECRET,
-      captureContent: true,
-      onEvent: event => instagramReceptionService.receive(event)
-    })
-  );
-  app.use('/api/v1/webhooks/facebook',createFacebookWebhookRouter({enabled:()=>config.FACEBOOK_ENGAGEMENT_ENABLED,appSecret:config.FACEBOOK_CLIENT_SECRET,
-    verifyToken:config.FACEBOOK_WEBHOOK_VERIFY_TOKEN,onEvents:events=>facebookReceptionStore.enqueue(events),
-    onDiagnostic:value=>console.info('facebook_webhook_diagnostic',JSON.stringify(value))}));
+  app.use(removedMetaEngagement);
   app.use(express.json({ limit: "1mb" }));
   morgan.token("safe-url", req => safeRequestLogUrl(req.url ?? ""));
   app.use(morgan(":method :safe-url :status :response-time ms"));
@@ -58,7 +43,6 @@ export function createApp() {
   app.use("/api/v1", composerRoutes);
   app.use("/api/v1", scheduleRoutes);
   app.use("/api/v1", instagramEngagementRoutes);
-  app.use('/api/v1',facebookEngagementRoutes);
   app.use("/api/v1", tiktokPostMetricsRoutes);
 
   app.use(notFoundHandler);

@@ -7,15 +7,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 const manager = readFileSync(new URL("../components/posts/PublishedPostManager.tsx", import.meta.url), "utf8");
 const types = readFileSync(new URL("../lib/api.ts", import.meta.url), "utf8");
 
-test("published-post interaction UI is limited to Social Scheduler's own Instagram publication records", () => {
-  assert.match(manager, /post\.platform\s*===\s*"instagram"/);
-  assert.match(manager, /post\.providerPostId/);
-  assert.match(manager, /instagram\/posts/);
-  const instagramPanel=manager.slice(manager.indexOf('export function InstagramPostEngagementPanel'),manager.indexOf('export function PublishedPostManager'));
-  assert.match(instagramPanel,/instagram\/posts/);
-  assert.doesNotMatch(instagramPanel, /facebook.*comments|comments.*facebook/i);
-});
-
 test("post interaction UI loads on expansion, paginates, refreshes, and requires explicit manual sends", () => {
   assert.match(manager, /查看互动|View activity/);
   assert.match(manager, /postPath}\/metrics/);

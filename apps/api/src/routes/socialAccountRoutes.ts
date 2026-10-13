@@ -10,16 +10,12 @@ import {
   oauthCallbackController,
   oauthProviderStatusController,
   startSharedOAuthController,
-  startOAuthController,
-  startInstagramEngagementOAuthController
+  startOAuthController
 } from "../controllers/socialAccountController";
-import {startFacebookEngagementOAuthController,facebookEngagementOAuthCallbackController} from '../controllers/socialAccountController';
 import { requireAuth } from "../middleware/auth";
 import { asyncHandler } from "../utils/asyncHandler";
 
 export const socialAccountRoutes = Router();
-socialAccountRoutes.post('/workspaces/:workspaceId/social-accounts/:socialAccountId/facebook-engagement/oauth/start',requireAuth,asyncHandler(startFacebookEngagementOAuthController));
-socialAccountRoutes.get('/integrations/facebook-engagement/oauth/callback',asyncHandler(facebookEngagementOAuthCallbackController));
 
 socialAccountRoutes.get(
   "/integrations/oauth/status",
@@ -58,11 +54,6 @@ socialAccountRoutes.get(
   "/workspaces/:workspaceId/social-accounts/:socialAccountId/pinterest-boards",
   requireAuth,
   asyncHandler(getPinterestBoardsController)
-);
-socialAccountRoutes.post(
-  "/workspaces/:workspaceId/social-accounts/:socialAccountId/instagram-engagement/oauth/start",
-  requireAuth,
-  asyncHandler(startInstagramEngagementOAuthController)
 );
 socialAccountRoutes.post(
   "/workspaces/:workspaceId/social-accounts/:socialAccountId/pinterest-boards",

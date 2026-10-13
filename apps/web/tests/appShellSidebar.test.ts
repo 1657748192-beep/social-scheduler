@@ -22,7 +22,7 @@ test("sidebar keeps navigation without duplicate channel or account controls", (
   assert.match(sidebar, /帖子管理/);
   assert.match(sidebar, /排程日历/);
   assert.match(sidebar, /href="\/social-accounts"/);
-  assert.ok(sidebar.indexOf('href="/social-accounts"') > sidebar.indexOf('href="/inbox"'));
+  assert.doesNotMatch(sidebar, /href="\/inbox"/);
   assert.match(html, /页面内容/);
 });
 
