@@ -5,6 +5,19 @@ import express from 'express';
 import { createFacebookWebhookRouter } from '../src/routes/facebookWebhookRoutes';
 import { parseFacebookWebhook } from '../src/services/facebookWebhookService';
 
+test('callbackDiagnosticsDescribeParsingWithoutLeakingContent',async()=>{
+  const diagnostics:unknown[]=[];
+  const app=express();app.use('/webhook',createFacebookWebhookRouter({enabled:()=>true,appSecret:'secret',verifyToken:'verify',onEvents:async()=>{},onDiagnostic:value=>{diagnostics.push(value);}}));
+  const server=app.listen(0,'127.0.0.1');await new Promise<void>(resolve=>server.once('listening',resolve));const address=server.address();assert.ok(address && typeof address!=='string');
+  const body=JSON.stringify({object:'page',entry:[{id:'100',time:1791331200,changes:[{field:'feed',value:{item:'comment',verb:'add',comment_id:'c1',post_id:'100_1',message:'private-content'}}]}]});
+  try{
+    const result=await fetch(`http://127.0.0.1:${address.port}/webhook`,{method:'POST',body,headers:{'Content-Type':'application/json','X-Hub-Signature-256':'sha256='+createHmac('sha256','secret').update(body).digest('hex')}});
+    assert.equal(result.status,200);
+    assert.deepEqual(diagnostics,[{outcome:'accepted',httpStatus:200,comments:1,messages:0,ignored:0,invalid:0}]);
+    assert.equal(JSON.stringify(diagnostics).includes('private-content'),false);
+  }finally{await new Promise<void>(resolve=>server.close(()=>resolve()));}
+});
+
 test('signatureAndDurableAck',async()=>{
   let fail=false,received=0;
   const app=express();app.use('/webhook',createFacebookWebhookRouter({enabled:()=>true,appSecret:'test-secret',verifyToken:'verify',onEvents:async events=>{if(fail)throw new Error('db failed');received+=events.length;}}));

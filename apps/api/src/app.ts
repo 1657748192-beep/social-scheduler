@@ -42,7 +42,8 @@ export function createApp() {
     })
   );
   app.use('/api/v1/webhooks/facebook',createFacebookWebhookRouter({enabled:()=>config.FACEBOOK_ENGAGEMENT_ENABLED,appSecret:config.FACEBOOK_CLIENT_SECRET,
-    verifyToken:config.FACEBOOK_WEBHOOK_VERIFY_TOKEN,onEvents:events=>facebookReceptionStore.enqueue(events)}));
+    verifyToken:config.FACEBOOK_WEBHOOK_VERIFY_TOKEN,onEvents:events=>facebookReceptionStore.enqueue(events),
+    onDiagnostic:value=>console.info('facebook_webhook_diagnostic',JSON.stringify(value))}));
   app.use(express.json({ limit: "1mb" }));
   morgan.token("safe-url", req => safeRequestLogUrl(req.url ?? ""));
   app.use(morgan(":method :safe-url :status :response-time ms"));
