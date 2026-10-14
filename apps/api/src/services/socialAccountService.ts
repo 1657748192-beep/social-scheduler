@@ -24,6 +24,7 @@ import { HttpError } from "../utils/errors";
 import { removeOAuthStateIfPresent } from "./oauthStateCleanup";
 import { requireWorkspaceManager, requireWorkspaceMembership } from "./workspaceService";
 import { lockFacebookPage,facebookSubscriptionCoordinator } from './facebookSubscription';
+import { socialAccountProfileUrl } from './socialAccountProfileUrl';
 
 export const startOAuthSchema = z.object({
   workspaceId: z.string().uuid()
@@ -53,6 +54,8 @@ type ProviderProfile = {
   displayName: string;
   avatarUrl?: string;
   accountType?: string;
+  profileUsername?: string;
+  profileUrl?: string;
 };
 
 type FacebookPageProfile = ProviderProfile & {
@@ -179,6 +182,7 @@ async function fetchProviderProfile(provider: OAuthProviderConfig, accessToken: 
     return {
       providerAccountId,
       displayName: payload.username || payload.name || "Instagram account",
+      profileUsername: typeof payload.username === 'string' ? payload.username : undefined,
       avatarUrl: payload.profile_picture_url,
       accountType: payload.account_type || "profile"
     };
@@ -209,6 +213,8 @@ async function fetchProviderProfile(provider: OAuthProviderConfig, accessToken: 
     return {
       providerAccountId: profile.open_id,
       displayName: profile.display_name,
+      profileUsername: typeof profile.username === 'string' ? profile.username : undefined,
+      profileUrl: typeof profile.profile_deep_link === 'string' ? profile.profile_deep_link : undefined,
       avatarUrl: profile.avatar_url,
       accountType: "profile"
     };
@@ -218,6 +224,7 @@ async function fetchProviderProfile(provider: OAuthProviderConfig, accessToken: 
     return {
       providerAccountId: payload.id,
       displayName: payload.profile_name || payload.username,
+      profileUsername: typeof payload.username === 'string' ? payload.username : undefined,
       avatarUrl: payload.profile_image,
       accountType: payload.account_type || "profile"
     };
@@ -596,9 +603,16 @@ export async function completeOAuth(platformParam: string, code: string, state: 
     ? new Date(Date.now() + credentialTokenResponse.expires_in * 1000)
     : null;
   const refreshTokenExpiresAt = refreshDeadline(provider.platform, credentialTokenResponse);
+  const profileUrl = socialAccountProfileUrl({
+    platform: provider.platform,
+    providerAccountId: profile.providerAccountId,
+    capabilities: {profileUsername: profile.profileUsername, profileUrl: profile.profileUrl}
+  });
   const capabilities = {
     oauth2: true,
     scopes,
+    ...(profile.profileUsername ? {profileUsername:profile.profileUsername} : {}),
+    ...(profileUrl ? {profileUrl} : {}),
     ...(provider.platform === "pinterest" ? { pinterestApiEnvironment: config.PINTEREST_API_ENV } : {})
   };
 
@@ -828,6 +842,7 @@ export async function listSocialAccounts(userId: string, workspaceId: string) {
     const scopes = account.credential?.scopes ?? [];
     return {
       ...account,
+      profileUrl: socialAccountProfileUrl(account),
       capabilities: {
         ...currentCapabilities,
         ...(account.platform === "instagram" ? {

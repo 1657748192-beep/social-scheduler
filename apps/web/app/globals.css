@@ -1772,6 +1772,11 @@ textarea {
   color: var(--muted);
 }
 
+.connected-account-identity { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; min-width: 0; }
+.connected-account-identity strong { overflow-wrap: anywhere; }
+.account-profile-link { padding: 7px 12px; font-size: 12px; white-space: nowrap; }
+.account-profile-unavailable { font-size: 12px; }
+
 .oauth-provider {
   display: grid;
   gap: 10px;

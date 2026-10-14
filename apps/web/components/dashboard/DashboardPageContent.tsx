@@ -7,6 +7,7 @@ import { DashboardSidebar } from "../../components/dashboard/DashboardSidebar";
 import { DashboardActivity } from "../../components/dashboard/DashboardActivity";
 import { TikTokAccountStatsPanel } from "../../components/channels/TikTokAccountStatsPanel";
 import { TikTokSandboxPanel } from "../../components/channels/TikTokSandboxPanel";
+import { SocialAccountProfileLink } from '../social/SocialAccountProfileLink';
 import {
   apiRequest,
   type CurrentUser,
@@ -559,7 +560,7 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
             {socialAccounts.map((account) => (
               <div className="connected-table-row" key={account.id}>
                 <span>{platformLabel(account.platform)}</span>
-                <strong>{account.displayName}</strong>
+                <div className="connected-account-identity"><strong>{account.displayName}</strong><SocialAccountProfileLink platform={account.platform} profileUrl={account.profileUrl}/></div>
                 <span>
                   {accountStatusLabel(account.status, locale)}
                   {authorizationWarning(account) ? (

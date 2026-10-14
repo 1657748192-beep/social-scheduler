@@ -236,6 +236,7 @@ export type WorkspaceInvitation = {
 
 export type SocialAccount = {
   id: string;
+  profileUrl?: string | null;
   platform: "x" | "facebook" | "instagram" | "tiktok" | "linkedin" | "youtube" | "pinterest";
   providerAccountId: string;
   displayName: string;
