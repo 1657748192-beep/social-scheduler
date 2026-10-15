@@ -58,3 +58,8 @@ test("file limit errors retain the server's 250 MB explanation", async context =
   transport.status = 413; transport.responseText = '{"message":"单个图片或视频不能超过 250 MB"}'; transport.onload();
   await assert.rejects(promise, /不能超过 250 MB/);
 });
+
+test('legacy upload errors preserve HTTP status for shared upload UI',async context=>{
+ const {promise,transport}=start(context);transport.status=403;transport.responseText='{"message":"Forbidden"}';transport.onload();
+ await assert.rejects(promise,{status:403});
+});

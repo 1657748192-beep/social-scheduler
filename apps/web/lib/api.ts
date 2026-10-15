@@ -1,4 +1,11 @@
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
+export class UploadHttpError extends Error {
+  constructor(message:string,public status:number,public code?:string,public retryAfterMs?:number){super(message);this.name='UploadHttpError';}
+}
+export function parseRetryAfter(value:string|null):number|undefined{
+  if(!value)return undefined;const ms=/^\d+(\.\d+)?$/.test(value)?Number(value)*1000:Date.parse(value)-Date.now();
+  return Number.isFinite(ms)?Math.max(0,ms):undefined;
+}
 
 export type TikTokAccountStats =
   | { status: "ok"; followerCount: number; followingCount: number; likesCount: number; videoCount: number; fetchedAt: string }
@@ -15,13 +22,12 @@ type ApiOptions = {
   body?: unknown;
 };
 
-function redirectToLoginAfterSessionExpiry() {
+export function redirectToLoginAfterSessionExpiry() {
   if (typeof window === "undefined") {
     return;
   }
 
-  window.localStorage.removeItem("social_scheduler_token");
-  window.localStorage.removeItem("social_scheduler_active_workspace_id");
+  try{window.localStorage.removeItem("social_scheduler_token");window.localStorage.removeItem("social_scheduler_active_workspace_id");}catch{/* private browser storage can be unavailable */}
 
   if (!window.location.pathname.startsWith("/login")) {
     window.location.assign("/login?reason=session-expired");
@@ -44,7 +50,7 @@ export async function apiRequest<T>(path: string, options: ApiOptions = {}): Pro
     if (response.status === 401 && options.token) {
       redirectToLoginAfterSessionExpiry();
     }
-    throw new Error(payload?.message ?? "请求失败");
+    throw new UploadHttpError(payload?.message ?? "请求失败",response.status,payload?.details?.code,parseRetryAfter(response.headers.get('Retry-After')));
   }
 
   return payload as T;
@@ -96,7 +102,7 @@ export function apiUpload<T>(
         redirectToLoginAfterSessionExpiry();
       }
 
-      reject(new Error(request.status === 408 ? "上传超时，请重试" : (payload?.message ?? `上传失败（HTTP ${request.status}）`)));
+      reject(new UploadHttpError(request.status === 408 ? "上传超时，请重试" : (payload?.message ?? `上传失败（HTTP ${request.status}）`),request.status));
     };
 
     request.onerror = () => reject(new Error("网络连接中断，请检查网络后重试"));
