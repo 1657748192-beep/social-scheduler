@@ -23,6 +23,7 @@ const base = "/workspaces/:workspaceId/tiktok-sandbox";
 tiktokSandboxRoutes.use(base, requireAuth, (_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
 tiktokSandboxRoutes.get(`${base}/status`, asyncHandler(async (req, res) => { res.json(await credentials.status(req.user!.id, req.params.workspaceId)); }));
 tiktokSandboxRoutes.get(`${base}/stats`, asyncHandler(async (req, res) => { res.json(await metrics.stats(req.user!.id, req.params.workspaceId)); }));
+tiktokSandboxRoutes.get(`${base}/profile`, asyncHandler(async (req, res) => { res.json(await metrics.profile(req.user!.id, req.params.workspaceId)); }));
 tiktokSandboxRoutes.get(`${base}/posts`, asyncHandler(async (req, res) => { res.json(await metrics.posts(req.user!.id, req.params.workspaceId, typeof req.query.cursor === "string" ? req.query.cursor : undefined)); }));
 tiktokSandboxRoutes.get(`${base}/posts/:scheduleId/metrics`, asyncHandler(async (req, res) => { res.json(await metrics.metrics(req.user!.id, req.params.workspaceId, req.params.scheduleId)); }));
 tiktokSandboxRoutes.delete(`${base}/connection`, asyncHandler(async (req, res) => { await credentials.disconnect(req.user!.id, req.params.workspaceId); res.json({ disconnected: true }); }));

@@ -12,7 +12,7 @@ export function createSandboxCredentialService({ db, settings, api }: SandboxDep
           await assertSandboxContext(tx, settings, userId, workspaceId);
           const row = await tx.tikTokSandboxCredential.findUnique({ where: { socialAccountId: settings.allowedAccountId } });
           const connected = !!row && row.userId === userId && row.workspaceId === workspaceId && row.clientKey === settings.clientId;
-          return { eligible: true, connected, accountName: "andypeng97" };
+          return { eligible: true, connected, profileGranted: connected && row.scopes.includes("user.info.profile"), accountName: "andypeng97" };
         });
       } catch (error) {
         if (error instanceof HttpError && error.statusCode === 403) return { eligible: false, connected: false };
@@ -29,7 +29,7 @@ export function createSandboxCredentialService({ db, settings, api }: SandboxDep
         if (row.expiresAt.getTime() <= Date.now() + 60000) {
           if (!row.refreshTokenEncrypted || !row.refreshTokenExpiresAt || row.refreshTokenExpiresAt.getTime() <= Date.now()) throw new HttpError(400, "Sandbox authorization required");
           const next = await api.refresh(settings.clientId, settings.clientSecret, decryptToken(row.refreshTokenEncrypted));
-          validateSandboxGrant(next.scopes.join(","));
+          validateSandboxGrant(next.scopes.join(","), row.scopes.includes("user.info.profile"));
           if (next.openId !== row.openId) throw new HttpError(400, "Sandbox account identity does not match");
           await assertSandboxContext(tx, settings, userId, workspaceId);
           const updated = await tx.tikTokSandboxCredential.updateMany({ where: { id: row.id, revision: row.revision }, data: {
@@ -41,7 +41,7 @@ export function createSandboxCredentialService({ db, settings, api }: SandboxDep
           if (updated.count !== 1) throw new HttpError(400, "Sandbox connection changed; retry authorization");
           row = await tx.tikTokSandboxCredential.findUniqueOrThrow({ where: { id: row.id } });
         }
-        return { accessToken: decryptToken(row.accessTokenEncrypted), openId: row.openId };
+        return { accessToken: decryptToken(row.accessTokenEncrypted), openId: row.openId, scopes: row.scopes };
       }, sandboxTransactionOptions);
     },
     async disconnect(userId: string, workspaceId: string) {

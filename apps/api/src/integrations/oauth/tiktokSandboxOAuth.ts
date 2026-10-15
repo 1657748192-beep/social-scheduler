@@ -3,9 +3,9 @@ import { HttpError } from "../../utils/errors";
 const scopes = ["user.info.basic", "video.list", "user.info.stats"];
 export type SandboxIdentity = { openId: string; unionId: string };
 export type SandboxToken = { accessToken: string; refreshToken?: string; openId: string; scopes: string[]; expiresIn: number; refreshExpiresIn?: number };
-export function validateSandboxGrant(value: unknown): string[] {
+export function validateSandboxGrant(value: unknown, requireProfile = false): string[] {
   const granted = typeof value === "string" ? value.split(/[ ,]+/).filter(Boolean) : [];
-  if (!scopes.every(scope => granted.includes(scope))) throw new HttpError(400, "Sandbox read permissions are missing");
+  if (!scopes.every(scope => granted.includes(scope)) || (requireProfile && !granted.includes("user.info.profile"))) throw new HttpError(400, "Sandbox read permissions are missing");
   return granted;
 }
 export function validateSandboxIdentity(identity: SandboxIdentity, expectedUnionId: string, tokenOpenId: string) {
@@ -15,7 +15,7 @@ export function validateSandboxIdentity(identity: SandboxIdentity, expectedUnion
 }
 export function sandboxAuthorizationUrl(clientKey: string, redirectUri: string, state: string) {
   const url = new URL("https://www.tiktok.com/v2/auth/authorize/");
-  url.search = new URLSearchParams({ client_key: clientKey, response_type: "code", scope: scopes.join(","), redirect_uri: redirectUri, state, disable_auto_auth: "1" }).toString();
+  url.search = new URLSearchParams({ client_key: clientKey, response_type: "code", scope: [...scopes, "user.info.profile"].join(","), redirect_uri: redirectUri, state, disable_auto_auth: "1" }).toString();
   return url.toString();
 }
 export function createTikTokSandboxAPI(fetcher: typeof fetch = fetch) {

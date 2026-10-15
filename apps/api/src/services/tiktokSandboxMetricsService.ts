@@ -2,6 +2,7 @@ import { HttpError } from "../utils/errors";
 import { assertSandboxContext, type SandboxDependencies } from "./tiktokSandboxAuthorizationService";
 import { createSandboxCredentialService } from "../integrations/social/tiktokSandboxCredentialService";
 import { queryTikTokAccountStats } from "../integrations/social/tiktokAccountStats";
+import { queryTikTokProfile } from "../integrations/social/tiktokProfile";
 import { queryTikTokPostMetrics } from "../integrations/social/tiktokPostMetrics";
 import { decryptToken } from "../utils/tokenCrypto";
 import { resolveTikTokPublishedVideo } from "../integrations/social/tiktokPublishedVideo";
@@ -27,6 +28,11 @@ export function createSandboxMetricsService(deps: SandboxDependencies, fetcher: 
   const { db, settings } = deps;
   const include = { postVariant: true, publishJobs: { where: { status: "succeeded" as const }, orderBy: { updatedAt: "desc" as const }, take: 1 } };
   return {
+    async profile(userId:string,workspaceId:string) {
+      const token = await credentials.token(userId, workspaceId);
+      if (!token.scopes.includes("user.info.profile")) return {status:'permission_missing' as const};
+      return queryTikTokProfile(token.accessToken, token.openId, fetcher);
+    },
     async stats(userId: string, workspaceId: string) {
       const token = await credentials.token(userId, workspaceId);
       const result = await queryTikTokAccountStats(token.accessToken, token.openId, fetcher);

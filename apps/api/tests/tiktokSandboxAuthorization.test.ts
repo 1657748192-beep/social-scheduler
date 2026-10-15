@@ -7,9 +7,9 @@ test("OAuth callback codes and state never enter access log URL", () => {
   assert.equal(safeRequestLogUrl("/api/v1/health"), "/api/v1/health");
 });
 const scopes = "user.info.basic,video.list,user.info.stats";
-test("sandbox authorization only asks for the three read scopes", () => {
+test("sandbox authorization adds profile reading without requesting publishing scopes", () => {
   const url = new URL(sandboxAuthorizationUrl("sandbox", "https://example.com/callback", "nonce"));
-  assert.equal(url.origin, "https://www.tiktok.com"); assert.equal(url.searchParams.get("scope"), scopes);
+  assert.equal(url.origin, "https://www.tiktok.com"); assert.equal(url.searchParams.get("scope"), scopes + ',user.info.profile');
   assert.equal(url.searchParams.get("state"), "nonce"); assert.equal(url.searchParams.get("client_key"), "sandbox");
 });
 test("identity uses union identity, never display name or cross-client open id", () => {
@@ -21,6 +21,8 @@ test("identity uses union identity, never display name or cross-client open id",
 test("missing actual grants never assumed from requested scopes", () => {
   for (const value of [undefined, "", "video.list,user.info.stats", "user.info.basic,video.list", "user.info.basic,user.info.stats"]) assert.throws(() => validateSandboxGrant(value));
   assert.deepEqual(validateSandboxGrant(scopes), ["user.info.basic", "video.list", "user.info.stats"]);
+  assert.throws(() => validateSandboxGrant(scopes, true));
+  assert.deepEqual(validateSandboxGrant(scopes + ",user.info.profile", true), ["user.info.basic", "video.list", "user.info.stats", "user.info.profile"]);
 });
 test("identity response must have both identifiers and successful provider status", async () => {
   for (const data of [{ data: { user: { open_id: "a" } }, error: { code: "ok" } }, { data: { user: { open_id: "a", union_id: "b" } }, error: { code: "bad" } }]) {

@@ -69,7 +69,7 @@ export function createSandboxAuthorizationService({ db, settings, api }: Sandbox
           await assertSandboxContext(tx, settings, state.userId, state.workspaceId);
           await assertSession(tx, state.userId, state.sessionId);
           const token = await api.exchange(settings.clientId, settings.clientSecret, { code: input.code, redirectUri: state.redirectUri });
-          validateSandboxGrant(token.scopes.join(","));
+          validateSandboxGrant(token.scopes.join(","), true);
           const identity = await api.identity(token.accessToken);
           validateSandboxIdentity(identity, state.expectedUnionId, token.openId);
           await assertSandboxContext(tx, settings, state.userId, state.workspaceId);

@@ -16,14 +16,15 @@ test("Sandbox database isolation, replay protection and identity gating", async 
   const settings = { enabled: true, allowedUserId: userId, allowedWorkspaceId: workspaceId, allowedAccountId: accountId,
     clientId: "sandbox-client", clientSecret: "sandbox-secret", redirectUri: "https://example.com/api/v1/integrations/tiktok-sandbox/oauth/callback" };
   let username = "andypeng97", identityUnion = "same", exchanged = 0, refreshed = 0;
+  let grantedScopes = ["user.info.basic", "video.list", "user.info.stats", "user.info.profile"];
   const api = {
     creator: async () => username,
     identity: async (token: string) => ({ openId: token === "prod-token" ? "prod-open" : "sandbox-open", unionId: identityUnion }),
     exchange: async (key: string, secret: string) => { assert.equal(key, "sandbox-client"); assert.equal(secret, "sandbox-secret"); exchanged++; return {
-      accessToken: "test-token", refreshToken: "test-refresh", openId: "sandbox-open", scopes: ["user.info.basic", "video.list", "user.info.stats"], expiresIn: 86400, refreshExpiresIn: 31536000 }; },
+      accessToken: "test-token", refreshToken: "test-refresh", openId: "sandbox-open", scopes: grantedScopes, expiresIn: 86400, refreshExpiresIn: 31536000 }; },
     refresh: async (key: string, secret: string, refreshToken: string) => {
       assert.equal(key, "sandbox-client"); assert.equal(secret, "sandbox-secret"); assert.equal(refreshToken, "test-refresh"); refreshed++;
-      return { accessToken: "renewed", refreshToken: "rotated", openId: "sandbox-open", scopes: ["user.info.basic", "video.list", "user.info.stats"], expiresIn: 86400, refreshExpiresIn: 31536000 };
+      return { accessToken: "renewed", refreshToken: "rotated", openId: "sandbox-open", scopes: grantedScopes, expiresIn: 86400, refreshExpiresIn: 31536000 };
     }
   };
   const service = createSandboxAuthorizationService({ db, settings, api });
@@ -49,6 +50,16 @@ test("Sandbox database isolation, replay protection and identity gating", async 
       const state = await start(); identityUnion = "wrong"; await assert.rejects(service.complete({ state, code: "code" })); identityUnion = "same";
       await assert.rejects(service.complete({ state, code: "code" }));
       assert.deepEqual(await db.tikTokSandboxCredential.findUnique({ where: { socialAccountId: accountId } }), row);
+    });
+    await t.test("missing supplemental profile grant preserves existing sandbox credential", async () => {
+      const row = await db.tikTokSandboxCredential.findUniqueOrThrow({ where: { socialAccountId: accountId } });
+      const state = await start();
+      const original = grantedScopes;
+      grantedScopes = original.filter(scope => scope !== "user.info.profile");
+      try { await assert.rejects(service.complete({state, code:"code"})); }
+      finally { grantedScopes = original; }
+      assert.deepEqual(await db.tikTokSandboxCredential.findUnique({where:{socialAccountId:accountId}}), row);
+      await assert.rejects(service.complete({state, code:"code"}));
     });
     await t.test("denied expired disabled and logged-out callbacks do not save", async () => {
       for (const mode of ["deny", "expired", "disabled", "logout", "role"]) {

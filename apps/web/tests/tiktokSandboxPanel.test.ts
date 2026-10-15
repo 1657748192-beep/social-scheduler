@@ -6,6 +6,20 @@ import { TikTokSandboxView, TikTokSandboxOutcome } from "../components/channels/
 const props = { status: { eligible: true, connected: true }, busy: false, error: "", posts: [], selected: "", nextCursor: null,
   stats: null, metrics: null, onAction: () => {}, onSelect: () => {}, t: (_zh: string, en: string) => en };
 
+test("profile grant controls supplement prompt and safe homepage link", () => {
+  const render = (extra: any) => renderToStaticMarkup(React.createElement(TikTokSandboxView, {...props, ...extra}));
+  assert.match(render({}), /Authorize profile access/);
+  const extra = {status:{eligible:true,connected:true,profileGranted:true},profile:{status:'ok',username:'andypeng97',profileUrl:'https://www.tiktok.com/@andypeng97',fetchedAt:'now'}};
+  const html = render(extra);
+  assert.doesNotMatch(html, /Authorize profile access/);
+  assert.match(html, /Read profile/);
+  assert.match(html, /href="https:\/\/www.tiktok.com\/@andypeng97" target="_blank" rel="noopener noreferrer"/);
+  assert.doesNotMatch(render({...extra,profile:{...extra.profile,profileUrl:'https://evil.example/@andypeng97'}}), /href=/);
+  assert.doesNotMatch(render({...extra,status:{eligible:true,connected:false}}), /href=/);
+  assert.match(render({...extra,profile:{status:'authorization_required'}}), /Reconnect sandbox/);
+  assert.match(render({...extra,profile:null,error:'Sandbox authorization required'}), /Reconnect sandbox/);
+});
+
 test("successful metrics remove both pending ID hints for the selected video in both languages", () => {
   for (const t of [props.t, (zh: string, _en: string) => zh]) {
     const html = renderToStaticMarkup(React.createElement(TikTokSandboxView, { ...props, t,

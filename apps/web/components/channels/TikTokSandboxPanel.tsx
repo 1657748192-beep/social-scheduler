@@ -5,21 +5,28 @@ import { useLanguage } from "../LanguageProvider";
 import { TikTokAccountStatsSummary } from "./TikTokAccountStatsPanel";
 import { TikTokMetricsSummary } from "../posts/TikTokMetricsSummary";
 
-type Status = { eligible: boolean; connected: boolean };
+type Status = { eligible: boolean; connected: boolean; profileGranted?: boolean };
+type Profile = {status:'ok';username:string;profileUrl:string;fetchedAt:string} | {status:'data_unavailable'|'temporarily_unavailable'|'permission_missing'|'authorization_required'};
 type Item = { id: string; videoId: string; text: string };
-type Action = "connect" | "disconnect" | "stats" | "posts" | "more" | "metrics";
+type Action = "connect" | "disconnect" | "stats" | "posts" | "more" | "metrics" | "profile";
 type ViewProps = { status: Status; busy: boolean; error: string; posts: Item[]; selected: string; nextCursor: string | null;
-  stats: TikTokAccountStats | null; metrics: TikTokPostMetrics | null; onAction(action: Action): void; onSelect(id: string): void; t(zh: string, en: string): string };
+  stats: TikTokAccountStats | null; metrics: TikTokPostMetrics | null; profile?: Profile | null; onAction(action: Action): void; onSelect(id: string): void; t(zh: string, en: string): string };
 export function TikTokSandboxView(p: ViewProps) {
   if (!p.status.eligible) return null;
   const { t } = p;
+  const reconnect = p.status.connected && (p.profile?.status === 'authorization_required' || !!p.error);
+  const profile = p.profile?.status === 'ok' && /^[A-Za-z0-9._]{1,24}$/.test(p.profile.username) &&
+    p.profile.profileUrl === `https://www.tiktok.com/@${p.profile.username}` ? p.profile : null;
   const needsVideoLookup = (post: Item) => !post.videoId && !(post.id === p.selected && p.metrics?.status === "ok");
   return <section className="panel" aria-label={t("TikTok Sandbox 数据测试", "TikTok Sandbox metrics test")} aria-busy={p.busy}>
     <h2>{t("TikTok Sandbox 数据测试", "TikTok Sandbox metrics test")}</h2>
     <p>andypeng97 · {t("只读测试，不更改正式发布授权。", "Read-only testing; production publishing authorization is unchanged.")}</p>
-    <button className="button secondary" disabled={p.busy} onClick={() => p.onAction("connect")}>{t("连接测试授权", "Connect sandbox")}</button>
+    {!p.status.connected || !p.status.profileGranted || reconnect ? <button className="button secondary" disabled={p.busy} onClick={() => p.onAction("connect")}>{reconnect ? t("重新连接测试", "Reconnect sandbox") : p.status.connected ? t("补充主页授权", "Authorize profile access") : t("连接测试授权", "Connect sandbox")}</button> : null}
     {p.status.connected ? <>
       <button className="button secondary" disabled={p.busy} onClick={() => p.onAction("disconnect")}>{t("断开测试连接", "Disconnect sandbox")}</button>
+      <button className="button secondary" disabled={p.busy || !p.status.profileGranted} onClick={() => p.onAction("profile")}>{t("读取主页信息", "Read profile")}</button>
+      {p.status.profileGranted && profile ? <p>{profile.username} · <a href={profile.profileUrl} target="_blank" rel="noopener noreferrer">{t("查看主页 ↗", "View profile ↗")}</a></p> : null}
+      {p.profile && p.profile.status !== 'ok' ? <p role="status">{p.profile.status === 'permission_missing' ? t("请补充主页授权后重试。", "Authorize profile access and retry.") : p.profile.status === 'authorization_required' ? t("测试授权已失效，请重新连接。", "Sandbox authorization expired. Reconnect.") : t("暂时无法读取主页信息，请稍后重试。", "Profile information is unavailable. Retry later.")}</p> : null}
       <button className="button secondary" disabled={p.busy} onClick={() => p.onAction("stats")}>{t("刷新账号统计", "Refresh account statistics")}</button>
       {p.stats ? <TikTokAccountStatsSummary result={p.stats} t={t} /> : null}
       <h3>{t("本软件发布的公开视频", "Public videos published by this software")}</h3>
@@ -61,6 +68,7 @@ function SandboxConnection({ token, workspaceId }: { token: string; workspaceId:
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [posts, setPosts] = useState<Item[]>([]), [selected, setSelected] = useState("");
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [stats, setStats] = useState<TikTokAccountStats | null>(null), [metrics, setMetrics] = useState<TikTokPostMetrics | null>(null);
   const active = useRef(false), running = useRef(false);
   const base = `/workspaces/${encodeURIComponent(workspaceId)}/tiktok-sandbox`;
@@ -72,6 +80,7 @@ function SandboxConnection({ token, workspaceId }: { token: string; workspaceId:
   async function action(kind: Action) {
     if (running.current) return;
     running.current = true; setBusy(true); setError("");
+    if (kind === "profile" || kind === "disconnect" || kind === "connect") setProfile(null);
     if (kind === "stats") setStats(null);
     if (kind === "metrics") setMetrics(null);
     if (kind === "disconnect") { setStats(null); setMetrics(null); setPosts([]); setSelected(""); setNextCursor(null); }
@@ -82,6 +91,9 @@ function SandboxConnection({ token, workspaceId }: { token: string; workspaceId:
       } else if (kind === "disconnect") {
         await apiRequest(`${base}/connection`, { token, method: "DELETE" });
         if (active.current) setStatus({ eligible: true, connected: false });
+      } else if (kind === "profile") {
+        const result = await apiRequest<Profile>(`${base}/profile`, { token });
+        if (active.current) { setProfile(result); if (result.status === 'permission_missing') setStatus(old => ({...old, profileGranted:false})); }
       } else if (kind === "stats") {
         const result = await apiRequest<TikTokAccountStats>(`${base}/stats`, { token }); if (active.current) setStats(result);
       } else if (kind === "metrics") {
@@ -98,6 +110,6 @@ function SandboxConnection({ token, workspaceId }: { token: string; workspaceId:
     } catch (e) { if (active.current) setError(e instanceof Error ? e.message : t("测试请求失败，请重试。", "Test request failed. Retry.")); }
     finally { running.current = false; if (active.current) setBusy(false); }
   }
-  return <TikTokSandboxView {...{ status, busy, error, posts, selected, nextCursor, stats, metrics, t }}
+  return <TikTokSandboxView {...{ status, busy, error, posts, selected, nextCursor, stats, metrics, profile, t }}
     onAction={kind => void action(kind)} onSelect={id => { setSelected(id); setMetrics(null); }} />;
 }
