@@ -64,7 +64,7 @@ export function apiUpload<T>(
     const request = new XMLHttpRequest();
     request.open("POST", `${API_BASE_URL}${path}`);
     request.setRequestHeader("Authorization", `Bearer ${token}`);
-    request.timeout = 30 * 60 * 1000;
+    request.timeout = 35 * 60 * 1000;
 
     request.upload.onprogress = (event) => {
       if (!event.lengthComputable) {
@@ -96,12 +96,12 @@ export function apiUpload<T>(
         redirectToLoginAfterSessionExpiry();
       }
 
-      reject(new Error(payload?.message ?? `上传失败（HTTP ${request.status}）`));
+      reject(new Error(request.status === 408 ? "上传超时，请重试" : (payload?.message ?? `上传失败（HTTP ${request.status}）`)));
     };
 
     request.onerror = () => reject(new Error("网络连接中断，请检查网络后重试"));
     request.onabort = () => reject(new Error("上传已取消"));
-    request.ontimeout = () => reject(new Error("上传超时，请压缩文件或稍后重试"));
+    request.ontimeout = () => reject(new Error("上传超时，请重试"));
     request.send(formData);
   });
 }

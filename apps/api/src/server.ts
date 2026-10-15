@@ -2,10 +2,11 @@ import { createApp } from "./app";
 import { config } from "./config";
 import { prisma } from "./prisma";
 import { redis } from "./redis";
+import { createApiServer } from "./httpServer";
 
 const app = createApp();
 
-const server = app.listen(config.API_PORT, () => {
+const server = createApiServer(app).listen(config.API_PORT, () => {
   console.log(`API listening on http://localhost:${config.API_PORT}`);
 });
 

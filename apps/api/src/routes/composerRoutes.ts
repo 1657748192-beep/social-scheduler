@@ -14,6 +14,9 @@ import {
 import { requireAuth } from "../middleware/auth";
 import { mediaUpload } from "../middleware/upload";
 import { asyncHandler } from "../utils/asyncHandler";
+import { allowMediaUploadTime } from "../httpServer";
+import { requireWorkspacePublishingAccess } from "../services/workspaceService";
+import { HttpError } from "../utils/errors";
 
 export const composerRoutes = Router();
 
@@ -27,6 +30,12 @@ composerRoutes.get(
 composerRoutes.post(
   "/workspaces/:workspaceId/media",
   requireAuth,
+  asyncHandler(async (req, _res, next) => {
+    const membership = await requireWorkspacePublishingAccess(req.user!.id, req.params.workspaceId);
+    if (membership.role === "viewer") throw new HttpError(403, "Viewers cannot upload media");
+    next();
+  }),
+  allowMediaUploadTime,
   mediaUpload.fields([
     { name: "file", maxCount: 1 },
     { name: "thumbnail", maxCount: 1 }

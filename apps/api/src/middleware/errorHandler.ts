@@ -14,6 +14,8 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ) {
+  if (res.writableEnded || res.destroyed) return;
+  if (res.headersSent) return _next(error);
   if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
     return res.status(413).json({
       error: "UploadTooLarge",
