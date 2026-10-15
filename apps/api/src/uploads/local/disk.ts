@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { createWriteStream } from 'node:fs';
-import { lstat, mkdir, statfs, unlink } from 'node:fs/promises';
+import { createReadStream, createWriteStream } from 'node:fs';
+import { lstat, mkdir, statfs, unlink,writeFile,rename,readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -12,9 +12,18 @@ export type LocalUploadDisk = {
   receive(sessionId: string, index: number, source: Readable, expectedBytes: number, sha256: string, signal: AbortSignal): Promise<StoredPart>;
   removeOwned(keys: string[]): Promise<void>;
   availableBytes(): Promise<bigint>;
+  assemble(sessionId:string,attemptId:string,parts:StoredPart[],signal:AbortSignal,mimeType?:string):Promise<{storageKey:string;sizeBytes:number}>;
+  hasFile(storageKey:string,sizeBytes:number):Promise<boolean>;
+  assembleThumbnail(sessionId:string,attemptId:string,key:string,sizeBytes:number,signal:AbortSignal):Promise<{storageKey:string;sizeBytes:number}>;
 };
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const PRIVATE = '.upload-sessions';
+const outputPattern=/^local-upload-([a-f0-9-]{36})-([a-f0-9-]{36})\.(mp4|webm|mov|mpeg|ogg|avi|bin|jpg)$/;
+export function assemblyKey(sid:string,attempt:string,mimeType='video/mp4'){
+  if(!UUID.test(sid)||!UUID.test(attempt))throw new HttpError(400,'Invalid assembly identifier');
+  const extension:Record<string,string>={'video/mp4':'mp4','video/webm':'webm','video/quicktime':'mov','video/mpeg':'mpeg','video/ogg':'ogg','video/x-msvideo':'avi','image/jpeg':'jpg'};
+  return `local-upload-${sid}-${attempt}.${extension[mimeType]??'bin'}`;
+}
 
 export function createLocalUploadDisk(root: string): LocalUploadDisk {
   root = path.resolve(root);
@@ -32,25 +41,75 @@ export function createLocalUploadDisk(root: string): LocalUploadDisk {
     return dir;
   }
   function parseKey(key: string) {
+    const final=outputPattern.exec(key);
+    if(final&&UUID.test(final[1])&&UUID.test(final[2]))return [key];
     const segments = key.split('/');
     if (segments.length !== 3 || segments[0] !== PRIVATE || !UUID.test(segments[1]) ||
-        !segments[2].endsWith('.part') || !UUID.test(segments[2].slice(0,-5))) {
+        !/\.(part|merge|receipt)$/.test(segments[2]) || !UUID.test(segments[2].replace(/\.[^.]+$/,''))) {
       throw new HttpError(400, 'Invalid private upload key');
     }
     return segments;
   }
+  async function ownedPath(key:string){
+    const parsed=parseKey(key);
+    if(parsed.length===1){await directory(root,false);return path.join(root,key);}
+    return path.join(await sessionDirectory(parsed[1],false),parsed[2]);
+  }
   return {
+    async assembleThumbnail(sid,attempt,key,sizeBytes,signal){
+      if(sizeBytes<5||sizeBytes>102400||!key.startsWith(`${PRIVATE}/${sid}/`))throw new HttpError(400,'Invalid thumbnail');
+      if(!await this.hasFile(key,sizeBytes))throw new HttpError(400,'Thumbnail unavailable');
+      const bytes=await readFile(await ownedPath(key));
+      if(bytes.length!==sizeBytes||bytes[0]!==255||bytes[1]!==216||bytes[2]!==255||bytes.at(-2)!==255||bytes.at(-1)!==217)throw new HttpError(400,'Invalid thumbnail');
+      return this.assemble(sid,attempt,[{storageKey:key,sizeBytes,sha256:createHash('sha256').update(bytes).digest('hex')}],signal,'image/jpeg');
+    },
+    async hasFile(key,sizeBytes){
+      try{const stat=await lstat(await ownedPath(key));return stat.isFile()&&!stat.isSymbolicLink()&&stat.size===sizeBytes;}
+      catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return false;throw e;}
+    },
+    async assemble(sid,attempt,parts,signal,mimeType){
+      if(!parts.length)throw new HttpError(409,'Upload has no blocks');
+      const storageKey=assemblyKey(sid,attempt,mimeType),dir=await sessionDirectory(sid,true);
+      const temporary=path.join(dir,`${attempt}.merge`),target=path.join(root,storageKey);
+      // The durable receipt proves this attempt owns its public output after a
+      // crash between rename and DB commit. Never overwrite another receipt.
+      await writeFile(path.join(dir,`${attempt}.receipt`),storageKey,{flag:'wx',mode:0o600});
+      let sizeBytes=0,owned=false,moved=false;
+      async function* verifiedParts(){
+        for(const part of parts){
+          signal.throwIfAborted();
+          if(!part.storageKey.startsWith(`${PRIVATE}/${sid}/`))throw new HttpError(400,'Block belongs to another session');
+          const sourcePath=await ownedPath(part.storageKey),stat=await lstat(sourcePath);
+          if(stat.isSymbolicLink()||!stat.isFile()||stat.size!==part.sizeBytes)throw new HttpError(400,'Upload block is unavailable');
+          const hash=createHash('sha256');let count=0;
+          for await(const buffer of createReadStream(sourcePath)){
+            signal.throwIfAborted();count+=buffer.length;
+            if(count>part.sizeBytes)throw new HttpError(400,'Upload block size changed');
+            hash.update(buffer);sizeBytes+=buffer.length;yield buffer;
+          }
+          if(count!==part.sizeBytes||hash.digest('hex')!==part.sha256)throw new HttpError(400,'Upload block checksum changed');
+        }
+      }
+      const output=createWriteStream(temporary,{flags:'wx',mode:0o600});output.once('open',()=>{owned=true;});
+      try{
+        await pipeline(Readable.from(verifiedParts()),output,{signal});signal.throwIfAborted();
+        await rename(temporary,target);moved=true;
+        return {storageKey,sizeBytes};
+      }catch(e){
+        if(owned)await unlink(moved?target:temporary).catch(err=>{if(err.code!=='ENOENT')throw err;});
+        throw e;
+      }
+    },
     async availableBytes() {
       await directory(root, false);
       const stat = await statfs(root, {bigint: true});
       return stat.bavail * stat.bsize;
     },
     async removeOwned(keys) {
-      const parsed = keys.map(parseKey);
-      for (const [, sid, filename] of parsed) {
+      keys.forEach(parseKey);
+      for (const key of keys) {
         try {
-          const dir = await sessionDirectory(sid, false);
-          const target = path.join(dir, filename);
+          const target = await ownedPath(key);
           const stat = await lstat(target);
           if (!stat.isFile() || stat.isSymbolicLink()) throw new HttpError(400, 'Unsafe upload file');
           await unlink(target);

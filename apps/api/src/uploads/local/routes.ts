@@ -6,6 +6,7 @@ import {config} from '../../config';
 import {CHUNK_THRESHOLD_BYTES,MAX_FILE_BYTES,PART_SIZE_BYTES} from './protocol';
 import {getOwnedSession,getUploadView,initSession,requireUploadWriteAccess} from './sessions';
 import {acceptPart,acceptThumbnail,type ChunkDeps} from './parts';
+import {completeUpload} from './complete';
 
 const base='/workspaces/:workspaceId/media';
 const actor=(req:Request)=>({userId:req.user!.id,workspaceId:req.params.workspaceId});
@@ -29,10 +30,12 @@ export function createLocalUploadRouter(deps:ChunkDeps){
  router.put(base+'/upload-sessions/:id/thumbnail',asyncHandler(async(req,res)=>{
   const input=streamSignal(req);try{res.json(await acceptThumbnail(deps,actor(req),req.params.id,req,input.signal));}finally{input.dispose();}
  }));
- for(const method of ['post','delete'] as const){
-  router[method](base+`/upload-sessions/:id${method==='post'?'/complete':''}`,asyncHandler(async(req,_res)=>{
-   await getOwnedSession(deps,actor(req),req.params.id);throw new HttpError(501,'Upload operation is not enabled yet');
-  }));
- }
+ router.post(base+'/upload-sessions/:id/complete',asyncHandler(async(req,res)=>{
+  try{res.json(await completeUpload(deps,actor(req),req.params.id));}
+  catch(e){if(e instanceof HttpError&&e.statusCode===409)res.setHeader('Retry-After','2');throw e;}
+ }));
+ router.delete(base+'/upload-sessions/:id',asyncHandler(async(req,_res)=>{
+  await getOwnedSession(deps,actor(req),req.params.id);throw new HttpError(501,'Upload operation is not enabled yet');
+ }));
  return router;
 }

@@ -12,7 +12,11 @@ test('Facebook durable reception isolates accounts, orders comments and recovers
   const db=new PrismaClient({datasources:{db:{url}}}),userId=randomUUID(),workspaceId=randomUUID(),secondWorkspaceId=randomUUID(),accountId=randomUUID(),secondAccountId=randomUUID();
   const store=createFacebookReceptionStore(db),now=new Date();
   const event:FacebookReceivedEventInput={pageId:'100',eventKey:'comment-add',kind:'comment',providerId:'c1',postId:'100_1',text:'hello',occurredAt:now.toISOString(),deleted:false};
-  async function drain(){for(const row of await store.claimBatch(new Date(),50)){await store.processClaim(row,new Date());await store.finishClaim(row.id,row.claimToken);}}
+  // Queue eligibility defaults to PostgreSQL time. The Docker DB clock can be
+  // a few ms ahead of Windows; use that same clock, rounded up from JS ms,
+  // instead of accidentally leaving just-inserted fixture events pending.
+  async function databaseNow(){const [row]=await db.$queryRaw<Array<{now:Date}>>`SELECT clock_timestamp() AS now`;return new Date(row.now.getTime()+1);}
+  async function drain(){for(const row of await store.claimBatch(await databaseNow(),50)){await store.processClaim(row,new Date());await store.finishClaim(row.id,row.claimToken);}}
   try{
     await db.user.create({data:{id:userId,email:`${userId}@example.test`,passwordHash:'not-a-password',name:'Test'}});
     for(const [id,account] of [[workspaceId,accountId],[secondWorkspaceId,secondAccountId]]){
@@ -31,7 +35,7 @@ test('Facebook durable reception isolates accounts, orders comments and recovers
       createClient:()=>({inspectCapabilities:async()=>({readComments:{status:'available'}}),listComments:async()=>({items:[{id:'c1',postId:'100_1',text:'stale Graph',timestamp:now.toISOString()}],nextCursor:null})}) as any});
     assert.deepEqual((await service.listComments({userId,workspaceId,socialAccountId:accountId},'schedule')).items,[]);
     const message:FacebookReceivedEventInput={pageId:'100',eventKey:'message',kind:'message',providerId:'m1',senderId:'customer',recipientId:'100',text:'hi',occurredAt:now.toISOString(),isEcho:false};
-    await store.enqueue([message]);const claimTime=new Date();const first=await store.claimBatch(claimTime,50);assert.equal(first.length,2);
+    await store.enqueue([message]);const claimTime=await databaseNow();const first=await store.claimBatch(claimTime,50);assert.equal(first.length,2);
     const reclaimed=await store.claimBatch(new Date(claimTime.getTime()+61000),50);assert.equal(reclaimed.length,2);
     assert.equal(await store.finishClaim(first[0].id,first[0].claimToken),false);
     for(const row of reclaimed){await store.processClaim(row,new Date(now.getTime()+61000));await store.finishClaim(row.id,row.claimToken);}
