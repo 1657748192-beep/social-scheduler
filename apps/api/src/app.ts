@@ -17,6 +17,7 @@ import { scheduleRoutes } from "./routes/scheduleRoutes";
 import { socialAccountRoutes } from "./routes/socialAccountRoutes";
 import { workspaceRoutes } from "./routes/workspaceRoutes";
 import { removedMetaEngagement } from './middleware/removedMetaEngagement';
+import { createUploadStatic } from './uploads/local/static';
 
 export function createApp() {
   const app = express();
@@ -32,7 +33,7 @@ export function createApp() {
   app.use(express.json({ limit: "1mb" }));
   morgan.token("safe-url", req => safeRequestLogUrl(req.url ?? ""));
   app.use(morgan(":method :safe-url :status :response-time ms"));
-  app.use("/uploads", express.static(uploadRoot));
+  app.use("/uploads", createUploadStatic(uploadRoot));
 
   app.use("/api/v1", healthRoutes);
   app.use("/api/v1/auth", authRoutes);
