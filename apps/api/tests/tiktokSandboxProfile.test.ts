@@ -34,6 +34,24 @@ test('official profile short links normalize to the verified API username withou
   assert.equal(calls,1);
 });
 
+test('vm.tiktok.com profile links normalize only after matching the verified API identity',async()=>{
+  const read=(openId:string,link:string)=>queryTikTokProfile('secret','sandbox-open',async()=>Response.json({error:{code:'ok'},data:{user:{open_id:openId,username:'andypeng97',profile_deep_link:link}}}));
+  const result=await read('sandbox-open','https://vm.tiktok.com/ZReview123/');
+  assert.equal(result.status,'ok');
+  if(result.status==='ok') assert.equal(result.profileUrl,'https://www.tiktok.com/@andypeng97');
+  for(const [openId,link] of [
+    ['wrong','https://vm.tiktok.com/ZReview123/'],
+    ['sandbox-open','https://vm.tiktok.com.evil.test/ZReview123/'],
+    ['sandbox-open','http://vm.tiktok.com/ZReview123/'],
+    ['sandbox-open','https://vm.tiktok.com:8443/ZReview123/'],
+    ['sandbox-open','https://secret:password@vm.tiktok.com/ZReview123/'],
+    ['sandbox-open','https://vm.tiktok.com/ZReview123/?token=secret'],
+    ['sandbox-open','https://vm.tiktok.com/ZReview123/#secret'],
+    ['sandbox-open','https://vm.tiktok.com/ZReview123/extra/'],
+    ['sandbox-open','https://vm.tiktok.com/@someoneelse']
+  ]) assert.equal((await read(openId,link)).status,'data_unavailable');
+});
+
 test('short link support cannot bypass identity, host, path or secret URL checks',async()=>{
   for(const [openId,username,link] of [
     ['wrong','andypeng97','https://www.tiktok.com/t/ZReview123/'],

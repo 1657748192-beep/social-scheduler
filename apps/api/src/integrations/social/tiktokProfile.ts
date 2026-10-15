@@ -12,12 +12,14 @@ export async function queryTikTokProfile(token:string,openId:string,fetcher:type
     if (!response.ok || body.error?.code !== 'ok' || user?.open_id !== openId ||
         typeof user.username !== 'string' || !/^[A-Za-z0-9._]{1,24}$/.test(user.username) || typeof user.profile_deep_link !== 'string') return {status:'data_unavailable'};
     const url = new URL(user.profile_deep_link);
-    // TikTok may return a /t/ share link instead of a username permalink.
+    // TikTok may return an official share link instead of a username permalink.
     // Use the verified API username; never follow user-controlled redirects.
     const profilePath = `/@${user.username}`;
-    const officialShortLink = /^\/t\/[A-Za-z0-9]{1,100}\/$/.test(url.pathname);
-    if (url.protocol !== 'https:' || url.hostname !== 'www.tiktok.com' || url.port || url.username || url.password || url.search || url.hash ||
-        (url.pathname !== profilePath && !officialShortLink)) return {status:'data_unavailable'};
+    const officialPermalink = url.hostname === 'www.tiktok.com' && url.pathname === profilePath;
+    const officialShortLink = (url.hostname === 'www.tiktok.com' && /^\/t\/[A-Za-z0-9]{1,100}\/$/.test(url.pathname)) ||
+      (url.hostname === 'vm.tiktok.com' && /^\/[A-Za-z0-9]{1,100}\/$/.test(url.pathname));
+    if (url.protocol !== 'https:' || url.port || url.username || url.password || url.search || url.hash ||
+        (!officialPermalink && !officialShortLink)) return {status:'data_unavailable'};
     return {status:'ok', username:user.username, profileUrl:`https://www.tiktok.com${profilePath}`, fetchedAt:new Date().toISOString()};
   } catch { return {status:'temporarily_unavailable'}; }
 }
