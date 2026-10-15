@@ -22,6 +22,33 @@ test('incorrect identity, unsafe links and conflicting usernames cannot be expos
     {open_id:'sandbox-open',username:'andypeng97',profile_deep_link:'https://www.tiktok.com/@andypeng97?access_token=secret'}
   ]) assert.equal((await queryTikTokProfile('secret','sandbox-open',async()=>Response.json({error:{code:'ok'},data:{user}}))).status,'data_unavailable');
 });
+
+test('official profile short links normalize to the verified API username without following redirects',async()=>{
+  let calls=0;
+  const result=await queryTikTokProfile('sandbox-secret','sandbox-open',async()=>{
+    calls++;
+    return Response.json({error:{code:'ok'},data:{user:{open_id:'sandbox-open',username:'andypeng97',profile_deep_link:'https://www.tiktok.com/t/ZReview123/'}}});
+  });
+  assert.equal(result.status,'ok');
+  if(result.status==='ok') assert.equal(result.profileUrl,'https://www.tiktok.com/@andypeng97');
+  assert.equal(calls,1);
+});
+
+test('short link support cannot bypass identity, host, path or secret URL checks',async()=>{
+  for(const [openId,username,link] of [
+    ['wrong','andypeng97','https://www.tiktok.com/t/ZReview123/'],
+    ['sandbox-open','','https://www.tiktok.com/t/ZReview123/'],
+    ['sandbox-open','andypeng97','https://evil.test/t/ZReview123/'],
+    ['sandbox-open','andypeng97','https://www.tiktok.com/t/'],
+    ['sandbox-open','andypeng97','https://www.tiktok.com/t/ZReview123/extra'],
+    ['sandbox-open','andypeng97','https://www.tiktok.com/t/ZReview123/?access_token=secret'],
+    ['sandbox-open','andypeng97','https://www.tiktok.com/t/ZReview123/#secret'],
+    ['sandbox-open','andypeng97','https://secret@www.tiktok.com/t/ZReview123/']
+  ]) {
+    const result=await queryTikTokProfile('secret','sandbox-open',async()=>Response.json({error:{code:'ok'},data:{user:{open_id:openId,username,profile_deep_link:link}}}));
+    assert.equal(result.status,'data_unavailable');
+  }
+});
 test('profile permission and session errors are safe states without leaking provider payloads',async()=>{
   for(const [httpStatus,code,want] of [[403,'scope_not_authorized','permission_missing'],[401,'access_token_invalid','authorization_required'],[500,'server_error','temporarily_unavailable']] as const) {
     assert.deepEqual(await queryTikTokProfile('secret','sandbox-open',async()=>Response.json({error:{code,message:'secret'}},{status:httpStatus})),{status:want});
