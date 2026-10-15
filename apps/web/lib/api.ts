@@ -20,6 +20,7 @@ type ApiOptions = {
   token?: string | null;
   method?: string;
   body?: unknown;
+  signal?:AbortSignal;
 };
 
 export function redirectToLoginAfterSessionExpiry() {
@@ -37,6 +38,7 @@ export function redirectToLoginAfterSessionExpiry() {
 export async function apiRequest<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: options.method ?? "GET",
+    signal:options.signal,
     headers: {
       "Content-Type": "application/json",
       ...(options.token ? { Authorization: `Bearer ${options.token}` } : {})
@@ -57,6 +59,7 @@ export async function apiRequest<T>(path: string, options: ApiOptions = {}): Pro
 }
 
 type UploadOptions = {
+  signal?:AbortSignal;
   onProgress?: (progress: { loaded: number; total: number; percent: number }) => void;
 };
 
@@ -68,6 +71,9 @@ export function apiUpload<T>(
 ): Promise<T> {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
+    let settled=false;
+    const finish=(error?:unknown,value?:T)=>{if(settled)return;settled=true;options.signal?.removeEventListener('abort',abort);error?reject(error):resolve(value!);};
+    const abort=()=>{request.abort();finish(new DOMException('Upload cancelled','AbortError'));};
     request.open("POST", `${API_BASE_URL}${path}`);
     request.setRequestHeader("Authorization", `Bearer ${token}`);
     request.timeout = 35 * 60 * 1000;
@@ -85,6 +91,7 @@ export function apiUpload<T>(
     };
 
     request.onload = () => {
+      if(settled)return;
       let payload: { message?: string } | null = null;
 
       try {
@@ -94,7 +101,7 @@ export function apiUpload<T>(
       }
 
       if (request.status >= 200 && request.status < 300) {
-        resolve(payload as T);
+        finish(undefined,payload as T);
         return;
       }
 
@@ -102,12 +109,13 @@ export function apiUpload<T>(
         redirectToLoginAfterSessionExpiry();
       }
 
-      reject(new UploadHttpError(request.status === 408 ? "上传超时，请重试" : (payload?.message ?? `上传失败（HTTP ${request.status}）`),request.status));
+      finish(new UploadHttpError(request.status === 408 ? "上传超时，请重试" : (payload?.message ?? `上传失败（HTTP ${request.status}）`),request.status));
     };
 
-    request.onerror = () => reject(new Error("网络连接中断，请检查网络后重试"));
-    request.onabort = () => reject(new Error("上传已取消"));
-    request.ontimeout = () => reject(new Error("上传超时，请重试"));
+    request.onerror = () => finish(new UploadHttpError("网络连接中断，请检查网络后重试",0));
+    request.onabort = () => finish(new DOMException('Upload cancelled','AbortError'));
+    request.ontimeout = () => finish(new UploadHttpError("上传超时，请重试",408));
+    options.signal?.addEventListener('abort',abort,{once:true});if(options.signal?.aborted){abort();return;}
     request.send(formData);
   });
 }

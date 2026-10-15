@@ -18,7 +18,8 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   const [locale, setLocale] = useState<AppLocale>("zh-CN");
 
   useEffect(() => {
-    const savedLocale = window.localStorage.getItem(storageKey);
+    let savedLocale:string|null=null;
+    try{savedLocale=window.localStorage.getItem(storageKey);}catch{/* Keep the page usable when browser storage is blocked. */}
 
     if (savedLocale === "en" || savedLocale === "zh-CN") {
       setLocale(savedLocale);
@@ -27,7 +28,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     document.documentElement.lang = locale;
-    window.localStorage.setItem(storageKey, locale);
+    try{window.localStorage.setItem(storageKey, locale);}catch{/* This-page locale still works if persistence is unavailable. */}
   }, [locale]);
 
   const value = useMemo<LanguageContextValue>(

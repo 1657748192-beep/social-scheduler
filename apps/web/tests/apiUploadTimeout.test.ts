@@ -18,16 +18,17 @@ class UploadTransport {
   open() {}
   setRequestHeader() {}
   send() {}
+  abort() { this.onabort?.(); }
 }
 
-function start(context: any) {
+function start(context: any,options?:{signal:AbortSignal}) {
   const before = Object.getOwnPropertyDescriptor(globalThis, "XMLHttpRequest");
   Object.defineProperty(globalThis, "XMLHttpRequest", { configurable: true, value: UploadTransport });
   context.after(() => {
     if (before) Object.defineProperty(globalThis, "XMLHttpRequest", before);
     else delete (globalThis as any).XMLHttpRequest;
   });
-  const promise = apiUpload("/workspaces/w/media", "fixture", new FormData());
+  const promise = apiUpload("/workspaces/w/media", "fixture", new FormData(),options);
   return { promise, transport: UploadTransport.latest };
 }
 
@@ -62,4 +63,11 @@ test("file limit errors retain the server's 250 MB explanation", async context =
 test('legacy upload errors preserve HTTP status for shared upload UI',async context=>{
  const {promise,transport}=start(context);transport.status=403;transport.responseText='{"message":"Forbidden"}';transport.onload();
  await assert.rejects(promise,{status:403});
+});
+
+test('aborting a legacy upload prevents a later success from crossing workspace scope',async context=>{
+ const controller=new AbortController();
+ const {promise:pending,transport}=start(context,{signal:controller.signal});
+ controller.abort();transport.status=201;transport.responseText='{"id":"old-workspace-asset"}';transport.onload?.();
+ await assert.rejects(pending,{name:'AbortError'});
 });

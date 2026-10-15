@@ -6,6 +6,10 @@ import {PART_SIZE_BYTES,MAX_FILE_BYTES,computeFingerprint,type UploadView} from 
 export type LocalUploadProgress={phase:'preparing'|'uploading'|'finalizing';confirmedBytes:number;totalBytes:number;speedBytesPerSecond:number|null;remainingSeconds:number|null;inflightBytes:number;canResumeAfterReload:boolean;sessionId?:string};
 type Pending={clientKey:string;sessionId?:string;notBeforeMs?:number};
 const pending=new Map<string,Pending>();
+export function forgetLocalUploadSession(userId:string,workspaceId:string,sessionId:string){
+ const prefix=`local-upload:v1:${userId}:${workspaceId}:`;
+ for(const [key,record] of pending)if(key.startsWith(prefix)&&record.sessionId===sessionId){pending.delete(key);try{localStorage.removeItem(key);}catch{}}
+}
 const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 function wait(ms:number,signal:AbortSignal){return new Promise<void>((resolve,reject)=>{signal.throwIfAborted();const done=()=>{signal.removeEventListener('abort',abort);resolve();};const timer=setTimeout(done,ms);const abort=()=>{clearTimeout(timer);reject(new DOMException('Upload cancelled','AbortError'));};signal.addEventListener('abort',abort,{once:true});});}
 function retryable(e:unknown){return e instanceof UploadHttpError&&(e.status===0||[408,429,500,502,503,504].includes(e.status)||(e.status===409&&['part_busy','assembling'].includes(e.code??'')));}
