@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { lstat, mkdir, statfs, unlink,writeFile,rename,readFile } from 'node:fs/promises';
+import { lstat, mkdir, statfs, unlink,writeFile,rename,readFile,readdir,rmdir,realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -15,6 +15,9 @@ export type LocalUploadDisk = {
   assemble(sessionId:string,attemptId:string,parts:StoredPart[],signal:AbortSignal,mimeType?:string):Promise<{storageKey:string;sizeBytes:number}>;
   hasFile(storageKey:string,sizeBytes:number):Promise<boolean>;
   assembleThumbnail(sessionId:string,attemptId:string,key:string,sizeBytes:number,signal:AbortSignal):Promise<{storageKey:string;sizeBytes:number}>;
+  ownedFiles(sessionId:string):Promise<Array<{storageKey:string;mtimeMs:number}>>;
+  orphanCandidates(before:Date,limit:number):Promise<string[]>;
+  pruneSessionDirectory(sessionId:string):Promise<void>;
 };
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const PRIVATE = '.upload-sessions';
@@ -56,6 +59,45 @@ export function createLocalUploadDisk(root: string): LocalUploadDisk {
     return path.join(await sessionDirectory(parsed[1],false),parsed[2]);
   }
   return {
+    async pruneSessionDirectory(sid){
+      try{
+        const dir=await sessionDirectory(sid,false),realRoot=await realpath(root),realDir=await realpath(dir);
+        if(path.relative(realRoot,realDir)!==path.join(PRIVATE,sid))throw new HttpError(400,'Unsafe upload directory boundary');
+        await rmdir(dir); // Nonrecursive: an unexpected file prevents deletion.
+      }catch(e){if(!['ENOENT','ENOTEMPTY','EEXIST'].includes((e as NodeJS.ErrnoException).code??''))throw e;}
+    },
+    async orphanCandidates(before,limit){
+      try{
+        await directory(root,false);await directory(path.join(root,PRIVATE),false);
+        const entries=await readdir(path.join(root,PRIVATE),{withFileTypes:true}),result:string[]=[];
+        for(const entry of entries){
+          if(result.length>=limit)break;
+          if(!UUID.test(entry.name)||entry.isSymbolicLink()||!entry.isDirectory())continue;
+          const dir=await sessionDirectory(entry.name,false),stat=await lstat(dir);
+          if(stat.mtimeMs<before.getTime())result.push(entry.name);
+        }
+        return result;
+      }catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return [];throw e;}
+    },
+    async ownedFiles(sid){
+      try{
+        const dir=await sessionDirectory(sid,false),result:Array<{storageKey:string;mtimeMs:number}>=[];
+        for(const filename of await readdir(dir)){
+          const storageKey=`${PRIVATE}/${sid}/${filename}`;parseKey(storageKey);
+          const file=path.join(dir,filename),stat=await lstat(file);
+          if(!stat.isFile()||stat.isSymbolicLink())throw new HttpError(400,'Unsafe upload residue');
+          result.push({storageKey,mtimeMs:stat.mtimeMs});
+          if(filename.endsWith('.receipt')){
+            if(stat.size>200)throw new HttpError(400,'Invalid assembly receipt');
+            const outputKey=await readFile(file,'utf8'),match=outputPattern.exec(outputKey);
+            if(!match||match[1]!==sid||match[2]!==filename.slice(0,-8))throw new HttpError(400,'Invalid assembly receipt');
+            try{const output=await lstat(await ownedPath(outputKey));if(!output.isFile()||output.isSymbolicLink())throw new HttpError(400,'Unsafe assembly output');result.push({storageKey:outputKey,mtimeMs:output.mtimeMs});}
+            catch(e){if((e as NodeJS.ErrnoException).code!=='ENOENT')throw e;}
+          }
+        }
+        return result;
+      }catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return [];throw e;}
+    },
     async assembleThumbnail(sid,attempt,key,sizeBytes,signal){
       if(sizeBytes<5||sizeBytes>102400||!key.startsWith(`${PRIVATE}/${sid}/`))throw new HttpError(400,'Invalid thumbnail');
       if(!await this.hasFile(key,sizeBytes))throw new HttpError(400,'Thumbnail unavailable');
@@ -68,8 +110,10 @@ export function createLocalUploadDisk(root: string): LocalUploadDisk {
       catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return false;throw e;}
     },
     async assemble(sid,attempt,parts,signal,mimeType){
+      signal.throwIfAborted();
       if(!parts.length)throw new HttpError(409,'Upload has no blocks');
       const storageKey=assemblyKey(sid,attempt,mimeType),dir=await sessionDirectory(sid,true);
+      signal.throwIfAborted();
       const temporary=path.join(dir,`${attempt}.merge`),target=path.join(root,storageKey);
       // The durable receipt proves this attempt owns its public output after a
       // crash between rename and DB commit. Never overwrite another receipt.

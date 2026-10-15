@@ -1,9 +1,16 @@
-import { createServer, type IncomingMessage, type RequestListener } from "node:http";
+import { createServer, type IncomingMessage, type RequestListener,type Server } from "node:http";
 import type { RequestHandler } from "express";
 
 const ordinaryRequestTimeoutMs = 5 * 60 * 1000;
 const uploadRequestTimeoutMs = 30 * 60 * 1000;
 const receiveDeadlines = new WeakMap<IncomingMessage, () => void>();
+
+export async function closeApiServer(server:Server,stopWork:()=>Promise<void>,disconnect:()=>Promise<void>){
+  const closed=new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
+  // Stop listeners first, then abort pending bodies before awaiting close.
+  // Waiting for close before abort would keep incomplete uploads alive.
+  await stopWork();await closed;await disconnect();
+}
 
 // Only mount after authentication and workspace upload authorization. A URL or
 // Content-Type alone must never grant a longer receive budget.

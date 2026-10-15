@@ -5,6 +5,7 @@ import {assemblyKey} from './disk';
 import {getOwnedSession,requireUploadWriteAccess} from './sessions';
 import {MERGE_TTL_MS,RECEIPT_TTL_MS,expectedPartBytes,type ReadyMedia,type UploadActor} from './protocol';
 import {type ChunkDeps} from './parts';
+import {beginUploadOperation} from './operations';
 
 export async function removeUnreferenced(deps:ChunkDeps,keys:string[]){
  if(!keys.length)return;
@@ -18,7 +19,7 @@ async function ready(deps:ChunkDeps,assetId:string|null):Promise<ReadyMedia>{
  return {...asset,originalAvailable:true};
 }
 export async function completeUpload(deps:ChunkDeps,actor:UploadActor,id:string):Promise<ReadyMedia>{
- await getOwnedSession(deps,actor,id);
+ id=(await getOwnedSession(deps,actor,id)).id;
  const claim=await deps.db.$transaction(async tx=>{
   await tx.$queryRaw`SELECT id FROM local_upload_sessions WHERE id=${id}::uuid FOR UPDATE`;
   const session=await tx.localUploadSession.findFirstOrThrow({where:{id,...actor}});
@@ -36,16 +37,16 @@ export async function completeUpload(deps:ChunkDeps,actor:UploadActor,id:string)
  const session=claim.session,attempt=session.mergeAttemptId!;
  const outputKey=assemblyKey(id,attempt,session.mimeType),thumbnailAttempt=randomUUID();
  const thumbnailKey=session.thumbnailStorageKey?assemblyKey(id,thumbnailAttempt,'image/jpeg'):null;
- const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),MERGE_TTL_MS);timer.unref();
+ const operation=beginUploadOperation(id),timer=setTimeout(operation.abort,MERGE_TTL_MS);timer.unref();
  let committed=false;
  try{
-  const output=await deps.disk.assemble(id,attempt,claim.parts,controller.signal,session.mimeType);
+  const output=await deps.disk.assemble(id,attempt,claim.parts,operation.signal,session.mimeType);
   if(output.sizeBytes!==session.sizeBytes)throw new HttpError(400,'Assembled upload size mismatch');
   let thumbnail:{storageKey:string;sizeBytes:number}|null=null;
   if(session.thumbnailStorageKey&&session.thumbnailSizeBytes){
    // Thumbnail was signature-checked on acceptance; obtain its stored checksum
    // through a bounded read in the disk boundary, not a public URL fetch.
-   thumbnail=await deps.disk.assembleThumbnail(id,thumbnailAttempt,session.thumbnailStorageKey,session.thumbnailSizeBytes,controller.signal);
+   thumbnail=await deps.disk.assembleThumbnail(id,thumbnailAttempt,session.thumbnailStorageKey,session.thumbnailSizeBytes,operation.signal);
   }
   const asset=await deps.db.$transaction(async tx=>{
    await tx.$queryRaw`SELECT id FROM local_upload_sessions WHERE id=${id}::uuid FOR UPDATE`;
@@ -68,8 +69,9 @@ export async function completeUpload(deps:ChunkDeps,actor:UploadActor,id:string)
    try{
     await removeUnreferenced(deps,[outputKey,...(thumbnailKey?[thumbnailKey]:[])]);
     await deps.db.localUploadSession.updateMany({where:{id,state:'assembling',mergeAttemptId:attempt},data:{state:'receiving',mergeLeaseUntil:null}});
+    await deps.db.localUploadSession.updateMany({where:{id,state:{in:['cancelled','expired']},mergeAttemptId:attempt},data:{mergeLeaseUntil:null}});
    }catch{/* fail safe: do not delete anything further */}
   }
   throw e;
- }finally{clearTimeout(timer);}
+ }finally{clearTimeout(timer);operation.done();}
 }

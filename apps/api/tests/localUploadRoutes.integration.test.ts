@@ -79,6 +79,8 @@ test('HTTP part busy and capacity responses enforce the same atomic Redis limits
  const a=await leases.acquire(session.id,0);assert.ok(a.ok);
  const busy=await http.request(`/upload-sessions/${session.id}/parts/0`,{method:'PUT',body:'x'});
  assert.equal(busy.status,409);assert.equal((await busy.json()).details.code,'part_busy');
+ const upper=await http.request(`/upload-sessions/${session.id.toUpperCase()}/parts/0`,{method:'PUT',body:'x'});
+ assert.equal(upper.status,409);assert.equal((await upper.json()).details.code,'part_busy');
  const b=await leases.acquire(session.id,1);assert.ok(b.ok);
  assert.equal((await http.request(`/upload-sessions/${session.id}/parts/2`,{method:'PUT',body:'x'})).status,429);
  await leases.release(a.lease);await leases.release(b.lease);

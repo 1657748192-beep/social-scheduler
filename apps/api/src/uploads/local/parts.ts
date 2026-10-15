@@ -6,6 +6,7 @@ import {getOwnedSession,getUploadView,requireUploadWriteAccess} from './sessions
 import {expectedPartBytes,MIN_FREE_BYTES,UPLOAD_TTL_MS,type SessionDeps,type UploadActor,type UploadView} from './protocol';
 import type {LocalUploadDisk,StoredPart} from './disk';
 import type {UploadLeaseManager} from './leases';
+import {beginUploadOperation} from './operations';
 
 export type ChunkDeps=SessionDeps & {disk:LocalUploadDisk;leases:UploadLeaseManager};
 export function requireReceiving(session:LocalUploadSession,now:Date){
@@ -32,9 +33,11 @@ async function receiveWithLease<T>(deps:ChunkDeps,actor:UploadActor,id:string,in
  }finally{await deps.leases.release(outcome.lease).catch(()=>{});}
 }
 export async function acceptPart(deps:ChunkDeps,actor:UploadActor,id:string,index:number,body:Readable,signal:AbortSignal):Promise<UploadView>{
- const initial=await getOwnedSession(deps,actor,id);requireReceiving(initial,deps.now());
+ const initial=await getOwnedSession(deps,actor,id);id=initial.id;requireReceiving(initial,deps.now());
+ const operation=beginUploadOperation(id,signal);signal=operation.signal;
+ try{
  const length=expectedPartBytes(initial.sizeBytes,index);
- return receiveWithLease(deps,actor,id,index,async (session,expiresAtMs)=>{
+ return await receiveWithLease(deps,actor,id,index,async (session,expiresAtMs)=>{
   let stored:StoredPart|undefined,confirmed=false;
   try{
    const existingPart=await deps.db.localUploadPart.findUnique({where:{sessionId_index:{sessionId:id,index}}});
@@ -53,12 +56,26 @@ export async function acceptPart(deps:ChunkDeps,actor:UploadActor,id:string,inde
    });
   }catch(e){confirmed=false;throw e;}finally{if(stored&&!confirmed)await deps.disk.removeOwned([stored.storageKey]);}
  });
+ }finally{operation.done();}
+}
+function readThumbnail(body:Readable,signal:AbortSignal):Promise<Buffer>{
+ return new Promise((resolve,reject)=>{
+  const chunks:Buffer[]=[];let size=0;
+  const detach=()=>{body.off('data',data);body.off('end',end);body.off('error',fail);body.off('close',closed);signal.removeEventListener('abort',abort);};
+  const fail=(e:Error)=>{detach();body.pause();reject(e);};
+  const data=(chunk:Buffer)=>{size+=chunk.length;if(size>102400)return fail(new HttpError(413,'Thumbnail exceeds 100KiB'));chunks.push(Buffer.from(chunk));};
+  const end=()=>{detach();resolve(Buffer.concat(chunks));};
+  const abort=()=>fail(new HttpError(410,'Upload cancelled'));
+  const closed=()=>{if(!body.readableEnded)fail(new HttpError(400,'Thumbnail interrupted'));};
+  if(signal.aborted)return abort();if(body.readableEnded)return fail(new HttpError(400,'Thumbnail body is empty or already consumed'));if(body.destroyed)return closed();
+  body.on('data',data);body.once('end',end);body.once('error',fail);body.once('close',closed);signal.addEventListener('abort',abort,{once:true});
+ });
 }
 export async function acceptThumbnail(deps:ChunkDeps,actor:UploadActor,id:string,body:Readable,signal:AbortSignal){
- return receiveWithLease(deps,actor,id,250,async(_session,expiresAtMs)=>{
-  const buffers:Buffer[]=[];let size=0;
-  for await(const chunk of body){signal.throwIfAborted();const b=Buffer.from(chunk);size+=b.length;if(size>102400)throw new HttpError(413,'Thumbnail exceeds 100KiB');buffers.push(b);}
-  const bytes=Buffer.concat(buffers);
+ id=(await getOwnedSession(deps,actor,id)).id;
+ const operation=beginUploadOperation(id,signal);signal=operation.signal;
+ try{return await receiveWithLease(deps,actor,id,250,async(_session,expiresAtMs)=>{
+  const bytes=await readThumbnail(body,signal),size=bytes.length;
   if(bytes.length<5||bytes[0]!==255||bytes[1]!==216||bytes[2]!==255||bytes.at(-2)!==255||bytes.at(-1)!==217)throw new HttpError(400,'Thumbnail must be JPEG');
   const stored=await deps.disk.receive(id,0,Readable.from([bytes]),bytes.length,createHash('sha256').update(bytes).digest('hex'),signal);
   let keep=false;
@@ -69,4 +86,5 @@ export async function acceptThumbnail(deps:ChunkDeps,actor:UploadActor,id:string
    return {received:true};
   });}catch(e){keep=false;throw e;}finally{if(!keep)await deps.disk.removeOwned([stored.storageKey]);}
  });
+ }finally{operation.done();}
 }
