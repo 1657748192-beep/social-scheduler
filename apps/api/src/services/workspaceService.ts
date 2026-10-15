@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "crypto";
-import type { WorkspaceRole } from "@prisma/client";
+import type { PrismaClient, WorkspaceRole } from "@prisma/client";
 import { z } from "zod";
 import { config } from "../config";
 import { prisma } from "../prisma";
@@ -42,8 +42,10 @@ function assertRoleCanManageMembers(role: WorkspaceRole) {
   }
 }
 
-export async function getMembership(userId: string, workspaceId: string) {
-  return prisma.workspaceMember.findFirst({
+type WorkspaceAccessDb = Pick<PrismaClient, "workspaceMember" | "user">;
+
+export async function getMembership(userId: string, workspaceId: string, db: WorkspaceAccessDb = prisma) {
+  return db.workspaceMember.findFirst({
     where: {
       userId,
       workspaceId,
@@ -52,8 +54,8 @@ export async function getMembership(userId: string, workspaceId: string) {
   });
 }
 
-export async function requireWorkspaceMembership(userId: string, workspaceId: string) {
-  const membership = await getMembership(userId, workspaceId);
+export async function requireWorkspaceMembership(userId: string, workspaceId: string, db: WorkspaceAccessDb = prisma) {
+  const membership = await getMembership(userId, workspaceId, db);
 
   if (!membership) {
     throw new HttpError(403, "You do not have access to this workspace");
@@ -62,9 +64,9 @@ export async function requireWorkspaceMembership(userId: string, workspaceId: st
   return membership;
 }
 
-export async function requireWorkspacePublishingAccess(userId: string, workspaceId: string) {
-  const membership = await requireWorkspaceMembership(userId, workspaceId);
-  const user = await prisma.user.findUnique({
+export async function requireWorkspacePublishingAccess(userId: string, workspaceId: string, db: WorkspaceAccessDb = prisma) {
+  const membership = await requireWorkspaceMembership(userId, workspaceId, db);
+  const user = await db.user.findUnique({
     where: { id: userId },
     select: {
       publishingAccessDisabled: true,
