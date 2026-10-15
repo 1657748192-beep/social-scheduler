@@ -5,7 +5,7 @@ import type {TestContext} from 'node:test';
 
 export async function createUploadHttpFixture(t:TestContext){
  const sessions=new Map<string,any>(),intents=new Map<string,string>(),storage=new Map<string,string>();
- const controls={loseAck:false,status:0,failIndex:0,retryAfter:'',active:0,maxActive:0,puts:0,gets:0,completes:0,completeBusy:0,assemblyPollsRemaining:2,ackDelayIndex:-1,getStatus:0,capStatus:200,legacyPuts:0,holdComplete:false,cancels:0};
+ const controls={loseAck:false,status:0,failIndex:0,retryAfter:'',active:0,maxActive:0,puts:0,gets:0,completes:0,completeBusy:0,assemblyPollsRemaining:2,ackDelayIndex:-1,getStatus:0,capStatus:200,legacyPuts:0,holdComplete:false,cancels:0,completedAssetExpired:false};
  const completeWaiters:Array<()=>void>=[];const releaseCompletes=()=>{controls.holdComplete=false;for(const release of completeWaiters.splice(0))release();};
  const server=createServer(async(req,res)=>{
   const route=new URL(req.url!,'http://test').pathname;const json=(status:number,body:unknown)=>{res.statusCode=status;res.setHeader('Content-Type','application/json');res.end(JSON.stringify(body));};
@@ -22,6 +22,7 @@ export async function createUploadHttpFixture(t:TestContext){
   if(req.method==='GET'){controls.gets++;if(controls.getStatus){json(controls.getStatus,{});return;}if(s.state==='assembling'&&controls.assemblyPollsRemaining--<=0)s.state='completed';json(200,s);return;}
   if(req.method==='PUT'&&match![3]!==undefined){
    const index=Number(match![3]);s.attempts.set(index,(s.attempts.get(index)??0)+1);controls.puts++;controls.active++;controls.maxActive=Math.max(controls.maxActive,controls.active);
+   if(s.state==='completed'){controls.active--;json(409,{details:{code:'completed'}});return;}
    await new Promise(resolve=>setTimeout(resolve,10));controls.active--;
    if(controls.status&&index===controls.failIndex){if(controls.retryAfter)res.setHeader('Retry-After',controls.retryAfter);json(controls.status,{message:'controlled upload error',details:{code:controls.status===409?'part_conflict':'controlled'}});return;}
    s.parts.set(index,bytes);s.writes.set(index,(s.writes.get(index)??0)+1);if(!s.receivedParts.includes(index))s.receivedParts.push(index);
@@ -32,6 +33,7 @@ export async function createUploadHttpFixture(t:TestContext){
   if(req.method==='POST'&&route.endsWith('/complete')){
    if(controls.holdComplete)await new Promise<void>(resolve=>completeWaiters.push(resolve));
    controls.completes++;if(controls.completeBusy-->0||s.state==='assembling'){s.state='assembling';res.setHeader('Retry-After','0');json(409,{details:{code:'assembling'}});return;}
+   if(controls.completedAssetExpired){json(410,{details:{code:'asset_expired'}});return;}
    s.state='completed';s.assetId=s.assetId??randomUUID();json(200,{id:s.assetId,workspaceId:'w',fileUrl:'https://example.test/video.mp4',storageKey:'video.mp4',mimeType:s.manifest.mimeType,sizeBytes:s.totalBytes,createdAt:new Date().toISOString(),originalAvailable:true});return;
   }
   if(req.method==='DELETE'){controls.cancels++;s.state=s.state==='completed'?'completed':'cancelled';json(200,{state:s.state,cleanupPending:false});return;}

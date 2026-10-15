@@ -5,6 +5,16 @@ import {createUploadHttpFixture} from './helpers/localUploadHttpTransport';
 
 function input(file=new File([Buffer.alloc(2097153,71)],'video.mp4',{type:'video/mp4'})){return {file,userId:randomUUID(),workspaceId:randomUUID(),token:'fixture-token-not-for-storage',signal:new AbortController().signal,onProgress:(_p:any)=>{}};}
 
+for(const expired of [false,true])test(`completed session re-entry skips chunks and revalidates the ${expired?'expired':'ready'} asset`,async t=>{
+ const f=await createUploadHttpFixture(t),{uploadLocalVideo}=await import('../lib/localChunkUpload'),args=input();
+ f.controls.status=403;await assert.rejects(uploadLocalVideo(args),{status:403});
+ const session=[...f.sessions.values()][0];session.state='completed';session.receivedParts=[];session.parts.clear();session.assetId=randomUUID();
+ f.controls.status=0;f.controls.completedAssetExpired=expired;const puts=f.controls.puts;
+ if(expired)await assert.rejects(uploadLocalVideo(args),{status:410});
+ else assert.equal((await uploadLocalVideo(args)).id,session.assetId);
+ assert.equal(f.controls.puts,puts);assert.equal(f.controls.completes,1);assert.equal(f.storage.size,0);
+});
+
 test('a lost HTTP acknowledgement is queried and accepted bytes are not resent',async t=>{
  const f=await createUploadHttpFixture(t);f.controls.loseAck=true;f.controls.ackDelayIndex=1;
  const {uploadLocalVideo}=await import('../lib/localChunkUpload');const p:any[]=[];const args=input();args.onProgress=value=>p.push(value);

@@ -3,7 +3,7 @@ import {config} from '../../config';
 import {HttpError} from '../../utils/errors';
 import {assemblyKey} from './disk';
 import {getOwnedSession,requireUploadWriteAccess} from './sessions';
-import {MERGE_TTL_MS,RECEIPT_TTL_MS,expectedPartBytes,type ReadyMedia,type UploadActor} from './protocol';
+import {MERGE_TTL_MS,RECEIPT_TTL_MS,MIN_FREE_BYTES,expectedPartBytes,type ReadyMedia,type UploadActor} from './protocol';
 import {type ChunkDeps} from './parts';
 import {beginUploadOperation} from './operations';
 
@@ -21,6 +21,9 @@ async function ready(deps:ChunkDeps,assetId:string|null):Promise<ReadyMedia>{
 export async function completeUpload(deps:ChunkDeps,actor:UploadActor,id:string):Promise<ReadyMedia>{
  id=(await getOwnedSession(deps,actor,id)).id;
  const claim=await deps.db.$transaction(async tx=>{
+  // Serialize capacity claims with initial reservations. Count full output
+  // allowances conservatively even if another merge has already written bytes.
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(742183005)`;
   await tx.$queryRaw`SELECT id FROM local_upload_sessions WHERE id=${id}::uuid FOR UPDATE`;
   const session=await tx.localUploadSession.findFirstOrThrow({where:{id,...actor}});
   await requireUploadWriteAccess(tx,actor);
@@ -29,6 +32,9 @@ export async function completeUpload(deps:ChunkDeps,actor:UploadActor,id:string)
   if(session.state==='assembling'&&session.mergeLeaseUntil&&session.mergeLeaseUntil>deps.now())throw new HttpError(409,'Upload is being finalized',{code:'assembling'});
   const parts=await tx.localUploadPart.findMany({where:{sessionId:id},orderBy:{index:'asc'}});
   if(parts.length!==session.partHashes.length||parts.some((p,i)=>p.index!==i||p.sha256!==session.partHashes[i]||p.sizeBytes!==expectedPartBytes(session.sizeBytes,i)))throw new HttpError(409,'Upload blocks are incomplete',{code:'missing_parts'});
+  const merging=await tx.localUploadSession.aggregate({where:{state:'assembling'},_sum:{sizeBytes:true,thumbnailSizeBytes:true}});
+  const outputBytes=BigInt(session.sizeBytes+(session.thumbnailSizeBytes??0))+BigInt(merging._sum.sizeBytes??0)+BigInt(merging._sum.thumbnailSizeBytes??0);
+  if(await deps.availableBytes()<MIN_FREE_BYTES+outputBytes)throw new HttpError(507,'Not enough storage to finalize upload',{code:'upload_capacity'});
   const now=deps.now(),attempt=randomUUID();
   const claimed=await tx.localUploadSession.update({where:{id},data:{state:'assembling',mergeAttemptId:attempt,mergeLeaseUntil:new Date(now.getTime()+MERGE_TTL_MS)}});
   return {session:claimed,parts,already:false};

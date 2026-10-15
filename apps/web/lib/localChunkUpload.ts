@@ -50,7 +50,11 @@ export async function uploadLocalVideo(input:{file:File;workspaceId:string;userI
   // full manifest under its idempotency key before trusting a cached session.
   const view=await request<UploadView>('/upload-sessions','POST',{clientKey:record.clientKey,originalName:file.name,mimeType:file.type,sizeBytes:file.size,partHashes:hashes,fingerprint});
   if(!uuid.test(view.id))throw new UploadHttpError('Invalid upload session',400,'invalid_status');
-  sessionId=view.id;record.sessionId=sessionId;save();await readStatus();
+  sessionId=view.id;record.sessionId=sessionId;save();const resumed=await readStatus();
+  // Completed sessions no longer have part rows. Revalidate the asset through
+  // complete rather than trying to upload the already-consumed blocks again.
+  const alreadyCompleted=resumed.state==='completed';
+  if(alreadyCompleted)for(let i=0;i<hashes.length;i++)confirmed.add(i);
   for(const i of confirmed)baseline+=Math.min(PART_SIZE_BYTES,file.size-i*PART_SIZE_BYTES);
   report('uploading');
   const send=async(index:number)=>{
@@ -77,7 +81,7 @@ export async function uploadLocalVideo(input:{file:File;workspaceId:string;userI
   const jobs=hashes.map((_,i)=>confirmed.has(i)?Promise.resolve():localUploadQueue.run(()=>send(i),signal));
   try{await Promise.all(jobs);}catch(e){controller.abort();await Promise.allSettled(jobs);throw e;}
   report('finalizing');
-  if(optionalThumbnail){
+  if(optionalThumbnail&&!alreadyCompleted){
    // A caller is expected to bound generation; keep this boundary bounded too.
    let timer:ReturnType<typeof setTimeout>|undefined;
    try{const thumbnail=await Promise.race([optionalThumbnail,new Promise<null>(resolve=>{timer=setTimeout(()=>resolve(null),5000);})]);if(thumbnail&&thumbnail.size<=102400)await request(`/upload-sessions/${sessionId}/thumbnail`,'PUT',undefined,thumbnail);}

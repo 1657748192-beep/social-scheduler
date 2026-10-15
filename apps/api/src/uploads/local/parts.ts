@@ -54,7 +54,15 @@ export async function acceptPart(deps:ChunkDeps,actor:UploadActor,id:string,inde
     const parts=await tx.localUploadPart.findMany({where:{sessionId:id},select:{index:true}});
     return getUploadView(updated,parts.map(p=>p.index));
    });
-  }catch(e){confirmed=false;throw e;}finally{if(stored&&!confirmed)await deps.disk.removeOwned([stored.storageKey]);}
+  }catch(e){
+   if(stored){
+    // COMMIT may have succeeded even when its acknowledgement was lost. Only
+    // remove this immutable key once a fresh DB read proves it unreferenced.
+    confirmed=true;
+    try{confirmed=!!await deps.db.localUploadPart.findFirst({where:{storageKey:stored.storageKey}});}catch{/* retain for reconciliation when DB is unavailable */}
+   }
+   throw e;
+  }finally{if(stored&&!confirmed)await deps.disk.removeOwned([stored.storageKey]);}
  });
  }finally{operation.done();}
 }
@@ -84,7 +92,11 @@ export async function acceptThumbnail(deps:ChunkDeps,actor:UploadActor,id:string
    if(deps.now().getTime()>=expiresAtMs)throw new HttpError(503,'Upload receiver lease expired');
    if(!session.thumbnailStorageKey){await tx.localUploadSession.update({where:{id},data:{thumbnailStorageKey:stored.storageKey,thumbnailSizeBytes:size}});keep=true;}
    return {received:true};
-  });}catch(e){keep=false;throw e;}finally{if(!keep)await deps.disk.removeOwned([stored.storageKey]);}
+  });}catch(e){
+   keep=true;
+   try{keep=!!await deps.db.localUploadSession.findFirst({where:{thumbnailStorageKey:stored.storageKey}});}catch{/* uncertain commit: preserve bytes */}
+   throw e;
+  }finally{if(!keep)await deps.disk.removeOwned([stored.storageKey]);}
  });
  }finally{operation.done();}
 }

@@ -10,6 +10,25 @@ import {startLocalUploadHttp} from './helpers/localUploadHttp';
 import {computeFingerprint} from '../src/uploads/local/protocol';
 import {createUploadLeases} from '../src/uploads/local/leases';
 
+for(const thumbnail of [false,true])for(const unavailable of [false,true])test(`${thumbnail?'thumbnail':'part'} survives a lost database COMMIT acknowledgement${unavailable?' while reconciliation is unavailable':''}`,async t=>{
+ const f=await createLocalUploadFixture(t),{createLocalUploadDisk}=await import('../src/uploads/local/disk');
+ const {acceptPart,acceptThumbnail}=await import('../src/uploads/local/parts'),{initSession}=await import('../src/uploads/local/sessions');
+ const disk=createLocalUploadDisk(f.root),deps={...f,disk,leases:createUploadLeases(f.redis,f.prefix),availableBytes:async()=>10n**12n};
+ const bytes=thumbnail?Buffer.from([255,216,255,224,1,255,217]):Buffer.from('original video');
+ const session=await initSession(deps,f.actor,await manifest(bytes));let transactions=0;
+ // Run the actual PostgreSQL transaction, then lose only its acknowledgement.
+ const db=new Proxy(f.db,{get(target,key){if(key==='$transaction')return async(...args:any[])=>{
+  const result=await (target.$transaction as any)(...args);if(++transactions===2)throw new Error('COMMIT acknowledgement lost');return result;
+ };if(unavailable&&transactions===2&&key===(thumbnail?'localUploadSession':'localUploadPart'))return new Proxy(Reflect.get(target,key),{get(model,method){if(method==='findFirst')return async()=>{throw new Error('database unavailable');};return Reflect.get(model,method);}});
+ return Reflect.get(target,key);}});
+ const faulty={...deps,db};
+ await assert.rejects(thumbnail?acceptThumbnail(faulty,f.actor,session.id,Readable.from([bytes]),new AbortController().signal):acceptPart(faulty,f.actor,session.id,0,Readable.from([bytes]),new AbortController().signal),/COMMIT acknowledgement lost/);
+ const current=await f.db.localUploadSession.findUniqueOrThrow({where:{id:session.id}});
+ const part=await f.db.localUploadPart.findUnique({where:{sessionId_index:{sessionId:session.id,index:0}}});
+ const key=thumbnail?current.thumbnailStorageKey:part?.storageKey;assert.ok(key);
+ assert.equal(await disk.hasFile(key!,bytes.length),true,'confirmed storage must remain present after ambiguous commit');
+});
+
 async function manifest(bytes:Buffer){const hashes=[createHash('sha256').update(bytes).digest('hex')];return {clientKey:randomUUID(),originalName:'test.mp4',mimeType:'video/mp4',sizeBytes:bytes.length,partHashes:hashes,fingerprint:await computeFingerprint(bytes.length,'video/mp4',hashes)};}
 
 test('real login protects every route; duplicate verified parts remain one row and status survives lost acknowledgement',async t=>{

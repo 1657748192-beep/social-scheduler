@@ -5,7 +5,7 @@ import path from 'node:path';
 import {Readable} from 'node:stream';
 import test from 'node:test';
 import {createLocalUploadFixture} from './helpers/localUploadFixture';
-import {computeFingerprint} from '../src/uploads/local/protocol';
+import {computeFingerprint,MIN_FREE_BYTES} from '../src/uploads/local/protocol';
 import {createLocalUploadDisk} from '../src/uploads/local/disk';
 import {createUploadLeases} from '../src/uploads/local/leases';
 import {initSession} from '../src/uploads/local/sessions';
@@ -18,6 +18,28 @@ async function upload(t:any){
  const s=await initSession(deps,f.actor,{clientKey:randomUUID(),originalName:'original.webm',mimeType:'video/webm',sizeBytes:bytes.length,partHashes:hashes,fingerprint:await computeFingerprint(bytes.length,'video/webm',hashes)});
  return {f,disk,deps,bytes,parts,s,fill:async()=>{for(let i=0;i<parts.length;i++)await acceptPart(deps,f.actor,s.id,i,Readable.from([parts[i]]),new AbortController().signal);}};
 }
+
+test('completion rechecks output capacity after upload and preserves resumable blocks on 507',async t=>{
+ const {completeUpload}=await import('../src/uploads/local/complete'),u=await upload(t);await u.fill();
+ let checks=0;
+ await assert.rejects(completeUpload({...u.deps,availableBytes:async()=>{checks++;return MIN_FREE_BYTES;}},u.f.actor,u.s.id),{statusCode:507});
+ assert.ok(checks>0);assert.equal(await u.f.db.mediaAsset.count({where:{workspaceId:u.f.actor.workspaceId}}),0);
+ assert.equal((await u.f.db.localUploadSession.findUniqueOrThrow({where:{id:u.s.id}})).state,'receiving');
+ assert.equal(await u.f.db.localUploadPart.count({where:{sessionId:u.s.id}}),u.parts.length);
+ assert.equal((await readdir(u.f.root)).filter(n=>n.startsWith('local-upload-')).length,0);
+ assert.ok((await completeUpload(u.deps,u.f.actor,u.s.id)).id);
+});
+
+test('concurrent merge claims include the other in-flight output in capacity checks',async t=>{
+ const {completeUpload}=await import('../src/uploads/local/complete'),a=await upload(t),b=await upload(t);await a.fill();await b.fill();
+ let entered!:()=>void,release!:()=>void;
+ const started=new Promise<void>(r=>{entered=r;}),blocked=new Promise<void>(r=>{release=r;});
+ const slowDisk={...a.disk,assemble:async(...args:Parameters<typeof a.disk.assemble>)=>{entered();await blocked;return a.disk.assemble(...args);}};
+ const first=completeUpload({...a.deps,disk:slowDisk},a.f.actor,a.s.id);const caught=first.then(value=>({value}),error=>({error}));
+ await started;
+ try{await assert.rejects(completeUpload({...b.deps,availableBytes:async()=>MIN_FREE_BYTES+BigInt(b.bytes.length)},b.f.actor,b.s.id),{statusCode:507});}
+ finally{release();const result=await caught;assert.ok('value' in result&&result.value.id);}
+});
 
 test('completion requires all blocks and concurrent repeats yield one verified existing-format asset',async t=>{
  const {completeUpload}=await import('../src/uploads/local/complete');
