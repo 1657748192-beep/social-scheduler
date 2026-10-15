@@ -18,6 +18,8 @@ import { socialAccountRoutes } from "./routes/socialAccountRoutes";
 import { workspaceRoutes } from "./routes/workspaceRoutes";
 import { removedMetaEngagement } from './middleware/removedMetaEngagement';
 import { createUploadStatic } from './uploads/local/static';
+import { createLocalUploadRouter } from './uploads/local/routes';
+import { localUploadRuntime } from './uploads/local/runtime';
 
 export function createApp() {
   const app = express();
@@ -41,6 +43,7 @@ export function createApp() {
   app.use("/api/v1", workspaceRoutes);
   app.use("/api/v1", tiktokSandboxRoutes);
   app.use("/api/v1", socialAccountRoutes);
+  app.use("/api/v1", createLocalUploadRouter(localUploadRuntime));
   app.use("/api/v1", composerRoutes);
   app.use("/api/v1", scheduleRoutes);
   app.use("/api/v1", instagramEngagementRoutes);
