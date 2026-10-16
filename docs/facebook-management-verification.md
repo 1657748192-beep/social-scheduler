@@ -33,7 +33,13 @@ Verified through the in-app browser on a loopback-only fixture server:
 
 The fixture is not evidence that Meta delivered a live event. Login/membership checks are additionally exercised by server route tests. Viewer/window/error/unknown-send and stale completion behavior are covered by component tests.
 
-## Separate external acceptance gate
+## Independent code review
+
+One fresh-context whole-branch review found no Critical issues and two Important issues: background refresh discarded a paginated conversation's selection/draft, and cached webhook comment text could override a newer successful Graph read. Both were reproduced by added failing tests and corrected in one fix pass. Pagination/selection/draft now survive background refresh; current Graph bodies win for the same ID while local-only arrivals and deletion tombstones remain. Focused regression run: 13/13 passed. Final full regression after this fix pass: 545/545 passed, zero failures/skips; API + Web root production build and diff check passed. No Minor findings were raised.
+
+The reviewer explicitly did not judge live Meta scopes, delivery, replies or production deployment; those remain external acceptance, not deferred product fixes.
+
+## Separate external acceptance gate (not performed)
 
 Not yet verified: production management configuration, real consent/scopes/tasks, official Meta test delivery, real customer `feed`/Messenger delivery, live replies or cloud deployment. A signed local/official diagnostic event alone is not live delivery acceptance.
 

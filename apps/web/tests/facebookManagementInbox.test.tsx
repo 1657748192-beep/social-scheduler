@@ -6,6 +6,30 @@ import {FacebookInbox} from '../components/inbox/FacebookInbox';
 import {withFacebookUI,facebookWorkspaces,facebookText,facebookButton,defaultFacebookResponse,envelope,readAt} from './helpers/facebookManagementUI';
 const inbox=(role='owner')=><FacebookInbox token="software-token" workspaces={[{...facebookWorkspaces[0],role}]}/>;
 
+test('pollingPreservesPaginatedSelectedConversationDraftAndContinuation',async()=>{
+  let refreshed=false;
+  await withFacebookUI(inbox(),async({view,timers,requests}:any)=>{
+    await act(async()=>facebookButton(view,'更多会话').props.onClick());
+    await act(async()=>view.root.findAllByType('button').find((b:any)=>b.children.join('').includes('Older customer')).props.onClick());
+    await act(async()=>view.root.findByType('textarea').props.onChange({target:{value:'draft for older customer'}}));
+    refreshed=true;await act(async()=>([...timers.values()][0] as any).callback());
+    assert.match(facebookText(view),/Older customer/);
+    assert.match(facebookText(view),/New active customer/);
+    assert.equal(view.root.findByType('textarea').props.value,'draft for older customer');
+    assert.equal(view.root.findAllByType('button').find((b:any)=>b.props['aria-pressed']===true).children.join('').includes('Older customer'),true);
+    await act(async()=>facebookButton(view,'更多会话').props.onClick());
+    assert.match(facebookText(view),/Last customer/);
+  },url=>{
+    if(url.pathname.endsWith('/conversations')){
+      const after=url.searchParams.get('cursor');
+      if(after==='remaining')return Response.json(envelope([{id:'last',counterpartyId:'500',counterpartyName:'Last customer'}]));
+      if(after==='older')return Response.json({...envelope([{id:'old',counterpartyId:'300',counterpartyName:'Older customer'}]),nextCursor:'remaining'});
+      return Response.json({...envelope([{id:refreshed?'new':'first',counterpartyId:'400',counterpartyName:refreshed?'New active customer':'First customer'}]),nextCursor:'older'});
+    }
+    if(url.pathname.endsWith('/messages'))return Response.json(envelope([{id:'m-old',conversationId:'old',senderId:'300',recipientId:'100',inbound:true,text:'Synthetic old conversation',timestamp:new Date().toISOString()}]));
+  });
+});
+
 test('switchingPageClearsDraftAndIgnoresLateReadSendAndErrors',async()=>{
   let holdRead=false,releaseRead!:(r:Response)=>void,rejectOld!:(e:Error)=>void,finishNew!:(r:Response)=>void;
   await withFacebookUI(inbox(),async({view,requests,storage}:any)=>{

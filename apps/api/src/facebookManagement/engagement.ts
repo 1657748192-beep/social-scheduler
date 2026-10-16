@@ -92,7 +92,10 @@ export function createFacebookManagementEngagement(deps:Dependencies){
         const remote=wrap(await api.listComments(postId,after));
         const local=await deps.receivedComments?.(access.managedPageId,postId,remote.items.map(c=>c.id),!after)??[];
         const merged=new Map(remote.items.map(comment=>[comment.id,comment]));
-        for(const comment of local){if(comment.deleted)merged.delete(comment.id);else if(!merged.has(comment.id)||Date.parse(comment.timestamp)>=Date.parse(merged.get(comment.id)!.timestamp))merged.set(comment.id,comment);}
+        // Graph timestamps are creation times; webhook timestamps are event
+        // times, so they cannot establish which body is newer. A successful
+        // current Graph body wins. Keep local-only arrivals and tombstones.
+        for(const comment of local){if(comment.deleted)merged.delete(comment.id);else if(!merged.has(comment.id))merged.set(comment.id,comment);}
         return{...remote,items:[...merged.values()].sort((a,b)=>Date.parse(b.timestamp)-Date.parse(a.timestamp)),source:local.length?'mixed' as const:remote.source};
       });
     },

@@ -115,3 +115,16 @@ test('newReceivedBodiesMergeButNeverMaskFailedGraphReads',async()=>fixture(async
   api.listComments=async()=>{throw new FacebookEngagementError('temporary_failure');};await assert.rejects(service.comments(ctx,schedule.id));
   api.listMessages=async()=>{throw new FacebookEngagementError('temporary_failure');};await assert.rejects(service.messages(ctx,'c1'));
 }));
+
+test('freshGraphCommentBodyWinsOverOlderWebhookEditButKeepsNewItemsAndTombstones',async()=>fixture(async({db,ctx,api,access,now,schedule}:any)=>{
+  const received=createFacebookManagementReceptionStore({db,appId:'123'});
+  const created=new Date(now.getTime()-7200000),eventTime=new Date(now.getTime()-3600000);
+  api.listComments=async()=>({items:[{id:'100_10',postId:'100_1',text:'Current edited text from successful Graph read',timestamp:created.toISOString()},{id:'100_deleted',postId:'100_1',text:'Deleted remote lag',timestamp:created.toISOString()}],nextCursor:null});
+  for(const row of [{providerId:'100_10',text:'Old cached add notification',deleted:false},{providerId:'100_new',text:'Newly received comment',deleted:false},{providerId:'100_deleted',text:null,deleted:true}])await db.facebookInteractionComment.create({data:{managedPageId:ctx.managedPageId,postId:'100_1',occurredAt:eventTime,...row}});
+  const service=createFacebookManagementEngagement({db,resolvePageAccess:access.resolvePageAccess,executeFacebookSend:createFacebookSendExecutor({db}).executeFacebookSend,createClient:()=>api,now:()=>now,receivedComments:received.comments});
+  const result=await service.comments(ctx,schedule.id);
+  assert.equal(result.items.find((c:any)=>c.id==='100_10').text,'Current edited text from successful Graph read');
+  assert.equal(result.items.find((c:any)=>c.id==='100_new').text,'Newly received comment');
+  assert.equal(result.items.some((c:any)=>c.id==='100_deleted'),false);
+  assert.equal(result.stale,false);
+}));

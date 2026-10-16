@@ -45,12 +45,17 @@ function InboxController({token,workspaces,initialContext}:Props){
 }
 function PageInbox({token,context,pageName,role}:{token:string;context:FacebookInteractionContext;pageName:string;role:Workspace['role']}){
   const {t}=useLanguage(),scope=useFacebookScope(facebookInteractionKey(token,context));
+  const hasLoadedMore=useRef(false);
   const [rows,setRows]=useState<FacebookConversation[]>([]),[conversationId,setConversationId]=useState(''),[cursor,setCursor]=useState<string|null>(null),[loaded,setLoaded]=useState(false),[loading,setLoading]=useState(false),[error,setError]=useState<string|null>(null),[revision,setRevision]=useState(0),[capabilities,setCapabilities]=useState<FacebookCapabilities|null>(null),[readAt,setReadAt]=useState('');
   async function read(after?:string){
     if(!scope.alive())return;const current=scope.capture('conversations');setLoading(true);
     try{const result=await facebookPageRequest<FacebookReadPage<FacebookConversation>>(token,context,'/conversations'+(after?'?cursor='+encodeURIComponent(after):''));if(!current())return;if(!Array.isArray(result.items))throw Error(t('会话响应不可用','Conversation response unavailable'));
-      setRows(previous=>after?[...new Map([...previous,...result.items].map(c=>[c.id,c])).values()]:result.items);setCursor(result.nextCursor);setReadAt(result.readAt);setLoaded(true);setError(null);
-      if(!after)setConversationId(previous=>result.items.some(c=>c.id===previous)?previous:result.items[0]?.id??'');
+      // A first-page response is not a complete directory: older loaded or
+      // selected conversations may simply have moved beyond that page.
+      if(after)hasLoadedMore.current=true;
+      setRows(previous=>[...new Map((after?[...previous,...result.items]:[...result.items,...previous.filter(c=>!result.items.some(next=>next.id===c.id))]).map(c=>[c.id,c])).values()]);
+      if(after||!hasLoadedMore.current)setCursor(result.nextCursor);setReadAt(result.readAt);setLoaded(true);setError(null);
+      if(!after)setConversationId(previous=>previous||result.items[0]?.id||'');
     }catch(e){if(current())setError(e instanceof Error?e.message:t('会话读取失败，保留上次数据。','Conversations unavailable; keeping previous data.'));}
     finally{if(current())setLoading(false);}
   }
