@@ -68,6 +68,10 @@ test('expiredSessionRemovedManagerAndConcurrentCallbacksCannotSave',async()=>fix
   await db.userSession.update({where:{id:ctx.sessionId},data:{expiresAt:new Date(0)}});
   await assert.rejects(oauth.callback({state:deadSession,code:'code'}));
   await db.userSession.update({where:{id:ctx.sessionId},data:{expiresAt:new Date(Date.now()+86400000)}});
+  const legacySession=await pending();
+  await db.userSession.update({where:{id:ctx.sessionId},data:{createdAt:new Date(Date.now()-25*3600000)}});
+  await assert.rejects(oauth.callback({state:legacySession,code:'code'}));
+  await db.userSession.update({where:{id:ctx.sessionId},data:{createdAt:new Date()}});
   const state=await pending();
   const results=await Promise.allSettled([oauth.callback({state,code:'a'}),oauth.callback({state,code:'b'})]);
   assert.equal(results.filter((r:any)=>r.status==='fulfilled').length,1);

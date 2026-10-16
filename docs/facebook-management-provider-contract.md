@@ -43,3 +43,4 @@
 - https://developers.facebook.com/docs/graph-api/reference/object/comments/ 明确支持 filter=stream（各层评论含回复）、游标分页，读取评论编号和公开回复要求 MODERATE；回复需要 pages_manage_engagement。新评论能力不会把 CREATE_CONTENT 单独当作 MODERATE。
 - https://developers.facebook.com/docs/graph-api/reference/comment/ 当前字段列表未列 object；新服务不调用旧 getComment 的 object{id} 请求，而通过已核验原帖的 comments edge 查找目标评论，无法核对则拒绝回复。
 - 新服务不复用旧 inspectCapabilities 对 debug_token.type 的假设；使用新 token 身份检查及真实 scopes/tasks，再由实际 API 错误决定可用性。
+- 官方手动登录流程 https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow/ 已核对服务端 GET oauth/access_token、严格一致 redirect_uri、debug_token 的 app_id/user_id 与 /me 身份。官方示例 app_id 可为数字，新代码仅对安全整数规范化后做精确比较，仍拒绝错误 app。user token 的 expires_at/data_access_expires_at 取较早有效到期时间。

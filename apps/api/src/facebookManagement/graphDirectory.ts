@@ -98,7 +98,8 @@ export function createFacebookDirectoryClient(input:{userToken:string;apiVersion
     async inspectPageToken(pageId:string,token:string):Promise<PageTokenInspection> {
       identifier(pageId);if(!token)return fail('invalid_input');
       const data=record((await request('debug_token',{input_token:token},`${input.appId}|${input.appSecret}`)).data);
-      if(data.app_id!==input.appId || data.is_valid!==true || (data.profile_id!==undefined && data.profile_id!==pageId))return fail('authorization_invalid');
+      const issuer=typeof data.app_id==='number'&&Number.isSafeInteger(data.app_id)?String(data.app_id):data.app_id;
+      if(issuer!==input.appId || data.is_valid!==true || (data.profile_id!==undefined && data.profile_id!==pageId))return fail('authorization_invalid');
       const scopes=strings(data.scopes);
       const granularScopes:PageTokenInspection['granularScopes']=[];
       if(data.granular_scopes!==undefined){

@@ -1,5 +1,6 @@
 import type {PrismaClient,Prisma} from '@prisma/client';
 import type {ManagementContext,PageContext,PageTokenInspection} from './types';
+import {LOGIN_SESSION_MAX_AGE_MS} from '../utils/sessionLifetime';
 
 export class FacebookPageAccessError extends Error{
   constructor(readonly status:403|404=404){super(status===403?'Facebook management access denied':'Facebook Page unavailable');}
@@ -7,7 +8,7 @@ export class FacebookPageAccessError extends Error{
 type AccessDb=Pick<PrismaClient,'workspaceMember'|'userSession'>;
 export async function requireManagementMember(db:AccessDb,ctx:ManagementContext,write=false,manager=false){
   const [session,member]=await Promise.all([
-    db.userSession.findFirst({where:{id:ctx.sessionId,userId:ctx.userId,revokedAt:null,expiresAt:{gt:new Date()}}}),
+    db.userSession.findFirst({where:{id:ctx.sessionId,userId:ctx.userId,revokedAt:null,expiresAt:{gt:new Date()},createdAt:{gt:new Date(Date.now()-LOGIN_SESSION_MAX_AGE_MS)}}}),
     db.workspaceMember.findFirst({where:{userId:ctx.userId,workspaceId:ctx.workspaceId,status:'active'}})
   ]);
   if(!session||!member||(write&&member.role==='viewer')||(manager&&!['owner','admin'].includes(member.role)))throw new FacebookPageAccessError(403);

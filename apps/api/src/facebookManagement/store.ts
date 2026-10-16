@@ -1,5 +1,6 @@
 import type {Prisma,PrismaClient,FacebookManagementOAuthState} from '@prisma/client';
 import type {ManagementContext} from './types';
+import {LOGIN_SESSION_MAX_AGE_MS} from '../utils/sessionLifetime';
 
 export type ManagementGrant={appId:string;providerUserId:string;userToken:string;scopes:string[];expiresAt:Date|null;pages:Array<{
   pageId:string;name:string;pageToken:string|null;tasks:string[];scopes:string[];expiresAt:Date|null;profileUrl:string|null;avatarUrl:string|null;
@@ -9,7 +10,7 @@ async function authorized(tx:Prisma.TransactionClient,ctx:ManagementContext,now:
   // Hold the current session and membership through the grant transaction.
   await tx.$queryRaw`SELECT id FROM user_sessions WHERE id=${ctx.sessionId}::uuid FOR UPDATE`;
   await tx.$queryRaw`SELECT id FROM workspace_members WHERE user_id=${ctx.userId}::uuid AND workspace_id=${ctx.workspaceId}::uuid FOR UPDATE`;
-  const session=await tx.userSession.findFirst({where:{id:ctx.sessionId,userId:ctx.userId,revokedAt:null,expiresAt:{gt:now}}});
+  const session=await tx.userSession.findFirst({where:{id:ctx.sessionId,userId:ctx.userId,revokedAt:null,expiresAt:{gt:now},createdAt:{gt:new Date(now.getTime()-LOGIN_SESSION_MAX_AGE_MS)}}});
   const member=await tx.workspaceMember.findFirst({where:{userId:ctx.userId,workspaceId:ctx.workspaceId,status:'active',role:{in:['owner','admin']}}});
   if(!session||!member)throw new ManagementAuthorizationError();
 }
