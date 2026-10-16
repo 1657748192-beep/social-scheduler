@@ -41,6 +41,14 @@ The reviewer explicitly did not judge live Meta scopes, delivery, replies or pro
 
 ## Separate external acceptance gate (not performed)
 
+### Authorized preparation, 2026-10-16
+
+The user confirmed proceeding with independent management configuration and Tencent Cloud deployment preparation. Server Compose was missing all four new management variables. Added API-only pass-through for `FACEBOOK_MANAGEMENT_ENABLED` (default false), `FACEBOOK_MANAGEMENT_LOGIN_CONFIG_ID`, `FACEBOOK_MANAGEMENT_GRAPH_API_VERSION`, and `FACEBOOK_MANAGEMENT_CALLBACK_URL` (remaining defaults empty). No original environment values or Worker service configuration were changed. A real `docker compose config --format json` test reproduced missing API settings before the change and then passed, including disabled-by-default and no management keys in Worker/Web. Full regression: 546/546 passed, zero failures/skips; diff check passed.
+
+Read-only Meta inspection confirmed application `1013567811268870` remains in development, with existing Page Publish config `1748083276619458` and old Engagement config `1119177347324881`. The old Engagement entry warns that some permissions are restricted. Neither existing configuration was edited. Opened a new independent configuration wizard, but did not submit/save permissions or complete consent; interaction timed out before the login-method stage could be verified.
+
+Existing TAT terminal UI briefly reported one connected session. Submission of a read-only version/container/disk/config-hash check timed out, so its execution/output is unconfirmed and must be inspected before retrying. Direct batch SSH to the same instance timed out. No deployment, migration, restart, production environment write, real reply/comment, or Meta permission save was sent. Resume by restoring the browser control connection and re-reading server and wizard state; do not infer deployed status from these local tests.
+
 Not yet verified: production management configuration, real consent/scopes/tasks, official Meta test delivery, real customer `feed`/Messenger delivery, live replies or cloud deployment. A signed local/official diagnostic event alone is not live delivery acceptance.
 
 Before any deployment or Meta mutation, obtain separate authorization and verify an independent management config ID. Preserve original publishing config, credential values, schedules and Worker. Do not change permissions merely to make a test pass. Unknown send outcomes require human verification in Meta Business Suite, not an automatic resend.
