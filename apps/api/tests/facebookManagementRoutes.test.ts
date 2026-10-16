@@ -8,9 +8,9 @@ import {HttpError} from '../src/utils/errors';
 
 test('unauthenticatedForeignViewerAndDisabledRequestsFailClosed',async()=>{
   const workspaceId=randomUUID(),pageId=randomUUID(),connectionId=randomUUID(),scheduleId=randomUUID(),sessionId=randomUUID();
-  const ids={owner:randomUUID(),editor:randomUUID(),viewer:randomUUID()};let enabled=true,calls=0;
+  const ids={owner:randomUUID(),editor:randomUUID(),viewer:randomUUID()};let enabled=true,calls=0,notificationWrites=0;
   const runtime:any={get enabled(){return enabled;},get configured(){return enabled;},member:async(ctx:any)=>{if(ctx.workspaceId!==workspaceId)throw new HttpError(403,'Unavailable');return{role:Object.entries(ids).find(([,id])=>id===ctx.userId)?.[0]};},
-    connections:async()=>[],disconnect:async()=>({disconnected:true}),oauth:{start:async()=>({authorizationUrl:'https://www.facebook.com/authorize'}),callback:async()=>{calls++;return{connectionId};}},
+    connections:async()=>[],disconnect:async()=>({disconnected:true}),notifications:{status:async()=>({enabled:false,subscription:'missing'}),enableNotifications:async()=>{notificationWrites++;return{enabled:true};}},oauth:{start:async()=>({authorizationUrl:'https://www.facebook.com/authorize'}),callback:async()=>{calls++;return{connectionId};}},
     directory:{list:async()=>({items:[]}),refresh:async()=>({items:[]}),select:async()=>({managedPageId:pageId})},
     engagement:{capabilities:async()=>({}),conversations:async()=>({items:[]}),messages:async()=>({items:[]}),comments:async()=>({items:[]}),replyMessage:async()=>{calls++;return{status:'sent',providerId:'m1'};},replyComment:async()=>{calls++;return{status:'sent',providerId:'c1'};}}};
   const app=express();app.use(removedMetaEngagement);app.use(express.json());
@@ -32,6 +32,9 @@ test('unauthenticatedForeignViewerAndDisabledRequestsFailClosed',async()=>{
     assert.equal((await request(`${base}/connections/${connectionId}/refresh`,'editor','POST',{})).status,403);
     assert.equal((await request(`${base}/pages/${pageId}/select`,'viewer','POST',{})).status,403);
     assert.equal((await request(`${base}/pages/${pageId}/conversations`,'viewer')).status,200);
+    assert.equal((await request(`${base}/pages/${pageId}/notifications/status`,'viewer')).status,200);assert.equal(notificationWrites,0);
+    assert.equal((await request(`${base}/pages/${pageId}/notifications/enable`,'editor','POST',{})).status,403);
+    assert.equal((await request(`${base}/pages/${pageId}/notifications/enable`,'owner','POST',{})).status,200);assert.equal(notificationWrites,1);
     const reply=`${base}/pages/${pageId}/conversations/c1/replies`;
     assert.equal((await request(reply,'viewer','POST',{text:'Reply',requestKey:randomUUID()})).status,403);
     assert.equal((await request(reply,'editor','POST',{text:'Reply',requestKey:randomUUID()})).status,200);

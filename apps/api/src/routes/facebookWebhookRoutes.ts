@@ -1,4 +1,4 @@
-import express,{Router} from 'express';
+import express,{Router,type ErrorRequestHandler} from 'express';
 import { createHmac,timingSafeEqual } from 'node:crypto';
 import { parseFacebookWebhook, type FacebookReceivedEventInput } from '../services/facebookWebhookService';
 export type FacebookWebhookDiagnostic={outcome:'disabled'|'signature_rejected'|'malformed'|'accepted'|'invalid_events'|'enqueue_failed';httpStatus:number;comments:number;messages:number;ignored:number;invalid:number};
@@ -28,5 +28,11 @@ export function createFacebookWebhookRouter(options:{enabled():boolean;appSecret
     ignored=parsed.ignored;invalid=parsed.invalid;
     try{await options.onEvents(parsed.events);return respond(parsed.invalid?503:200,parsed.invalid?'invalid_events':'accepted');}catch{return respond(503,'enqueue_failed');}
   });
-  return router;
+  const parserError:ErrorRequestHandler=(error,_req,res,_next)=>{
+    if(res.headersSent||res.destroyed)return;
+    const status=error?.type==='entity.too.large'?413:400;
+    try{options.onDiagnostic?.({outcome:'malformed',httpStatus:status,comments:0,messages:0,ignored:0,invalid:0});}catch{/* No raw parser error or request body is logged. */}
+    res.sendStatus(status);
+  };
+  router.use(parserError);return router;
 }

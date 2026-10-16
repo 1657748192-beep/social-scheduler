@@ -13,10 +13,14 @@ import {createFacebookPageAccess,requireManagementMember} from './access';
 import {createFacebookSendExecutor} from './sendAttempts';
 import {createFacebookManagementEngagement} from './engagement';
 import type {ManagementContext} from './types';
+import {createFacebookManagementReceptionStore} from './receptionStore';
+import {createFacebookSubscriptionService} from './subscriptions';
+import {createFacebookWebhookRouter} from '../routes/facebookWebhookRoutes';
 
-export function createFacebookManagementRuntime(input:{db:PrismaClient;settings:FacebookManagementConfig;appSecret:string;encrypt:(v:string)=>string;decrypt:(v:string)=>string;fetchImpl?:typeof fetch}){
+export function createFacebookManagementRuntime(input:{db:PrismaClient;settings:FacebookManagementConfig;appSecret:string;verifyToken?:string;encrypt:(v:string)=>string;decrypt:(v:string)=>string;fetchImpl?:typeof fetch}){
   const {db,settings,appSecret}=input;
   const store=createFacebookManagementStore(db,input.encrypt);
+  const receptionStore=createFacebookManagementReceptionStore({db,appId:settings.appId});
   const gateway=createFacebookManagementGateway({config:settings,appSecret,fetchImpl:input.fetchImpl});
   const oauth=createFacebookManagementOAuth({store,config:settings,exchange:gateway.exchange});
   function directoryClient(connection:{appId:string;userToken:string}){
@@ -29,8 +33,12 @@ export function createFacebookManagementRuntime(input:{db:PrismaClient;settings:
     return directoryClient({...connection,userToken:input.decrypt(connection.userTokenEncrypted)}).inspectPageToken(pageId,token);
   }});
   const engagement=createFacebookManagementEngagement({db,resolvePageAccess:access.resolvePageAccess,executeFacebookSend:createFacebookSendExecutor({db}).executeFacebookSend,
+    receivedMessages:receptionStore.messages,receivedComments:receptionStore.comments,latestInbound:receptionStore.latestInbound,
     createClient:({pageId,accessToken})=>createFacebookEngagementClient({pageId,accessToken,apiVersion:settings.graphVersion,fetchImpl:input.fetchImpl})});
-  return {enabled:settings.enabled,configured:settings.enabled,oauth,directory,engagement,
+  const notifications=createFacebookSubscriptionService({db,appId:settings.appId,resolvePageAccess:access.resolvePageAccess,createClient:access=>createFacebookEngagementClient({pageId:access.pageId,accessToken:access.pageToken,apiVersion:settings.graphVersion,appId:settings.appId,fetchImpl:input.fetchImpl})});
+  const webhook=createFacebookWebhookRouter({enabled:()=>settings.enabled,appSecret,verifyToken:input.verifyToken??'',onEvents:receptionStore.enqueue,
+    onDiagnostic:value=>console.info('Facebook management webhook',JSON.stringify(value))});
+  return {enabled:settings.enabled,configured:settings.enabled,oauth,directory,engagement,notifications,receptionStore,webhook,
     member:(ctx:ManagementContext)=>requireManagementMember(db,ctx),
     async connections(ctx:ManagementContext){
       await requireManagementMember(db,ctx);
@@ -41,4 +49,4 @@ export function createFacebookManagementRuntime(input:{db:PrismaClient;settings:
   };
 }
 export type FacebookManagementRuntime=ReturnType<typeof createFacebookManagementRuntime>;
-export const facebookManagementRuntime=createFacebookManagementRuntime({db:prisma,settings:getFacebookManagementConfig(process.env),appSecret:config.FACEBOOK_CLIENT_SECRET,encrypt:encryptToken,decrypt:decryptToken});
+export const facebookManagementRuntime=createFacebookManagementRuntime({db:prisma,settings:getFacebookManagementConfig(process.env),appSecret:config.FACEBOOK_CLIENT_SECRET,verifyToken:config.FACEBOOK_WEBHOOK_VERIFY_TOKEN,encrypt:encryptToken,decrypt:decryptToken});

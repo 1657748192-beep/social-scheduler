@@ -11,7 +11,9 @@ import type {createFacebookSendExecutor} from './sendAttempts';
 type Access=Awaited<ReturnType<ReturnType<typeof createFacebookPageAccess>['resolvePageAccess']>>;
 type Client=Pick<FacebookEngagementClient,'listConversations'|'getConversation'|'listMessages'|'listComments'|'replyComment'|'sendMessage'>;
 type Dependencies={db:PrismaClient;resolvePageAccess:ReturnType<typeof createFacebookPageAccess>['resolvePageAccess'];executeFacebookSend:ReturnType<typeof createFacebookSendExecutor>['executeFacebookSend'];
-  createClient:(input:{pageId:string;accessToken:string})=>Client;now?:()=>Date;latestInbound?:(managedPageId:string,participantId:string)=>Promise<Date|null>};
+  createClient:(input:{pageId:string;accessToken:string})=>Client;now?:()=>Date;latestInbound?:(managedPageId:string,participantId:string)=>Promise<Date|null>;
+  receivedMessages?:(managedPageId:string,participantId:string,conversationId:string)=>Promise<FacebookMessage[]>;
+  receivedComments?:(managedPageId:string,postId:string,ids:string[],recent:boolean)=>Promise<FacebookComment[]>};
 function permissions(access:Access):FacebookCapabilities{
   const state=(scopes:string[],tasks:string[],write=false)=>({status:(scopes.every(s=>access.scopes.includes(s))&&tasks.some(t=>access.tasks.includes(t))&&(!write||access.role!=='viewer')?'available':'missing') as 'available'|'missing'});
   return {readComments:state(['pages_read_engagement','pages_read_user_content'],['MODERATE']),replyComments:state(['pages_read_user_content','pages_manage_engagement'],['MODERATE'],true),
@@ -76,11 +78,23 @@ export function createFacebookManagementEngagement(deps:Dependencies){
     },
     async messages(ctx:PageContext,conversationId:string,after?:string){
       validateAfter(after);const {access,api}=await authorized(ctx,'readMessages');
-      return provider(access,async()=>{const item=await conversation(api,conversationId,access);return wrap(messagesFor(await api.listMessages(conversationId,after),item,access));});
+      return provider(access,async()=>{
+        const item=await conversation(api,conversationId,access),remote=wrap(messagesFor(await api.listMessages(conversationId,after),item,access));
+        const local=!after&&deps.receivedMessages?await deps.receivedMessages(access.managedPageId,item.counterpartyId,item.id):[];
+        messagesFor({items:local,nextCursor:null},item,access);
+        const merged=new Map(remote.items.map(message=>[message.id,message]));for(const message of local)merged.set(message.id,message);
+        return {...remote,items:[...merged.values()].sort((a,b)=>Date.parse(b.timestamp)-Date.parse(a.timestamp)),source:local.length?'mixed' as const:remote.source};
+      });
     },
     async comments(ctx:PageContext,scheduleId:string,after?:string){
       validateAfter(after);const {access,api}=await authorized(ctx,'readComments');const postId=await published(ctx,access,scheduleId);
-      return provider(access,async()=>wrap(await api.listComments(postId,after)));
+      return provider(access,async()=>{
+        const remote=wrap(await api.listComments(postId,after));
+        const local=await deps.receivedComments?.(access.managedPageId,postId,remote.items.map(c=>c.id),!after)??[];
+        const merged=new Map(remote.items.map(comment=>[comment.id,comment]));
+        for(const comment of local){if(comment.deleted)merged.delete(comment.id);else if(!merged.has(comment.id)||Date.parse(comment.timestamp)>=Date.parse(merged.get(comment.id)!.timestamp))merged.set(comment.id,comment);}
+        return{...remote,items:[...merged.values()].sort((a,b)=>Date.parse(b.timestamp)-Date.parse(a.timestamp)),source:local.length?'mixed' as const:remote.source};
+      });
     },
     async replyMessage(ctx:PageContext,input:{conversationId:string;text:string;requestKey:string}){
       validateText(input.text,2000);const {access,api}=await authorized(ctx,'replyMessages',true);

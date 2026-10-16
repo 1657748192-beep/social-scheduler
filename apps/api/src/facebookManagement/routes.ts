@@ -45,6 +45,8 @@ export function createFacebookManagementRouter(runtime:FacebookManagementRuntime
   route('get','/pages','read',async(req,ctx)=>runtime.directory.list(ctx,z.object({connectionId:uuid.optional(),businessId:z.string().regex(/^\d{1,256}$/).optional(),query:z.string().max(200).optional(),cursor}).strict().parse(req.query)));
   route('post','/pages/:managedPageId/select','manage',async(req,ctx)=>runtime.directory.select(ctx,uuid.parse(req.params.managedPageId)));
   route('get','/pages/:managedPageId/capabilities','read',async(req,ctx)=>runtime.engagement.capabilities(page(req,ctx)));
+  route('get','/pages/:managedPageId/notifications/status','read',async(req,ctx)=>runtime.notifications.status(page(req,ctx)));
+  route('post','/pages/:managedPageId/notifications/enable','manage',async(req,ctx)=>runtime.notifications.enableNotifications(page(req,ctx)));
   route('get','/pages/:managedPageId/conversations','read',async(req,ctx)=>runtime.engagement.conversations(page(req,ctx),cursor.parse(req.query.cursor)));
   route('get','/pages/:managedPageId/conversations/:conversationId/messages','read',async(req,ctx)=>runtime.engagement.messages(page(req,ctx),identifier.parse(req.params.conversationId),cursor.parse(req.query.cursor)));
   route('post','/pages/:managedPageId/conversations/:conversationId/replies','write',async(req,ctx)=>runtime.engagement.replyMessage(page(req,ctx),{...reply(2000).parse(req.body),conversationId:identifier.parse(req.params.conversationId)}));

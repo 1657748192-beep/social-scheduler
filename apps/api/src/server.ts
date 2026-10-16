@@ -5,9 +5,12 @@ import { redis } from "./redis";
 import { createApiServer,closeApiServer } from "./httpServer";
 import {localUploadRuntime,localUploadRedis} from './uploads/local/runtime';
 import {startLocalUploadCleanup} from './uploads/local/cleanup';
+import {facebookManagementRuntime} from './facebookManagement/runtime';
+import {startFacebookManagementPump} from './facebookManagement/receptionPump';
 
 const app = createApp();
 const uploadCleanup=startLocalUploadCleanup(localUploadRuntime);
+const facebookPump=startFacebookManagementPump({enabled:facebookManagementRuntime.enabled,store:facebookManagementRuntime.receptionStore});
 
 const server = createApiServer(app).listen(config.API_PORT, () => {
   console.log(`API listening on http://localhost:${config.API_PORT}`);
@@ -15,7 +18,7 @@ const server = createApiServer(app).listen(config.API_PORT, () => {
 
 async function shutdown() {
   console.log("Shutting down API");
-  await closeApiServer(server,()=>uploadCleanup.stop(),async () => {
+  await closeApiServer(server,async()=>{await Promise.all([uploadCleanup.stop(),facebookPump.stop()]);},async () => {
     await prisma.$disconnect();
     localUploadRedis.disconnect();
     redis.disconnect();

@@ -6,6 +6,7 @@ import {createFacebookManagementEngagement} from '../src/facebookManagement/enga
 import {createFacebookPageAccess} from '../src/facebookManagement/access';
 import {createFacebookSendExecutor} from '../src/facebookManagement/sendAttempts';
 import {FacebookEngagementError} from '../src/integrations/social/facebookEngagement';
+import {createFacebookManagementReceptionStore} from '../src/facebookManagement/receptionStore';
 
 async function fixture(run:(f:any)=>Promise<void>){
   const url=process.env.FACEBOOK_TEST_DATABASE_URL;assert.ok(url,'Independent database required');assert.match(new URL(url).pathname,/_test$/);assert.notEqual(url,process.env.DATABASE_URL);
@@ -101,4 +102,16 @@ test('sendUsesTheRevalidatedGrantNotTheEarlierReadToken',async()=>fixture(async(
     createClient:({accessToken})=>({...api,sendMessage:async()=>{sentTokens.push(accessToken);return{status:'sent',providerId:'fresh-send'};}})});
   assert.equal((await service.replyMessage(ctx,{conversationId:'c1',text:'Reply',requestKey:randomUUID()})).status,'sent');
   assert.deepEqual(sentTokens,['fresh-page']);
+}));
+
+test('newReceivedBodiesMergeButNeverMaskFailedGraphReads',async()=>fixture(async({db,ctx,api,access,now,schedule}:any)=>{
+  const received=createFacebookManagementReceptionStore({db,appId:'123'});
+  await db.facebookInteractionComment.create({data:{managedPageId:ctx.managedPageId,providerId:'100_10',postId:'100_1',deleted:true,occurredAt:now}});
+  await db.facebookInteractionMessage.create({data:{managedPageId:ctx.managedPageId,providerId:'m-received',participantId:'300',senderId:'300',recipientId:'100',text:'New received',occurredAt:now}});
+  const service=createFacebookManagementEngagement({db,resolvePageAccess:access.resolvePageAccess,executeFacebookSend:createFacebookSendExecutor({db}).executeFacebookSend,createClient:()=>api,now:()=>now,
+    receivedMessages:received.messages,receivedComments:received.comments,latestInbound:received.latestInbound} as any);
+  assert.equal((await service.comments(ctx,schedule.id)).items.length,0);
+  const messages=await service.messages(ctx,'c1');assert.ok(messages.items.some((m:any)=>m.id==='m-received'&&m.text==='New received'));assert.equal(messages.source,'mixed');
+  api.listComments=async()=>{throw new FacebookEngagementError('temporary_failure');};await assert.rejects(service.comments(ctx,schedule.id));
+  api.listMessages=async()=>{throw new FacebookEngagementError('temporary_failure');};await assert.rejects(service.messages(ctx,'c1'));
 }));

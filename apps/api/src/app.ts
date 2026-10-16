@@ -21,10 +21,11 @@ import { createUploadStatic } from './uploads/local/static';
 import { createLocalUploadRouter } from './uploads/local/routes';
 import { localUploadRuntime } from './uploads/local/runtime';
 import {createFacebookManagementRouter} from './facebookManagement/routes';
-import {facebookManagementRuntime} from './facebookManagement/runtime';
+import {facebookManagementRuntime,type FacebookManagementRuntime} from './facebookManagement/runtime';
 
-export function createApp() {
+export function createApp(options:{facebookManagement?:FacebookManagementRuntime}={}) {
   const app = express();
+  const management=options.facebookManagement??facebookManagementRuntime;
 
   app.use(helmet());
   app.use(
@@ -33,6 +34,7 @@ export function createApp() {
       credentials: true
     })
   );
+  if(management.enabled)app.use('/api/v1/webhooks/facebook',management.webhook);
   app.use(removedMetaEngagement);
   app.use(express.json({ limit: "1mb" }));
   morgan.token("safe-url", req => safeRequestLogUrl(req.url ?? ""));
@@ -43,7 +45,7 @@ export function createApp() {
   app.use("/api/v1/auth", authRoutes);
   app.use("/api/v1", adminRoutes);
   app.use("/api/v1", workspaceRoutes);
-  app.use('/api/v1',createFacebookManagementRouter(facebookManagementRuntime,{webAppUrl:config.WEB_APP_URL}));
+  app.use('/api/v1',createFacebookManagementRouter(management,{webAppUrl:config.WEB_APP_URL}));
   app.use("/api/v1", tiktokSandboxRoutes);
   app.use("/api/v1", socialAccountRoutes);
   app.use("/api/v1", createLocalUploadRouter(localUploadRuntime));
