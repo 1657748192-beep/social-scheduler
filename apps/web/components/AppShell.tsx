@@ -24,7 +24,7 @@ const navItems = [
   { href: "/posts", label: ["帖子管理", "Post manager"], helper: ["已发布与复用", "Published posts and reuse"] },
   { href: "/social-accounts", label: ["社交账号", "Social accounts"], helper: ["绑定、解绑与账号管理", "Connect and manage accounts"] }
 ] as const;
-const managementNavItems=[{href:'/facebook-management',label:['BM 主页管理','BM Page management'],helper:['只读目录与独立授权','Read-only directory and independent authorization']}] as const;
+const managementNavItems=[{href:'/facebook-management',label:['BM 主页管理','BM Page management'],helper:['只读目录与独立授权','Read-only directory and independent authorization']},{href:'/facebook-inbox',label:['Facebook 收件箱','Facebook inbox'],helper:['公共主页私信与人工回复','Page messages and manual replies']}] as const;
 
 export function AppShell({ title, subtitle, userLabel, wide = false, children }: AppShellProps) {
   const pathname = usePathname();

@@ -5052,10 +5052,23 @@ textarea {
 .facebook-connection-state { display: grid; gap: 6px; margin-top: 6px; color: #526c61; font-size: 13px; }
 .facebook-warning { padding: 12px 14px; border-radius: 10px; background: #fff6e7; color: #7b4c05; }
 .facebook-confirm { border: 2px solid #11996c; }
+.facebook-status-panel { padding: 14px; margin: 14px 0; border: 1px solid #dce8e3; border-radius: 12px; background: #f8fcfa; overflow-wrap: anywhere; }
+.facebook-inbox { min-width: 0; overflow-wrap: anywhere; }
+.facebook-inbox-columns { display: grid; grid-template-columns: minmax(150px,1fr) minmax(0,2fr); gap: 18px; margin-top: 16px; }
+.facebook-inbox-columns > section, .facebook-messages, .facebook-comments-view { min-width: 0; }
+.facebook-conversation-button { display: block; width: 100%; margin: 8px 0; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.facebook-message, .facebook-comment { border: 1px solid #e0eae5; border-radius: 12px; padding: 14px; margin: 12px 0; overflow-wrap: anywhere; }
+.facebook-message p, .facebook-comment p { white-space: pre-wrap; }
+.facebook-messages textarea, .facebook-comment-reply textarea { display: block; width: 100%; min-height: 90px; box-sizing: border-box; margin: 10px 0; }
+.facebook-comment-reply label { display: block; }
+.facebook-post-comments { margin-top: 16px; }
+.facebook-warning label { display: flex; align-items: flex-start; gap: 8px; margin: 12px 0; }
+.facebook-warning input[type="checkbox"] { flex: 0 0 auto; width: auto; margin-top: 4px; }
 @media (max-width: 600px) {
   .facebook-management-heading, .facebook-connection-row { align-items: stretch; flex-direction: column; }
   .facebook-filters { grid-template-columns: minmax(0,1fr); }
   .facebook-management-heading label { min-width: 0; }
   .facebook-page-card { padding: 16px; }
+  .facebook-inbox-columns { grid-template-columns: minmax(0,1fr); }
   .facebook-actions { gap: 8px; }
 }

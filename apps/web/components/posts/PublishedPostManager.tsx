@@ -19,6 +19,9 @@ import { supportedPlatformIds } from "../../lib/platformCounts";
 import { filterPublishedPosts, getPlatformAccounts } from "../../lib/publishedPostFilters";
 import { useLanguage } from "../LanguageProvider";
 import { TikTokPostMetricsPanel } from "./TikTokPostMetricsPanel";
+import {FacebookPostComments} from './FacebookPostComments';
+import {useFacebookEnabled} from '../social/useFacebookEnabled';
+import {loadFacebookDirectory,type FacebookManagedPage} from '../../lib/facebookManagement';
 
 type PublishedPostManagerProps = {
   token: string;
@@ -385,6 +388,13 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const facebookEnabled=useFacebookEnabled(token,workspaceId);
+  const [facebookPages,setFacebookPages]=useState<{key:string;items:FacebookManagedPage[]}>({key:'',items:[]});
+  useEffect(()=>{
+    let current=true;const controller=new AbortController(),key=token+':'+workspaceId;setFacebookPages({key,items:[]});
+    if(facebookEnabled&&workspaceId)void loadFacebookDirectory(token,workspaceId,controller.signal).then(result=>{if(current)setFacebookPages({key,items:result.items});}).catch(()=>{});
+    return()=>{current=false;controller.abort();};
+  },[token,workspaceId,facebookEnabled]);
 
   useEffect(() => {
     const nextWorkspaceId = getActiveWorkspaceId(workspaces, workspaceId);
@@ -539,6 +549,9 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
           );
           const composerUrl = `/composer?workspaceId=${encodeURIComponent(workspaceId)}&copyPostId=${encodeURIComponent(post.postId)}`;
           const mediaReuse = getMediaReuseStatus(post, now, locale);
+          const facebookPage=facebookEnabled&&facebookPages.key===token+':'+workspaceId&&post.platform==='facebook'&&post.socialAccount?.id&&post.providerPostId&&/^\d+_\d+$/.test(post.providerPostId)
+            ?facebookPages.items.find(page=>page.publishingAccountId===post.socialAccount!.id&&page.pageId===post.providerPostId!.split('_')[0]):undefined;
+          const facebookSelection=facebookPage?.connectionChoices?.find(choice=>choice.managedPageId===facebookPage.selectedManagedPageId&&choice.available);
 
           return (
             <article className="published-post-card" key={post.id}>
@@ -617,6 +630,7 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
                 {post.platform === "tiktok" ? (
                   <TikTokPostMetricsPanel key={`${workspaceId}:${post.id}:${token}`} token={token} workspaceId={workspaceId} scheduleId={post.id} />
                 ) : null}
+                {facebookPage&&facebookSelection?<FacebookPostComments key={`${token}:${workspaceId}:${facebookSelection.managedPageId}:${facebookSelection.connectionId}:${post.id}`} token={token} workspaceId={workspaceId} managedPageId={facebookSelection.managedPageId} connectionId={facebookSelection.connectionId} scheduleId={post.id} providerPostId={post.providerPostId} pageName={facebookPage.name} role={workspaceRole}/>:null}
               </div>
             </article>
           );

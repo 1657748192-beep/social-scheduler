@@ -1,9 +1,13 @@
 'use client';
-import { useEffect,useState } from 'react';
-import { apiRequest } from '../../lib/api';
-export function useFacebookEnabled(token:string|null){
-  const [enabled,setEnabled]=useState(false);
-  useEffect(()=>{let current=true;setEnabled(false);if(token)void apiRequest<{enabled:boolean}>('/integrations/facebook-engagement/status',{token})
-    .then(result=>{if(current)setEnabled(result.enabled===true);}).catch(()=>{});return()=>{current=false;};},[token]);
-  return enabled;
+import {useEffect,useState} from 'react';
+import {facebookManagementRequest} from '../../lib/facebookManagement';
+export function useFacebookEnabled(token:string|null,workspaceId?:string){
+  const key=(token??'')+':'+(workspaceId??''),[status,setStatus]=useState({key:'',enabled:false});
+  useEffect(()=>{
+    let current=true;const controller=new AbortController();setStatus({key,enabled:false});
+    if(token&&workspaceId)void facebookManagementRequest<{enabled:boolean;configured:boolean}>(token,workspaceId,'/status',{signal:controller.signal})
+      .then(result=>{if(current)setStatus({key,enabled:result.enabled===true&&result.configured===true});}).catch(()=>{});
+    return()=>{current=false;controller.abort();};
+  },[token,workspaceId]);
+  return status.key===key&&status.enabled;
 }

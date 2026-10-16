@@ -19,8 +19,8 @@ test('BM navigationRequiresNewEnabledStatusAndNeverCallsRetiredAuthorization',as
   const router={back(){},forward(){},refresh(){},push(){},replace(){},prefetch:async()=>{}};
   const element=()=>React.createElement(AppRouterContext.Provider,{value:router},React.createElement(PathnameContext.Provider,{value:'/dashboard'},React.createElement(LanguageProvider,null,React.createElement(AppShell,{title:'Dashboard',children:null}))));
   try{
-    await act(async()=>{view=create(element());});assert.equal(view!.root.findAllByType('a').some(a=>a.props.href==='/facebook-management'),true);
-    await act(async()=>view.unmount());enabled=false;await act(async()=>{view=create(element());});assert.equal(view!.root.findAllByType('a').some(a=>a.props.href==='/facebook-management'),false);
+    await act(async()=>{view=create(element());});assert.equal(view!.root.findAllByType('a').some(a=>a.props.href==='/facebook-management'),true);assert.equal(view!.root.findAllByType('a').some(a=>a.props.href==='/facebook-inbox'),true);
+    await act(async()=>view.unmount());enabled=false;await act(async()=>{view=create(element());});assert.equal(view!.root.findAllByType('a').some(a=>a.props.href==='/facebook-management'),false);assert.equal(view!.root.findAllByType('a').some(a=>a.props.href==='/facebook-inbox'),false);
     assert.ok(requests.every(path=>!path.includes('facebook-engagement')));
   }finally{if(view!)await act(async()=>view.unmount());globalThis.fetch=saved.fetch;(globalThis as any).window=saved.window;(globalThis as any).document=saved.document;(globalThis as any).self=saved.self;(globalThis as any).localStorage=saved.storage;}
 });
