@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ComposerPlatform, MediaAsset } from "../../lib/api";
 import { appendWebsiteToText } from "./contentUtils";
 import type { PinterestPinSettingsValue } from "./PinterestPinSettings";
 import { platformLimits, type ComposerSocialAccount } from "./platformConfig";
 import { useLanguage } from "../LanguageProvider";
+import { PlatformPostPreview } from "./PlatformPostPreview";
 
 type PostPreviewProps = {
   accounts: ComposerSocialAccount[];
@@ -30,6 +31,16 @@ export function PostPreview({
 }: PostPreviewProps) {
   const { t } = useLanguage();
   const [previewPlatform, setPreviewPlatform] = useState<ComposerPlatform | null>(null);
+  const [previewAccountId, setPreviewAccountId] = useState("");
+  const dialogRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!previewPlatform || !dialogRef.current) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    dialogRef.current.focus();
+    return () => { document.body.style.overflow = previousOverflow; previous?.focus?.(); };
+  }, [previewPlatform]);
   const groups = new Map<ComposerPlatform, ComposerSocialAccount[]>();
   const selectedPlatforms = Array.from(new Set(accounts.map((account) => account.platform)));
   const totalMediaCount = selectedPlatforms.reduce(
@@ -48,13 +59,7 @@ export function PostPreview({
       : appendWebsiteToText(texts[previewPlatform] || baseText, websites[previewPlatform])
     : "";
   const previewMedia = previewPlatform ? mediaByPlatform[previewPlatform] : [];
-  const previewAsset = previewMedia[0];
-  const previewImageUrl = previewAsset?.thumbnailUrl ?? (
-    previewAsset?.mimeType.startsWith("image/") && previewAsset.originalAvailable !== false
-      ? previewAsset.fileUrl
-      : null
-  );
-  const previewAccount = previewAccounts[0];
+  const previewAccount = previewAccounts.find(account => account.id === previewAccountId) ?? previewAccounts[0];
   const pinterestPinTitle =
     previewPlatform === "pinterest" && previewAccount
       ? pinterestSettingsByAccount[previewAccount.id]?.title.trim()
@@ -107,7 +112,7 @@ export function PostPreview({
                   ))}
                   {platformAccounts.length > 4 ? <span className="account-chip">+{platformAccounts.length - 4}</span> : null}
                 </div>
-                <button className="button secondary publish-preview-button" onClick={() => setPreviewPlatform(platform)} type="button">
+                <button className="button secondary publish-preview-button" onClick={() => { setPreviewAccountId(platformAccounts[0]?.id ?? ""); setPreviewPlatform(platform); }} type="button">
                   {t("预览效果", "Preview")}
                 </button>
               </div>
@@ -126,9 +131,20 @@ export function PostPreview({
         <section
           aria-label={t(`${platformLimits[previewPlatform].label} 发布预览`, `${platformLimits[previewPlatform].label} publishing preview`)}
           aria-modal="true"
+          ref={dialogRef}
+          tabIndex={-1}
           className="publish-preview-dialog"
           onClick={(event) => event.stopPropagation()}
           role="dialog"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") { event.stopPropagation(); setPreviewPlatform(null); }
+            if (event.key === "Tab") {
+              const nodes = event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),select,video[controls],a[href],[tabindex="0"]');
+              const first = nodes[0], last = nodes[nodes.length - 1];
+              if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget)) { event.preventDefault(); last?.focus(); }
+              else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+            }
+          }}
         >
           <header className="publish-preview-header">
             <div>
@@ -141,34 +157,15 @@ export function PostPreview({
             </button>
           </header>
 
+          {previewAccounts.length > 1 ? <label className="publish-preview-account-picker">{t("预览账号", "Preview account")}
+            <select aria-label={t("预览账号", "Preview account")} value={previewAccount?.id ?? ""} onChange={event => setPreviewAccountId(event.target.value)}>
+              {previewAccounts.map(account => <option key={account.id} value={account.id}>{account.displayName}</option>)}
+            </select>
+          </label> : null}
+
           <div className="publish-preview-body">
-            <article className={`social-post-preview ${previewPlatform}`}>
-              <div className="social-preview-account">
-                <span className="social-preview-avatar">
-                  {(previewAccount?.displayName || platformLimits[previewPlatform].label).slice(0, 1).toUpperCase()}
-                </span>
-                <div>
-                  <strong>{previewAccount?.displayName || t("发布账号", "Publishing account")}</strong>
-                  <small>{t(`${platformLimits[previewPlatform].label} · 发布后效果模拟`, `${platformLimits[previewPlatform].label} · simulated post`)}</small>
-                </div>
-              </div>
-              {pinterestPinTitle ? <h3 className="pinterest-pin-title">{pinterestPinTitle}</h3> : null}
-              <p className="social-preview-text">{previewText || t("这里会显示你填写的帖子文案。", "Your post copy will appear here.")}</p>
-              {previewImageUrl ? (
-                <img alt={t("发布素材预览", "Publishing media preview")} className="social-preview-media" src={previewImageUrl} />
-              ) : previewAsset?.mimeType.startsWith("video/") ? (
-                <div className="social-preview-media-placeholder">{t("视频素材将显示首帧封面", "Video media will show its cover frame")}</div>
-              ) : null}
-              {previewPlatform === "pinterest" && websites.pinterest ? (
-                <p className="pinterest-pin-destination">{t("点击 Pin 将跳转至：", "This Pin will open:")} {websites.pinterest}</p>
-              ) : null}
-              <div className="social-preview-engagement">
-                <span>♡</span>
-                <span>◌</span>
-                <span>↗</span>
-                <small>{t("这是发布前模拟预览，实际平台样式可能略有不同。", "This is a simulated preview; actual platform styling may differ slightly.")}</small>
-              </div>
-            </article>
+            <PlatformPostPreview key={`${previewPlatform}:${previewAccount?.id}`} platform={previewPlatform} account={previewAccount} text={previewText} media={previewMedia} pinTitle={pinterestPinTitle} destination={previewPlatform === "pinterest" ? websites.pinterest : undefined} />
+            <p className="publish-preview-disclaimer">{t("手机端样式模拟，实际展示可能因平台版本、设备和素材比例不同而变化。操作图标仅作示意，不显示模拟互动数据。", "Simulated mobile layout. Actual appearance varies by platform version, device and media ratio. Actions are illustrative; no engagement figures are invented.")}</p>
           </div>
         </section>
       </div>

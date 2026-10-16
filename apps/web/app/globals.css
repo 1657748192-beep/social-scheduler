@@ -2966,6 +2966,103 @@ textarea {
   text-align: right;
 }
 
+.publish-preview-account-picker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 22px;
+  font-size: 13px;
+  color: #475569;
+}
+.publish-preview-account-picker select { min-width: 0; flex: 1; max-width: 340px; }
+.publish-preview-disclaimer { max-width: 460px; margin: 14px auto 0; color: #64748b; font-size: 12px; line-height: 1.6; }
+.native-post-preview {
+  --preview-tag-color: #00376b;
+  width: min(410px, 100%);
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid #dce2e9;
+  border-radius: 14px;
+  background: #fff;
+  color: #171717;
+  box-shadow: 0 8px 25px #0f172a0c;
+  font-family: Arial, "Microsoft YaHei", sans-serif;
+}
+.native-preview-brand { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 8px 14px; border-bottom: 1px solid #eceff2; }
+.native-preview-brand .official-platform-logo { width: 23px; height: 23px; background: #fff; border-radius: 6px; padding: 2px; }
+.native-preview-brand .official-platform-logo img { width: 100%; height: 100%; object-fit: contain; }
+.native-preview-brand > strong { font-size: 16px; letter-spacing: -.4px; }
+.native-preview-brand > span:last-child { margin-left: auto; font-size: 11px; color: #747b85; }
+.native-preview-author { display: flex; gap: 9px; align-items: center; padding: 12px 14px; min-width: 0; }
+.native-preview-author > div { min-width: 0; }
+.native-preview-author strong { display: block; font-size: 13px; overflow-wrap: anywhere; }
+.native-preview-author small { display: block; margin-top: 4px; color: #747b85; font-size: 10px; }
+.native-preview-avatar { display: grid; place-items: center; width: 34px; height: 34px; flex: 0 0 34px; overflow: hidden; border-radius: 50%; background: #eaf0f4; color: #475569; font-size: 14px; font-weight: 700; }
+.native-preview-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.native-preview-more { align-self: flex-start; margin-left: auto; color: #646b74; letter-spacing: 2px; }
+.native-preview-caption { padding: 4px 14px 15px; font-size: 13px; line-height: 1.65; overflow-wrap: anywhere; white-space: pre-wrap; }
+.native-caption-author { font-weight: 700; }
+.preview-hashtag { color: var(--preview-tag-color, #00376b); font-weight: 500; }
+.native-caption-toggle { display: inline; margin-left: 6px; border: 0; padding: 0; background: none; color: #65717f; font: inherit; cursor: pointer; }
+.native-caption-toggle:hover { text-decoration: underline; }
+.native-preview-media { position: relative; display: grid; place-items: center; min-height: 180px; background: #f1f3f5; }
+.native-preview-media > img, .native-preview-media > video { display: block; width: 100%; max-height: 480px; object-fit: contain; }
+.native-preview-media > video { aspect-ratio: 4 / 5; background: #101114; }
+.native-preview-empty { display: grid; width: 100%; min-height: 210px; place-items: center; padding: 24px; color: #687280; font-size: 13px; text-align: center; }
+.native-preview-page { position: absolute; right: 12px; top: 12px; border-radius: 20px; padding: 5px 9px; color: #fff; background: #111827b3; font-size: 11px; }
+.native-preview-media > button { position: absolute; top: 50%; transform: translateY(-50%); width: 29px; height: 29px; display: grid; place-items: center; border: 0; border-radius: 50%; background: #fffffff0; color: #20242b; font-size: 24px; line-height: 1; cursor: pointer; box-shadow: 0 1px 7px #0002; }
+.native-preview-media > button[aria-disabled="true"] { opacity: .3; cursor: default; }
+.native-preview-previous { left: 10px; }
+.native-preview-next { right: 10px; }
+.native-preview-cover-note { position: absolute; bottom: 8px; padding: 5px 8px; border-radius: 6px; font-size: 11px; color: #fff; background: #000a; }
+.native-preview-actions { display: flex; align-items: center; gap: 17px; padding: 12px 14px; }
+.native-preview-actions > span { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.native-preview-actions .native-preview-save { margin-left: auto; }
+.native-post-preview.instagram { border-radius: 5px; }
+.native-post-preview.instagram .native-preview-author { padding-top: 11px; padding-bottom: 11px; }
+.native-post-preview.instagram .native-preview-avatar { outline: 2px solid #d34687; outline-offset: 2px; width: 30px; height: 30px; flex-basis: 30px; margin-right: 3px; }
+.native-post-preview.facebook { --preview-tag-color: #0866ff; }
+.native-post-preview.facebook .native-preview-brand > strong { color: #0866ff; }
+.native-post-preview.facebook .native-preview-caption { font-size: 14px; }
+.native-post-preview.facebook .native-preview-actions { justify-content: space-around; border-top: 1px solid #e9ebef; color: #65676b; }
+.native-post-preview.youtube { --preview-tag-color: #065fd4; }
+.native-post-preview.youtube .native-preview-media > video { aspect-ratio: 16 / 9; }
+.native-post-preview.youtube .native-preview-caption { font-size: 14px; font-weight: 500; }
+.native-post-preview.youtube .native-preview-actions > span { padding: 7px 12px; border-radius: 20px; background: #f2f2f2; }
+.native-post-preview.youtube .native-preview-actions { gap: 8px; padding-top: 0; }
+.native-post-preview.pinterest { --preview-tag-color: #111; max-width: 340px; border-radius: 20px; }
+.native-post-preview.pinterest .preview-hashtag { font-weight: 600; }
+.native-pin-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; font-weight: 700; }
+.native-pin-save { padding: 10px 17px; border-radius: 24px; background: #e60023; color: #fff; font-size: 13px; }
+.native-post-preview.pinterest .native-preview-media { margin: 0 9px; border-radius: 13px; overflow: hidden; }
+.native-post-preview.pinterest .pinterest-pin-title { padding: 14px 14px 0; font-size: 18px; }
+.native-post-preview.pinterest .native-preview-media > img { max-height: 460px; }
+.native-post-preview.tiktok { --preview-tag-color: #fff; max-width: 340px; border: 1px solid #222; border-radius: 20px; background: #101114; color: #fff; }
+.native-post-preview.tiktok .native-preview-brand { border-color: #ffffff20; }
+.native-post-preview.tiktok .native-preview-brand > span:last-child { color: #b6bcc5; }
+.native-tiktok-stage { position: relative; min-height: 510px; }
+.native-tiktok-stage .native-preview-media { aspect-ratio: 9 / 16; min-height: 510px; background: #101114; }
+.native-tiktok-stage .native-preview-media > img, .native-tiktok-stage .native-preview-media > video { width: 100%; height: 100%; max-height: none; object-fit: contain; aspect-ratio: 9 / 16; }
+.native-tiktok-stage .native-preview-empty { color: #b4bbc5; }
+.native-tiktok-overlay { position: absolute; left: 0; right: 55px; bottom: 50px; max-height: 62%; overflow: auto; padding: 38px 12px 10px; background: linear-gradient(transparent, #0009); text-shadow: 0 1px 3px #000a; }
+.native-tiktok-overlay > strong { font-size: 14px; }
+.native-tiktok-overlay .native-preview-caption { padding: 7px 0 8px; font-size: 12px; }
+.native-tiktok-overlay .preview-hashtag { font-weight: 700; }
+.native-tiktok-overlay .native-caption-toggle { color: #e4e7ed; font-weight: 600; }
+.native-tiktok-overlay > small { font-size: 10px; color: #ebedf0; }
+.native-tiktok-stage .native-preview-actions.vertical { position: absolute; right: 4px; bottom: 80px; display: grid; gap: 21px; padding: 8px; }
+.native-tiktok-stage .native-preview-save { margin: 0; }
+.native-tiktok-stage .native-preview-actions svg { width: 27px; height: 27px; filter: drop-shadow(0 1px 2px #0008); }
+.native-post-preview button:focus-visible, .publish-preview-account-picker select:focus-visible { outline: 3px solid #22b88a; outline-offset: 3px; }
+@media (max-width: 520px) {
+  .publish-preview-backdrop { padding: 10px; }
+  .publish-preview-dialog { max-height: calc(100dvh - 20px); }
+  .publish-preview-header { padding: 14px; }
+  .publish-preview-body { padding: 12px; }
+  .publish-preview-account-picker { padding: 10px 14px; }
+  .native-preview-actions { gap: 12px; }
+}
+
 .publish-action-panel {
   display: grid;
   gap: 16px;
