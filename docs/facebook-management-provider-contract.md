@@ -23,8 +23,8 @@
 - 只采用权限参考中的真实名称 `pages_read_user_content`；中文 AI 翻译的部分指南显示 `pages_read_user_engagement` 或 `pages_manage_read_engagement`，不能据此申请不存在或未确认的权限。
 - 第一版继续使用已批准设计的保守 24 小时、用户真实入站消息、人工文字回复规则。不因较新指南存在其他窗口开启方式/广告 7 天例外而扩大本期发送资格。
 - 会话指南显示部分场景存在消息详情读取限制，UI 不承诺完整历史；API 的实际结果与权限错误优先，不编造缺失正文。接收时间、读取时间、上游可见范围分别呈现。
-- 目录记录字段仅选 id/name，主页 link/picture 等扩展字段须在任务 2 中继续对照官方 Page 参考确认，再请求；不能仅凭 SDK 方法或字段枚举推断可读性。
-- 任务 2 的 inspectPageToken 还需 debug_token 官方字段核对；任务 6 若复用旧会话/评论 adapter 的扩展 fields，应先核对 Conversation/Message/Comment 参考。尚未核对字段不加入请求或测试假响应。
+- Page 参考已核对 id/name/link/picture：https://developers.facebook.com/docs/graph-api/reference/page/ 。目录只保留安全的 HTTPS 主页和头像链接，不把 BM 可分配任务当作用户授权。
+- debug_token 参考已核对 app_id/is_valid/profile_id/scopes/granular_scopes/expires_at：https://developers.facebook.com/docs/graph-api/reference/debug_token/ 。使用显式注入的新应用认证检查，并用 Page token 的 /me 身份核对目标主页；不依赖未列出的 type 字段。任务 6 若复用旧 adapter 的扩展 fields，仍须先核对 Conversation/Message/Comment 参考。
 - 主页 token 始终来源于新用户授权；不从原 OauthCredential 拷贝。新登录配置与原发布、旧互动配置 ID 必须不同。
 - 同一个 Meta app 下 grants 可能共享；不调用全应用权限删除，不保证上游授权完全物理隔离。任何外部配置/实际同意流程须单独确认范围。
 - 读取错误 190/200/限流等按安全分类返回，不能用空列表掩盖。所有 Graph 外部请求固定 host、Bearer header、10 秒超时，禁重定向、不跟随 paging.next 里的任意 URL。
@@ -34,4 +34,5 @@
 - Docker 恢复后的原始基线：476/476、0 skipped。
 - 新配置真实断言 RED：4 个失败；实现 GREEN：4/4。补充容器 API_PUBLIC_URL 用例 RED→GREEN，最终 5/5。
 - 加配置后的完整回归：481/481、0 skipped；API TypeScript 构建通过。
+- 目录适配器：真实断言 RED 7 项，GREEN 7/7；完整回归 488/488、0 skipped，API TypeScript 构建通过。覆盖 21 个主页分页、恶意链接、游标循环、限流、并发限制及 token 身份检查。
 - 本文件未进行真实 Meta 读取／发送、配置变更、权限审核或云端部署。
