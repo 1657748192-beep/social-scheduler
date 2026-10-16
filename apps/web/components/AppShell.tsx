@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { apiRequest, type CurrentUser } from "../lib/api";
+import { apiRequest, type CurrentUser,type Workspace } from "../lib/api";
+import {facebookManagementRequest} from '../lib/facebookManagement';
 import { LanguageToggle, useLanguage } from "./LanguageProvider";
 import { AccountMenu } from "./AccountMenu";
 
@@ -23,12 +24,14 @@ const navItems = [
   { href: "/posts", label: ["帖子管理", "Post manager"], helper: ["已发布与复用", "Published posts and reuse"] },
   { href: "/social-accounts", label: ["社交账号", "Social accounts"], helper: ["绑定、解绑与账号管理", "Connect and manage accounts"] }
 ] as const;
+const managementNavItems=[{href:'/facebook-management',label:['BM 主页管理','BM Page management'],helper:['只读目录与独立授权','Read-only directory and independent authorization']}] as const;
 
 export function AppShell({ title, subtitle, userLabel, wide = false, children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { t } = useLanguage();
   const [currentUserName, setCurrentUserName] = useState("");
+  const [facebookManagementEnabled,setFacebookManagementEnabled]=useState(false);
   const accountName = userLabel?.trim() || currentUserName || t("账号", "Account");
 
   useEffect(() => {
@@ -41,6 +44,16 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
     }).catch(() => null);
     return () => { mounted = false; };
   }, [userLabel]);
+  useEffect(()=>{
+    let current=true;const controller=new AbortController();let token:string|null=null;
+    try{token=localStorage.getItem('social_scheduler_token');}catch{return;}
+    if(!token)return;const auth=token;
+    void apiRequest<Workspace[]>('/workspaces',{token:auth,signal:controller.signal}).then(async spaces=>{
+      if(!spaces.length)return {enabled:false,configured:false};
+      return facebookManagementRequest<{enabled:boolean;configured:boolean}>(auth,spaces[0].id,'/status',{signal:controller.signal});
+    }).then(result=>{if(current)setFacebookManagementEnabled(result.enabled===true&&result.configured===true);}).catch(()=>{});
+    return()=>{current=false;controller.abort();};
+  },[]);
 
   async function signOut() {
     const token = localStorage.getItem("social_scheduler_token");
@@ -73,7 +86,7 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
         </Link>
 
         <nav className="software-nav" aria-label="主导航">
-          {navItems.map((item) => (
+          {[...navItems,...(facebookManagementEnabled?managementNavItems:[])].map((item) => (
             <Link
               className={pathname === item.href ? "active" : ""}
               href={item.href}

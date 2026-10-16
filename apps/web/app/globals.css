@@ -5030,3 +5030,32 @@ textarea {
 .tiktok-metrics-grid dd { margin: 6px 0 0; font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
 @media (max-width: 600px) { .tiktok-metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .tiktok-account-stats { grid-column: 1 / -1; width: 100%; min-width: 0; }
+
+.facebook-management { display: grid; gap: 18px; min-width: 0; }
+.facebook-management .panel, .facebook-page-card { min-width: 0; overflow-wrap: anywhere; }
+.facebook-management-heading, .facebook-connection-row, .facebook-page-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.facebook-management-heading > div { flex: 1; min-width: 0; }
+.facebook-management-heading label { min-width: 180px; }
+.facebook-filters { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 14px; }
+.facebook-management label { display: grid; gap: 7px; min-width: 0; }
+.facebook-management select, .facebook-management input { width: 100%; min-width: 0; box-sizing: border-box; }
+.facebook-management-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,330px),1fr)); gap: 16px; min-width: 0; }
+.facebook-page-card { padding: 20px; background: #fff; border: 1px solid #dce8e3; border-radius: 16px; }
+.facebook-page-card h3 { margin: 0 0 6px; }
+.facebook-page-heading { justify-content: flex-start; align-items: flex-start; }
+.facebook-page-heading img { border-radius: 50%; flex-shrink: 0; object-fit: cover; }
+.facebook-page-heading > div { min-width: 0; }
+.facebook-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.facebook-actions button, .facebook-actions a { white-space: normal; overflow-wrap: anywhere; max-width: 100%; }
+.facebook-connection-row { padding: 14px 0; border-bottom: 1px solid #e1ebe7; }
+.facebook-connection-row:last-child { border-bottom: 0; }
+.facebook-connection-state { display: grid; gap: 6px; margin-top: 6px; color: #526c61; font-size: 13px; }
+.facebook-warning { padding: 12px 14px; border-radius: 10px; background: #fff6e7; color: #7b4c05; }
+.facebook-confirm { border: 2px solid #11996c; }
+@media (max-width: 600px) {
+  .facebook-management-heading, .facebook-connection-row { align-items: stretch; flex-direction: column; }
+  .facebook-filters { grid-template-columns: minmax(0,1fr); }
+  .facebook-management-heading label { min-width: 0; }
+  .facebook-page-card { padding: 16px; }
+  .facebook-actions { gap: 8px; }
+}

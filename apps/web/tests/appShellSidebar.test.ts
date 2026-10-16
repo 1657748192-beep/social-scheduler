@@ -23,6 +23,7 @@ test("sidebar keeps navigation without duplicate channel or account controls", (
   assert.match(sidebar, /排程日历/);
   assert.match(sidebar, /href="\/social-accounts"/);
   assert.doesNotMatch(sidebar, /href="\/inbox"/);
+  assert.doesNotMatch(sidebar, /href="\/facebook-management"/);
   assert.match(html, /页面内容/);
 });
 
