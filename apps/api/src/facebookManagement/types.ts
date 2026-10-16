@@ -7,6 +7,8 @@ export type ManagedPageDto = {
   publishingAccountId:string|null;
   authorization:'available'|'missing'|'expired'|'unknown';
   lastReadAt:string|null;
+  connectionChoices?:Array<{managedPageId:string;connectionId:string;available:boolean}>;
+  selectedManagedPageId?:string|null;
 };
 export type ReadPage<T> = {
   items:T[];nextCursor:string|null;readAt:string;
