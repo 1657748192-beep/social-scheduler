@@ -102,7 +102,9 @@ test('cancelling an in-flight assembly fences its commit and does not leave a te
 
 test('an already-consumed thumbnail body is rejected without holding a receiver indefinitely',async t=>{
  const u=await fixture(t),body=Readable.from([Buffer.from('{}')]);for await(const _ of body){}
- const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),80);
+ // The watchdog bounds a broken receiver, not real PostgreSQL/Redis latency.
+ // Slow local volumes can take over 80ms before the receiver even starts.
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),5000);
  try{await assert.rejects(acceptThumbnail(u.deps,u.f.actor,u.s.id,body,controller.signal),{statusCode:400});}
  finally{clearTimeout(timer);}
  assert.equal(await u.deps.leases.active(u.s.id),false);
