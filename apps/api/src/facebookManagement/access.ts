@@ -31,6 +31,6 @@ export function createFacebookPageAccess(deps:{db:PrismaClient;decrypt:(v:string
     if(inspection.pageId!==page.pageId||inspection.expiresAt&&new Date(inspection.expiresAt)<=new Date())throw new FacebookPageAccessError();
     const scopes=inspection.scopes.filter(scope=>!inspection.granularScopes.some(g=>g.scope===scope&&g.targetIds!==null&&!g.targetIds.includes(page.pageId)));
     if(!scopes.length)throw new FacebookPageAccessError();
-    return {managedPageId:page.id,pageId:page.pageId,connectionId:page.connectionId,appId:page.connection.appId,pageToken,tasks:page.tasks,scopes,role:member.role,publishingAccountId:account?.id??null};
+    return {managedPageId:page.id,pageId:page.pageId,connectionId:page.connectionId,connectionVersion:page.connection.version,appId:page.connection.appId,pageToken,tasks:page.tasks,scopes,role:member.role,publishingAccountId:account?.id??null};
   }};
 }

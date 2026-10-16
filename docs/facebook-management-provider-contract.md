@@ -36,3 +36,10 @@
 - 加配置后的完整回归：481/481、0 skipped；API TypeScript 构建通过。
 - 目录适配器：真实断言 RED 7 项，GREEN 7/7；完整回归 488/488、0 skipped，API TypeScript 构建通过。覆盖 21 个主页分页、恶意链接、游标循环、限流、并发限制及 token 身份检查。
 - 本文件未进行真实 Meta 读取／发送、配置变更、权限审核或云端部署。
+
+## 互动字段复用核对（任务 6）
+
+- 官方 Conversation 参考列出 id/participants/updated_time/messages；Message 参考列出 id/from/to/message/created_time。已读取 https://developers.facebook.com/docs/graph-api/reference/conversation/ 与 https://developers.facebook.com/docs/graph-api/reference/message/ 的 v26.0 正文。
+- https://developers.facebook.com/docs/graph-api/reference/object/comments/ 明确支持 filter=stream（各层评论含回复）、游标分页，读取评论编号和公开回复要求 MODERATE；回复需要 pages_manage_engagement。新评论能力不会把 CREATE_CONTENT 单独当作 MODERATE。
+- https://developers.facebook.com/docs/graph-api/reference/comment/ 当前字段列表未列 object；新服务不调用旧 getComment 的 object{id} 请求，而通过已核验原帖的 comments edge 查找目标评论，无法核对则拒绝回复。
+- 新服务不复用旧 inspectCapabilities 对 debug_token.type 的假设；使用新 token 身份检查及真实 scopes/tasks，再由实际 API 错误决定可用性。
