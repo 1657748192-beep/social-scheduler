@@ -4,6 +4,7 @@ import { z } from "zod";
 import { config } from "../config";
 import { prisma } from "../prisma";
 import { HttpError } from "../utils/errors";
+import { retireFacebookManagementAuthorizer } from "../facebookManagement/store";
 
 const assignableRoles = ["admin", "editor", "viewer"] as const;
 const memberRoles = ["owner", "admin", "editor", "viewer"] as const;
@@ -236,12 +237,13 @@ export async function updateMember(
     throw new HttpError(400, "Nothing to update");
   }
 
-  return prisma.workspaceMember.update({
-    where: { id: member.id },
-    data: {
-      role: input.role,
-      status: input.status
+  return prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT id FROM workspace_members WHERE id=${member.id}::uuid FOR UPDATE`;
+    const updated=await tx.workspaceMember.update({where:{id:member.id},data:{role:input.role,status:input.status}});
+    if(updated.status!=='active'||!['owner','admin'].includes(updated.role)){
+      await retireFacebookManagementAuthorizer(tx,workspaceId,member.userId);
     }
+    return updated;
   });
 }
 
@@ -263,8 +265,10 @@ export async function removeMember(actorId: string, workspaceId: string, memberI
     throw new HttpError(400, "Workspace owner cannot be removed");
   }
 
-  await prisma.workspaceMember.delete({
-    where: { id: member.id }
+  await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT id FROM workspace_members WHERE id=${member.id}::uuid FOR UPDATE`;
+    await retireFacebookManagementAuthorizer(tx,workspaceId,member.userId);
+    await tx.workspaceMember.delete({where:{id:member.id}});
   });
 
   return { ok: true };

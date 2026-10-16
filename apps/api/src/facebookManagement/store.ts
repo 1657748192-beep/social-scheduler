@@ -6,6 +6,13 @@ export type ManagementGrant={appId:string;providerUserId:string;userToken:string
   pageId:string;name:string;pageToken:string|null;tasks:string[];scopes:string[];expiresAt:Date|null;profileUrl:string|null;avatarUrl:string|null;
 }>};
 export class ManagementAuthorizationError extends Error{constructor(){super('Facebook management authorization unavailable');}}
+export async function retireFacebookManagementAuthorizer(tx:Prisma.TransactionClient,workspaceId:string,userId:string){
+  // Caller holds the membership row, matching the OAuth grant lock order.
+  await tx.facebookManagementConnection.updateMany({where:{workspaceId,userId},data:{status:'disconnected',userTokenEncrypted:null,version:{increment:1}}});
+  await tx.facebookManagedPage.updateMany({where:{connection:{workspaceId,userId}},data:{active:false,pageTokenEncrypted:null,notificationsEnabled:false}});
+  await tx.facebookManagementPageSelection.deleteMany({where:{workspaceId,page:{connection:{workspaceId,userId}}}});
+  await tx.facebookManagementOAuthState.deleteMany({where:{workspaceId,userId}});
+}
 async function authorized(tx:Prisma.TransactionClient,ctx:ManagementContext,now:Date){
   // Hold the current session and membership through the grant transaction.
   await tx.$queryRaw`SELECT id FROM user_sessions WHERE id=${ctx.sessionId}::uuid FOR UPDATE`;
@@ -65,7 +72,7 @@ export function createFacebookManagementStore(db:PrismaClient,encrypt:(value:str
     async disconnect(ctx:ManagementContext,id:string){
       return db.$transaction(async tx=>{
         await authorized(tx,ctx,new Date());
-        const changed=await tx.facebookManagementConnection.updateMany({where:{id,workspaceId:ctx.workspaceId,userId:ctx.userId},data:{status:'disconnected',userTokenEncrypted:null,version:{increment:1}}});
+        const changed=await tx.facebookManagementConnection.updateMany({where:{id,workspaceId:ctx.workspaceId},data:{status:'disconnected',userTokenEncrypted:null,version:{increment:1}}});
         if(changed.count!==1)throw new ManagementAuthorizationError();
         await tx.facebookManagedPage.updateMany({where:{connectionId:id},data:{active:false,pageTokenEncrypted:null,notificationsEnabled:false}});
         await tx.facebookManagementPageSelection.deleteMany({where:{workspaceId:ctx.workspaceId,page:{connectionId:id}}});
