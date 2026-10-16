@@ -127,6 +127,8 @@ model User {
   oauthAuthorizationLinks OauthAuthorizationLink[] @relation("OauthAuthorizationLinkCreator")
   uploadedMedia MediaAsset[]     @relation("MediaUploader")
   localUploadSessions LocalUploadSession[]
+  facebookManagementConnections FacebookManagementConnection[]
+  facebookManagementStates FacebookManagementOAuthState[]
 
   @@map("users")
 }
@@ -178,6 +180,9 @@ model Workspace {
   oauthAuthorizationLinks OauthAuthorizationLink[]
   mediaAssets MediaAsset[]
   localUploadSessions LocalUploadSession[]
+  facebookManagementConnections FacebookManagementConnection[]
+  facebookManagementStates FacebookManagementOAuthState[]
+  facebookManagementSelections FacebookManagementPageSelection[]
 
   @@map("workspaces")
 }
@@ -578,6 +583,195 @@ model LocalUploadPart {
 
   @@id([sessionId, index])
   @@map("local_upload_parts")
+}
+
+model FacebookManagementConnection {
+  id String @id @default(uuid()) @db.Uuid
+  appId String
+  workspaceId String @db.Uuid
+  userId String @db.Uuid
+  providerUserId String
+  userTokenEncrypted String?
+  scopes String[]
+  expiresAt DateTime?
+  status String @default("active")
+  version Int @default(1)
+  directoryReadAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  workspace Workspace @relation(fields:[workspaceId],references:[id],onDelete:Cascade)
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  pages FacebookManagedPage[]
+  @@index([workspaceId,status])
+  @@map("facebook_management_connections")
+}
+
+model FacebookManagedPage {
+  id String @id @default(uuid()) @db.Uuid
+  connectionId String @db.Uuid
+  pageId String
+  name String
+  profileUrl String?
+  avatarUrl String?
+  pageTokenEncrypted String?
+  tasks String[]
+  scopes String[]
+  expiresAt DateTime?
+  active Boolean @default(true)
+  notificationsEnabled Boolean @default(false)
+  lastReadAt DateTime?
+  connection FacebookManagementConnection @relation(fields:[connectionId],references:[id],onDelete:Cascade)
+  businesses FacebookManagedPageBusiness[]
+  selections FacebookManagementPageSelection[]
+  events FacebookInteractionEvent[]
+  comments FacebookInteractionComment[]
+  threads FacebookInteractionThread[]
+  messages FacebookInteractionMessage[]
+  sendAttempts FacebookInteractionSendAttempt[]
+  @@unique([connectionId,pageId])
+  @@index([pageId,active])
+  @@map("facebook_managed_pages")
+}
+
+model FacebookManagedPageBusiness {
+  id String @id @default(uuid()) @db.Uuid
+  managedPageId String @db.Uuid
+  businessId String
+  name String
+  relation String
+  page FacebookManagedPage @relation(fields:[managedPageId],references:[id],onDelete:Cascade)
+  @@unique([managedPageId,businessId,relation])
+  @@map("facebook_managed_page_businesses")
+}
+
+model FacebookManagementOAuthState {
+  id String @id @default(uuid()) @db.Uuid
+  appId String
+  state String @unique
+  userId String @db.Uuid
+  workspaceId String @db.Uuid
+  sessionId String @db.Uuid
+  callbackUrl String
+  connectionId String? @db.Uuid
+  connectionVersion Int?
+  expiresAt DateTime
+  consumedAt DateTime?
+  completedAt DateTime?
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  workspace Workspace @relation(fields:[workspaceId],references:[id],onDelete:Cascade)
+  @@index([expiresAt])
+  @@map("facebook_management_oauth_states")
+}
+
+model FacebookManagementPageSelection {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  pageId String
+  managedPageId String @db.Uuid
+  workspace Workspace @relation(fields:[workspaceId],references:[id],onDelete:Cascade)
+  page FacebookManagedPage @relation(fields:[managedPageId],references:[id],onDelete:Cascade)
+  @@unique([workspaceId,pageId])
+  @@map("facebook_management_page_selections")
+}
+
+model FacebookManagementSubscription {
+  id String @id @default(uuid()) @db.Uuid
+  appId String
+  pageId String
+  fields String[]
+  status String @default("unknown")
+  checkedAt DateTime?
+  diagnosticId String?
+  @@unique([appId,pageId])
+  @@map("facebook_management_subscriptions")
+}
+
+model FacebookInteractionEvent {
+  id String @id @default(uuid()) @db.Uuid
+  managedPageId String @db.Uuid
+  eventKey String
+  payload Json
+  status String @default("pending")
+  attempts Int @default(0)
+  availableAt DateTime @default(now())
+  leaseUntil DateTime?
+  claimToken String?
+  diagnosticId String?
+  receivedAt DateTime @default(now())
+  page FacebookManagedPage @relation(fields:[managedPageId],references:[id],onDelete:Cascade)
+  @@unique([managedPageId,eventKey])
+  @@index([status,availableAt,leaseUntil])
+  @@index([receivedAt])
+  @@map("facebook_interaction_events")
+}
+
+model FacebookInteractionComment {
+  id String @id @default(uuid()) @db.Uuid
+  managedPageId String @db.Uuid
+  providerId String
+  postId String
+  parentId String?
+  senderId String?
+  senderName String?
+  text String?
+  deleted Boolean @default(false)
+  occurredAt DateTime
+  receivedAt DateTime @default(now())
+  page FacebookManagedPage @relation(fields:[managedPageId],references:[id],onDelete:Cascade)
+  @@unique([managedPageId,providerId])
+  @@index([managedPageId,postId,occurredAt])
+  @@index([receivedAt])
+  @@map("facebook_interaction_comments")
+}
+
+model FacebookInteractionThread {
+  id String @id @default(uuid()) @db.Uuid
+  managedPageId String @db.Uuid
+  participantId String
+  providerId String?
+  participantName String?
+  lastInboundAt DateTime?
+  updatedAt DateTime @updatedAt
+  receivedAt DateTime @default(now())
+  page FacebookManagedPage @relation(fields:[managedPageId],references:[id],onDelete:Cascade)
+  @@unique([managedPageId,participantId])
+  @@index([receivedAt])
+  @@map("facebook_interaction_threads")
+}
+
+model FacebookInteractionMessage {
+  id String @id @default(uuid()) @db.Uuid
+  managedPageId String @db.Uuid
+  providerId String
+  participantId String
+  senderId String
+  recipientId String
+  text String?
+  isEcho Boolean @default(false)
+  occurredAt DateTime
+  receivedAt DateTime @default(now())
+  page FacebookManagedPage @relation(fields:[managedPageId],references:[id],onDelete:Cascade)
+  @@unique([managedPageId,providerId])
+  @@index([managedPageId,participantId,occurredAt])
+  @@index([receivedAt])
+  @@map("facebook_interaction_messages")
+}
+
+model FacebookInteractionSendAttempt {
+  id String @id @default(uuid()) @db.Uuid
+  managedPageId String @db.Uuid
+  requestKey String @db.Uuid
+  payloadHash String
+  status String @default("pending")
+  providerId String?
+  diagnosticId String?
+  errorCode String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  page FacebookManagedPage @relation(fields:[managedPageId],references:[id],onDelete:Cascade)
+  @@unique([managedPageId,requestKey])
+  @@index([createdAt])
+  @@map("facebook_interaction_send_attempts")
 }
 
 model Post {
