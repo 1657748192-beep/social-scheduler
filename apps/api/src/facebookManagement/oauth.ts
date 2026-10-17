@@ -4,11 +4,13 @@ import type {ManagementContext} from './types';
 import {ManagementAuthorizationError,type ManagementGrant,type createFacebookManagementStore} from './store';
 
 type Dependencies={store:ReturnType<typeof createFacebookManagementStore>;config:FacebookManagementConfig;
+  authorizeUser?:(ctx:ManagementContext)=>Promise<void>;
   exchange:(code:string,callbackUrl:string)=>Promise<ManagementGrant|null>};
-export function createFacebookManagementOAuth({store,config,exchange}:Dependencies){
+export function createFacebookManagementOAuth({store,config,exchange,authorizeUser}:Dependencies){
   return {
     async start(ctx:ManagementContext,connectionId?:string){
       if(!config.enabled)throw new ManagementAuthorizationError();
+      await authorizeUser?.(ctx);
       const state=randomBytes(32).toString('base64url');
       await store.createState({...ctx,appId:config.appId,state,callbackUrl:config.callbackUrl,connectionId});
       const url=new URL(`https://www.facebook.com/${config.graphVersion}/dialog/oauth`);
@@ -21,6 +23,7 @@ export function createFacebookManagementOAuth({store,config,exchange}:Dependenci
       // Consume cancellation/error callbacks too, so a denied flow cannot be replayed.
       if(!saved||!code||code.length>8192||saved.callbackUrl!==config.callbackUrl||saved.appId!==config.appId)throw new ManagementAuthorizationError();
       try{
+        await authorizeUser?.(saved);
         const grant=await exchange(code,saved.callbackUrl);
         if(!grant)throw new ManagementAuthorizationError();
         const connectionId=await store.saveGrant(saved,grant);

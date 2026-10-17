@@ -3,9 +3,11 @@ import {useEffect,useState} from 'react';
 import {useRouter} from 'next/navigation';
 import {AppShell} from '../../components/AppShell';
 import {FacebookManagementPanel} from '../../components/facebook/FacebookManagementPanel';
+import {PlatformAdminOnly} from '../../components/facebook/PlatformAdminOnly';
 import {useLanguage} from '../../components/LanguageProvider';
 import {apiRequest,type Workspace} from '../../lib/api';
-export default function FacebookManagementPage(){
+export default function FacebookManagementPage(){return <PlatformAdminOnly><ManagementPageContent/></PlatformAdminOnly>;}
+function ManagementPageContent(){
   const router=useRouter(),{t}=useLanguage();
   const [token,setToken]=useState<string|null>(null),[workspaces,setWorkspaces]=useState<Workspace[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(false),[outcome,setOutcome]=useState('');
   useEffect(()=>{

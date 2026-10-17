@@ -5,8 +5,11 @@ import {randomUUID} from 'node:crypto';
 import {createFacebookManagementRouter} from '../src/facebookManagement/routes';
 import {removedMetaEngagement} from '../src/middleware/removedMetaEngagement';
 import {HttpError} from '../src/utils/errors';
+import {config} from '../src/config';
+import {createFacebookManagementOAuth} from '../src/facebookManagement/oauth';
 
 test('unauthenticatedForeignViewerAndDisabledRequestsFailClosed',async()=>{
+  const previousAdmins=config.ADMIN_EMAILS;config.ADMIN_EMAILS='fixture@example.test';
   const workspaceId=randomUUID(),pageId=randomUUID(),connectionId=randomUUID(),scheduleId=randomUUID(),sessionId=randomUUID();
   const ids={owner:randomUUID(),editor:randomUUID(),viewer:randomUUID()};let enabled=true,calls=0,notificationWrites=0;
   const runtime:any={get enabled(){return enabled;},get configured(){return enabled;},member:async(ctx:any)=>{if(ctx.workspaceId!==workspaceId)throw new HttpError(403,'Unavailable');return{role:Object.entries(ids).find(([,id])=>id===ctx.userId)?.[0]};},
@@ -53,5 +56,29 @@ test('unauthenticatedForeignViewerAndDisabledRequestsFailClosed',async()=>{
     const callback=await request('/api/v1/integrations/facebook-management/oauth/callback?state=secret-state&code=secret-code','');
     assert.equal(callback.status,302);assert.equal(callback.headers.get('location'),'https://example.test/facebook-management?facebook_management=connected');
     assert.equal(callback.headers.get('referrer-policy'),'no-referrer');assert.equal(calls,2);
-  }finally{await new Promise<void>(r=>server.close(()=>r()));}
+  }finally{config.ADMIN_EMAILS=previousAdmins;await new Promise<void>(r=>server.close(()=>r()));}
+});
+
+test('workspace owners and admins cannot read or mutate management APIs without platform admin access',async()=>{
+  const before=config.ADMIN_EMAILS;config.ADMIN_EMAILS='platform@example.test';let calls=0;
+  const runtime:any={enabled:true,member:async()=>{calls++;return{role:'owner'};},directory:{list:async()=>{calls++;return{items:[]};}}};
+  const app=express();app.use(express.json());app.use(createFacebookManagementRouter(runtime,{webAppUrl:'https://example.test',authenticate:(req,_res,next)=>{req.user={id:randomUUID(),email:req.headers.authorization??'customer@example.test',sessionId:randomUUID()};next();}}));
+  const server=app.listen(0,'127.0.0.1');await new Promise<void>(r=>server.once('listening',r));const address=server.address() as any;
+  const base=`http://127.0.0.1:${address.port}/workspaces/${randomUUID()}/facebook-management`;
+  try{
+    for(const [method,path] of [['GET','/status'],['GET','/connections'],['GET','/pages'],['POST','/oauth/start'],['POST',`/connections/${randomUUID()}/refresh`],['POST',`/pages/${randomUUID()}/select`],['GET',`/pages/${randomUUID()}/conversations`],['POST',`/pages/${randomUUID()}/conversations/thread/replies`]]){
+      const response=await fetch(base+path,{method,headers:{authorization:'customer@example.test','content-type':'application/json'}});
+      assert.equal(response.status,403,path);
+    }
+    assert.equal(calls,0,'denial must precede runtime and provider work');
+    config.ADMIN_EMAILS='';assert.equal((await fetch(base+'/pages',{headers:{authorization:'platform@example.test'}})).status,403);assert.equal(calls,0);
+    config.ADMIN_EMAILS='platform@example.test';assert.equal((await fetch(base+'/pages',{headers:{authorization:'PLATFORM@example.test'}})).status,200);assert.equal(calls,2);
+  }finally{config.ADMIN_EMAILS=before;await new Promise<void>(r=>server.close(()=>r()));}
+});
+
+test('previous OAuth state cannot exchange or save credentials after platform access is denied',async()=>{
+  let exchanges=0,saves=0;
+  const oauth=createFacebookManagementOAuth({config:{enabled:true,appId:'123',callbackUrl:'https://example.test/callback'} as any,store:{consumeState:async()=>({userId:'customer',appId:'123',callbackUrl:'https://example.test/callback'}),saveGrant:async()=>{saves++;return 'connection';}} as any,authorizeUser:async()=>{throw new HttpError(403,'Denied');},exchange:async()=>{exchanges++;return{} as any;}});
+  await assert.rejects(oauth.callback({state:'a'.repeat(43),code:'old-customer-code'}));
+  assert.equal(exchanges,0);assert.equal(saves,0);
 });

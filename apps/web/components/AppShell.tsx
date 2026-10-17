@@ -48,7 +48,7 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
     let current=true;const controller=new AbortController();let token:string|null=null;
     try{token=localStorage.getItem('social_scheduler_token');}catch{return;}
     if(!token)return;const auth=token;
-    void apiRequest<Workspace[]>('/workspaces',{token:auth,signal:controller.signal}).then(async spaces=>{
+    void apiRequest<CurrentUser>('/auth/me',{token:auth,signal:controller.signal}).then(user=>user.isPlatformAdmin===true?apiRequest<Workspace[]>('/workspaces',{token:auth,signal:controller.signal}):[]).then(async spaces=>{
       if(!spaces.length)return {enabled:false,configured:false};
       return facebookManagementRequest<{enabled:boolean;configured:boolean}>(auth,spaces[0].id,'/status',{signal:controller.signal});
     }).then(result=>{if(current)setFacebookManagementEnabled(result.enabled===true&&result.configured===true);}).catch(()=>{});

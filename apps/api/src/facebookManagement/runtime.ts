@@ -1,5 +1,7 @@
 import type {PrismaClient} from '@prisma/client';
 import {config} from '../config';
+import {isPlatformAdmin} from '../utils/platformAdmin';
+import {HttpError} from '../utils/errors';
 import {prisma} from '../prisma';
 import {encryptToken,decryptToken} from '../utils/tokenCrypto';
 import {createFacebookEngagementClient} from '../integrations/social/facebookEngagement';
@@ -22,7 +24,10 @@ export function createFacebookManagementRuntime(input:{db:PrismaClient;settings:
   const store=createFacebookManagementStore(db,input.encrypt);
   const receptionStore=createFacebookManagementReceptionStore({db,appId:settings.appId});
   const gateway=createFacebookManagementGateway({config:settings,appSecret,fetchImpl:input.fetchImpl});
-  const oauth=createFacebookManagementOAuth({store,config:settings,exchange:gateway.exchange});
+  const oauth=createFacebookManagementOAuth({store,config:settings,exchange:gateway.exchange,authorizeUser:async ctx=>{
+    const user=await db.user.findUnique({where:{id:ctx.userId},select:{email:true}});
+    if(!user||!isPlatformAdmin(user.email))throw new HttpError(403,'Platform administrator required');
+  }});
   function directoryClient(connection:{appId:string;userToken:string}){
     if(connection.appId!==settings.appId)throw new FacebookDirectoryError('authorization_invalid');
     return createFacebookDirectoryClient({appId:settings.appId,appSecret,apiVersion:settings.graphVersion,userToken:connection.userToken,fetchImpl:input.fetchImpl});

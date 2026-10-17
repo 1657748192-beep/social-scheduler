@@ -3,6 +3,7 @@ import { createHash, randomBytes, randomUUID } from "crypto";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { config } from "../config";
+import {isPlatformAdmin} from '../utils/platformAdmin';
 import { prisma } from "../prisma";
 import { HttpError } from "../utils/errors";
 import {
@@ -281,6 +282,7 @@ export async function getCurrentUser(userId: string) {
     id: user.id,
     email: user.email,
     name: user.name,
+    isPlatformAdmin: isPlatformAdmin(user.email),
     workspaces: user.memberships.map((membership) => ({
       id: membership.workspace.id,
       name: membership.workspace.name,

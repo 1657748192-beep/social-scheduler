@@ -14,6 +14,21 @@ import {createFacebookSubscriptionService} from '../src/facebookManagement/subsc
 import {createFacebookManagementReceptionStore} from '../src/facebookManagement/receptionStore';
 import {FacebookEngagementError} from '../src/integrations/social/facebookEngagement';
 
+test('real authenticated API distinguishes platform admin from workspace owner without touching publishing',async()=>withFacebookManagementFixture(async(f:any)=>{
+  const session=await f.db.userSession.findUniqueOrThrow({where:{id:f.sessionId}});
+  const token=jwt.sign({sub:f.userId,email:`${f.userId}@example.test`,sid:f.sessionId,jti:session.tokenId},'facebook-management-http-test-only',{expiresIn:'1h'});
+  const before=await f.snapshot();
+  for(const admin of [false,true]){
+    const http=await startFacebookManagementHttp(admin?`${f.userId}@example.test`:'');
+    try{
+      const headers={authorization:`Bearer ${token}`};
+      const me=await fetch(http.origin+'/api/v1/auth/me',{headers});assert.equal(me.status,200);assert.equal((await me.json()).isPlatformAdmin,admin);
+      const status=await fetch(`${http.origin}/api/v1/workspaces/${f.workspaceIds[0]}/facebook-management/status`,{headers});assert.equal(status.status,admin?200:403);
+    }finally{await http.stop();}
+  }
+  assert.deepEqual(await f.snapshot(),before);
+}));
+
 test('fullManagementLifecycleLeavesPublishingExactlyUnchanged',async()=>withFacebookManagementFixture(async(f:any)=>{
   const {db}=f,workspaceId=f.workspaceIds[0];
   const post=await db.post.create({data:{workspaceId,authorId:f.userId,baseText:'Original',variants:{create:{platform:'facebook',socialAccountId:f.accounts[0].id,text:'Original',publishStatus:'published'}}},include:{variants:true}});

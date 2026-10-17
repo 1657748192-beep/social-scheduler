@@ -3,6 +3,7 @@ import {z,ZodError} from 'zod';
 import {randomUUID} from 'node:crypto';
 import {requireAuth} from '../middleware/auth';
 import {HttpError} from '../utils/errors';
+import {isPlatformAdmin} from '../utils/platformAdmin';
 import {FacebookPageAccessError} from './access';
 import {ManagementAuthorizationError} from './store';
 import {FacebookSendInputError} from './sendAttempts';
@@ -30,6 +31,7 @@ export function createFacebookManagementRouter(runtime:FacebookManagementRuntime
     router[method](base+path,authenticate,async(req,res,next)=>{
       res.setHeader('Cache-Control','no-store');
       try{
+        if(!req.user||!isPlatformAdmin(req.user.email))throw new HttpError(403,'Facebook management is restricted to platform administrators');
         const ctx=context(req),member=await runtime.member(ctx);
         if(mode!=='status'&&!runtime.enabled)throw new HttpError(404,'Facebook management is not enabled');
         if(mode==='manage'&&!['owner','admin'].includes(member.role)||mode==='write'&&!['owner','admin','editor'].includes(member.role))throw new HttpError(403,'Workspace role cannot perform this action');

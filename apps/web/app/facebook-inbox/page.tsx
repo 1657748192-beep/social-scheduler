@@ -3,9 +3,10 @@ import {Suspense,useEffect,useMemo,useState} from 'react';
 import {useRouter,useSearchParams} from 'next/navigation';
 import {AppShell} from '../../components/AppShell';
 import {FacebookInbox} from '../../components/inbox/FacebookInbox';
+import {PlatformAdminOnly} from '../../components/facebook/PlatformAdminOnly';
 import {useLanguage} from '../../components/LanguageProvider';
 import {apiRequest,type Workspace} from '../../lib/api';
-export default function FacebookInboxPage(){return <Suspense fallback={<p>Loading…</p>}><InboxPageContent/></Suspense>;}
+export default function FacebookInboxPage(){return <PlatformAdminOnly><Suspense fallback={<p>Loading…</p>}><InboxPageContent/></Suspense></PlatformAdminOnly>;}
 function InboxPageContent(){
   const router=useRouter(),params=useSearchParams(),{t}=useLanguage();
   const [token,setToken]=useState<string|null>(null),[workspaces,setWorkspaces]=useState<Workspace[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(false);

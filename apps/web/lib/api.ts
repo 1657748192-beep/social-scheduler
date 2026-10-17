@@ -140,6 +140,7 @@ export type PasswordResetConfirmResponse = {
 };
 
 export type CurrentUser = {
+  isPlatformAdmin?: boolean;
   id: string;
   email: string;
   name: string;
