@@ -1,5 +1,19 @@
 # Facebook BM and engagement relaunch verification
 
+## Current cloud delivery status, 2026-10-17
+
+This section supersedes the earlier chronological preflight/blocker notes below. Authorized API/Web-only deployment completed at console 10:00:04–10:00:09, release commit `88af3b36bea631e79cdee093049583d2ebb88483`. Management is enabled with independent config `1046726461751818`, Graph v26.0 and exact HTTPS facebook-management callback. Original Meta config entries and the three old OAuth callbacks remain; only the fourth callback was added. Both comment permissions are in review preparation (“准备测试”), not approved; the app was not published or submitted for full review.
+
+- Backup directory: `/opt/social-scheduler-releases/facebook-management-20261017-88af3b3`, mode 0700. Database dump mode 0600, 1.2MB, SHA256 `fc718c35105165cbad4e893c4812262f93b7fb2402487e8e89487ec8ca8df9b5`. Original config/Compose, private container inspection, protected table digests and old API/Web image tags retained. An initial directory-owner failure was resolved by creating only this new directory as ubuntu via sudo; no prior backups were changed.
+- Production backup restored into existing PostgreSQL database `facebook_management_restore_20261017`; all three additive migrations passed there before production. Restored publishing credential/account/schedule/job digests match their pre-migration values. No new cloud resource or COS upload.
+- API/Web build exit 0. Production applied exactly `20261016000100_facebook_management`, `20261016000200_facebook_management_relations`, `20261016000300_facebook_management_app_identity`. Startup used original .env + .env.sandbox.local and both original Compose files, `up -d --no-deps api web`. No full deploy script, reset or Worker recreate.
+- Four new management keys appended to .env; byte-prefix check confirms every original byte was preserved, .env.sandbox.local unchanged. Rendered original provider/JWT/encryption/database/Redis environment values equal the old API environment, with no management keys added to Worker.
+- Public health at 10:00:48: API ok, database ok, Redis PONG; /en, /facebook-management and /facebook-inbox HTTP 200. Production oauth_credentials, social_accounts, schedules and publish_jobs digests all unchanged.
+- New API container `bc8fd08e4ae9`, Web `1fe7ace5ee3e`. Worker remains full ID `3cbc3bed81805673ee7a949da9fcefefecc3619761d68e5eb25da50344f97e5e`, original StartedAt `2026-10-13T06:01:58.401954871Z`. Root 12G available, 81% used after build.
+- Logged-in browser renders BM management and Facebook inbox navigation and the “连接管理授权” button. It explicitly reports no independent connection and no automatic import of publishing credentials. No actual management OAuth consent, live Page scope/task validation, subscriptions or customer sends were performed. Real comment/Messenger delivery and manual replies remain unaccepted, not claimed fixed.
+
+Rollback preparation (not executed): old images are tagged `social-scheduler-api:before-facebook-management-20261017` and `social-scheduler-web:before-facebook-management-20261017`. Retag these to their normal latest tags and recreate only api/web with the original Compose/env file ordering. Do not run down, recreate Worker, drop new tables, or restore over production. The temporary restore database and restricted dump are retained for acceptance/rollback evidence; their removal is a separate named cleanup, never a production restore.
+
 ## Boundaries
 
 Local development only, 2026-10-16. Feature disabled by default. No push, Tencent Cloud deployment, Meta dashboard changes, real OAuth consent, subscription changes, or real customer replies were performed.
