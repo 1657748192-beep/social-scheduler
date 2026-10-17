@@ -1,0 +1,30 @@
+export const platforms=['facebook','instagram','tiktok','youtube','pinterest'] as const;
+export type InboxPlatform=typeof platforms[number];
+export type Kind='comments'|'messages'|'mentions';
+export type Capability='comments.read'|'comments.reply'|'messages.read'|'messages.reply'|'mentions.read';
+export const capabilities:Capability[]=['comments.read','comments.reply','messages.read','messages.reply','mentions.read'];
+export type Scope={userId:string;sessionId:string;workspaceId:string};
+export type Query={accountIds:string[];kind:Kind;status?:'pending'|'in_progress'|'resolved';unread?:boolean;tagIds?:string[];from?:string;to?:string;q?:string;searchMessages:boolean;cursor?:string;limit:number};
+export type CapabilityEvidence={capability:Capability;supported:boolean;integrated:boolean;productOpen:boolean;approval:'unknown'|'pending'|'approved'|'rejected';grant:'missing'|'valid'|'expired';roleAllowed:boolean;verifiedAt:string|null;providerRestriction:string|null};
+export type CapabilityDto={capability:Capability;available:boolean;reason:string;verifiedAt:string|null};
+export type AccountStatus={accountId:string;status:string;count:number|null;diagnosticId?:string};
+export type PageResult<T>={items:T[];nextCursor:string|null;accountsStatus:AccountStatus[];partial:boolean;observedAt:string;lastSuccessfulSyncAt:string|null};
+export type AccountDto={id:string;platform:InboxPlatform;name:string;avatarUrl:string|null;publishingStatus:string;capabilities:CapabilityDto[]};
+export type SourceRef={managedPageId:string;connectionId:string;connectionVersion:number;scheduleId?:string;postId?:string;conversationId?:string;commentId?:string;participantId?:string};
+export type ResolvedAsset={ctx:Scope;accountId:string;platform:InboxPlatform;canonicalKey:string;appNamespace:string;providerAssetId:string;sourceRef:SourceRef|null;connectionVersion:number};
+export type BodyItem={id:string;text:string|null;occurredAt:string;inbound:boolean;senderName?:string|null;deleted?:boolean};
+export type VerifiedItem={providerEventId:string;threadId:string;actorId:string|null;actorName:string|null;kind:Kind;occurredAt:string;inbound:boolean;deleted:boolean;sourceRef:SourceRef;text?:string|null};
+export type AdapterPage={items:VerifiedItem[];nextCursor:string|null;coverage:string;warnings:string[]};
+export type AdapterDetail={items:BodyItem[];nextCursor:string|null;officialUrl:string|null;replyTarget:string|null;capabilities:CapabilityDto[]};
+export type SendOutcome={status:'sent';providerId:string}|{status:'failed';code:string;diagnosticId:string}|{status:'unknown';diagnosticId:string};
+export interface InboxAdapter {
+ capabilities(asset:ResolvedAsset):Promise<CapabilityDto[]>;
+ list(asset:ResolvedAsset,kind:Kind,cursor:string|null,limit:number):Promise<AdapterPage>;
+ detail(asset:ResolvedAsset,sourceRef:SourceRef,cursor?:string):Promise<AdapterDetail>;
+ reply(asset:ResolvedAsset,target:SourceRef,text:string,requestKey:string):Promise<SendOutcome>;
+ normalizeVerifiedEvent(sourceIds:string[],asset:ResolvedAsset):Promise<VerifiedItem[]>;
+}
+export type TagDto={id:string;kind:string;name:string;color:string;version:number};
+export type CaseDto={id:string;kind:Kind;accountId:string;customerId:string|null;customerName:string|null;sourceLabel:string;status:string;version:number;lastInboundAt:string|null;unread:boolean;tags:TagDto[];assigneeId:string|null;sentiment:string|null};
+export type DetailDto=CaseDto&AdapterDetail;
+export type CustomerDto={id:string;version:number;name:string|null;identities:Array<{platform:string;name:string|null;username:string|null;avatarUrl:string|null;profileUrl:string|null;accountId:string}>;tags:TagDto[];notes:Array<{id:string;text:string;authorId:string;createdAt:string}>;cases:CaseDto[]};
