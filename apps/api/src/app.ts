@@ -24,6 +24,10 @@ import {createFacebookManagementRouter} from './facebookManagement/routes';
 import {facebookManagementRuntime,type FacebookManagementRuntime} from './facebookManagement/runtime';
 import {createFacebookPageSyncRouter} from './facebookPageSync/routes';
 import {getFacebookPageSyncRuntime} from './facebookPageSync/runtime';
+import {createInteractionInboxRuntime} from './interactionInbox/runtime';
+import {createInteractionInboxRouter} from './interactionInbox/routes';
+import {prisma} from './prisma';
+import {redis} from './redis';
 
 export function createApp(options:{facebookManagement?:FacebookManagementRuntime}={}) {
   const app = express();
@@ -48,6 +52,7 @@ export function createApp(options:{facebookManagement?:FacebookManagementRuntime
   app.use("/api/v1", adminRoutes);
   app.use("/api/v1", workspaceRoutes);
   app.use('/api/v1',createFacebookManagementRouter(management,{webAppUrl:config.WEB_APP_URL}));
+  app.use('/api/v1',createInteractionInboxRouter(createInteractionInboxRuntime({db:prisma,redis,facebook:management})));
   app.use("/api/v1", tiktokSandboxRoutes);
   app.use('/api/v1',createFacebookPageSyncRouter(getFacebookPageSyncRuntime,{webAppUrl:config.WEB_APP_URL}));
   app.use("/api/v1", socialAccountRoutes);
