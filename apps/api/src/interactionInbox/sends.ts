@@ -1,9 +1,10 @@
 import type {PrismaClient} from '@prisma/client';import {z} from 'zod';import {HttpError} from '../utils/errors';
 import type {InboxAccess,InboxDb} from './access';import type {InboxRegistry} from './adapters/registry';import type {Scope,SendOutcome,SourceRef} from './types';
+import {sourceSchema} from './access';
 export async function pendingInboxSend(db:InboxDb,ctx:Scope,id:string,source:SourceRef){
  const ref=await db.interactionAudit.findFirst({where:{workspaceId:ctx.workspaceId,targetId:id,action:'reply.reference'},orderBy:[{createdAt:'desc'},{id:'desc'}]});if(!ref)return null;
  if(await db.interactionAudit.findFirst({where:{workspaceId:ctx.workspaceId,targetId:id,action:'reply.acknowledge',result:ref.result}}))return null;
- const attempt=await db.facebookInteractionSendAttempt.findUnique({where:{managedPageId_requestKey:{managedPageId:source.managedPageId,requestKey:ref.result}}});
+ const attempt=await db.facebookInteractionSendAttempt.findUnique({where:{managedPageId_requestKey:{managedPageId:sourceSchema.parse(source).managedPageId,requestKey:ref.result}}});
  if(attempt&&['sent','failed'].includes(attempt.status))return null;
  return{requestKey:ref.result,status:attempt?.status??'pending',diagnosticId:attempt?.diagnosticId??null,createdAt:ref.createdAt.toISOString()};
 }

@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {withInboxFixture} from './helpers/interactionInboxFixture';
 import {config} from '../src/config';
-async function service(f:any){const m=await import('../src/interactionInbox/access').catch(()=>null);assert.ok(m,'inbox access service required');return m.createInboxAccess({db:f.db,facebookEnabled:true,verifyFacebook:async()=>({readComments:{status:'available'},readMessages:{status:'available'},replyComments:{status:'available'},replyMessages:{status:'available'}})});}
+async function service(f:any){const {inboxTestAccess}=await import('./helpers/interactionInboxServices');return inboxTestAccess(f);}
 test('ordinaryOwnerAndNonmemberAdminAreDenied',async()=>withInboxFixture(async f=>{
  const s=await service(f),before=await f.protectedSnapshot();const old=config.ADMIN_EMAILS;config.ADMIN_EMAILS='';await assert.rejects(s.require(f.adminCtx,'read'),(e:any)=>e.statusCode===403);config.ADMIN_EMAILS=old;
  await assert.rejects(s.require({...f.adminCtx,workspaceId:'00000000-0000-4000-8000-000000000000'},'read'));

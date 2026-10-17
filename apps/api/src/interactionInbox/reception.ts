@@ -1,5 +1,6 @@
 import {randomUUID} from 'node:crypto';import type {PrismaClient} from '@prisma/client';import type Redis from 'ioredis';import {z} from 'zod';
 import {HttpError} from '../utils/errors';import type {InboxAccess} from './access';import type {InboxRegistry} from './adapters/registry';import type {createInboxProjection} from './projection';import type {Scope,AdapterPage} from './types';import {encodeInboxCursor,decodeInboxCursor} from './cursor';
+import {sourceSchema} from './access';
 const acquire="redis.call('ZREMRANGEBYSCORE',KEYS[1],'-inf',ARGV[1]); if redis.call('EXISTS',KEYS[2])==1 then return 0 end; if redis.call('ZCARD',KEYS[1])>=4 then return -1 end; redis.call('SET',KEYS[2],'1','EX',30); redis.call('ZADD',KEYS[1],ARGV[2],ARGV[3]); redis.call('EXPIRE',KEYS[1],120); return 1";
 export function createInboxReception({db,access,registry,projection,redis}:{db:PrismaClient;access:InboxAccess;registry:InboxRegistry;projection:ReturnType<typeof createInboxProjection>;redis:Pick<Redis,'eval'|'zrem'|'get'|'set'>}){
  async function refreshInbox(ctx:Scope,input:unknown){
@@ -29,7 +30,7 @@ export function createInboxReception({db,access,registry,projection,redis}:{db:P
  async function projectFacebookSourceBatch(sourceRefs:string[],_now:Date,ctx?:Scope){
   if(!ctx||sourceRefs.length>50)return 0;await access.require(ctx,'write');
   const sources=await db.facebookInteractionMessage.findMany({where:{id:{in:sourceRefs},page:{connection:{workspaceId:ctx.workspaceId}}},take:50,include:{page:true}});let count=0;
-  for(const pageId of new Set(sources.map(s=>s.managedPageId))){const page=sources.find(s=>s.managedPageId===pageId)!.page,account=await db.socialAccount.findFirst({where:{workspaceId:ctx.workspaceId,platform:'facebook',providerAccountId:page.pageId,status:'active'}});if(!account)continue;try{const a=await access.resolveInboxAsset(ctx,account.id,'messages.read');if(a.sourceRef?.managedPageId!==pageId)continue;const items=await registry.getInboxAdapter('facebook').normalizeVerifiedEvent(sources.filter(s=>s.managedPageId===pageId).map(s=>s.id),a);count+=(await projection.projectVerifiedPage(ctx,a,{items,nextCursor:null,coverage:'verified_received_sources',warnings:[]})).count;}catch{/* Retry only under an authorized visible refresh, never under an assumed user. */}}
+  for(const pageId of new Set(sources.map(s=>s.managedPageId))){const page=sources.find(s=>s.managedPageId===pageId)!.page,account=await db.socialAccount.findFirst({where:{workspaceId:ctx.workspaceId,platform:'facebook',providerAccountId:page.pageId,status:'active'}});if(!account)continue;try{const a=await access.resolveInboxAsset(ctx,account.id,'messages.read');if(sourceSchema.parse(a.sourceRef).managedPageId!==pageId)continue;const items=await registry.getInboxAdapter('facebook').normalizeVerifiedEvent(sources.filter(s=>s.managedPageId===pageId).map(s=>s.id),a);count+=(await projection.projectVerifiedPage(ctx,a,{items,nextCursor:null,coverage:'verified_received_sources',warnings:[]})).count;}catch{/* Retry only under an authorized visible refresh, never under an assumed user. */}}
   return count;
  }
  return{refreshInbox,projectFacebookSourceBatch};

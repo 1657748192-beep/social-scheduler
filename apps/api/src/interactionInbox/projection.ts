@@ -2,20 +2,23 @@ import type {PrismaClient} from '@prisma/client';import {HttpError} from '../uti
 import type {InboxAccess} from './access';import {sourceSchema} from './access';
 import type {AdapterPage,ResolvedAsset,Scope} from './types';
 import {inboxSourceAlive} from './sourceLifetime';
-export function createInboxProjection({db,access,policyVerified=false}:{db:PrismaClient;access:InboxAccess;policyVerified?:boolean}){
+import {createLiveInboxPolicy,type LiveInboxPolicy} from './livePolicy';
+export function createInboxProjection({db,access,policy=createLiveInboxPolicy([])}:{db:PrismaClient;access:InboxAccess;policy?:LiveInboxPolicy}){
  return{async projectVerifiedPage(ctx:Scope,a:ResolvedAsset,page:AdapterPage){
-  if(!policyVerified)throw new HttpError(409,'Interaction data policy verification required');
+  if(a.platform!=='facebook')throw new HttpError(409,'Platform not integrated');
+  policy.requireAsset({workspaceId:ctx.workspaceId,platform:'facebook',appId:a.appNamespace,providerAssetId:a.providerAssetId},'read');
+  const originalSource=sourceSchema.parse(a.sourceRef);
   if(page.items.length>1250)throw new HttpError(502,'Provider result too large');
   const fresh=await access.resolveInboxAsset(ctx,a.accountId);if(fresh.canonicalKey!==a.canonicalKey||fresh.connectionVersion!==a.connectionVersion)throw new HttpError(409,'Connection changed');
   return access.write(ctx,async tx=>{
    const connection=await tx.facebookManagementConnection.findFirst({where:{id:a.sourceRef?.connectionId,workspaceId:ctx.workspaceId,status:'active',version:a.connectionVersion}});
    const selection=await tx.facebookManagementPageSelection.findUnique({where:{workspaceId_pageId:{workspaceId:ctx.workspaceId,pageId:a.providerAssetId}}});
-   if(!connection||selection?.managedPageId!==a.sourceRef?.managedPageId)throw new HttpError(404,'Connection changed');
-   const asset=await tx.interactionAsset.upsert({where:{workspaceId_canonicalKey:{workspaceId:ctx.workspaceId,canonicalKey:a.canonicalKey}},create:{workspaceId:ctx.workspaceId,canonicalKey:a.canonicalKey,platform:a.platform,appNamespace:a.appNamespace,providerAssetId:a.providerAssetId,facebookManagedPageId:a.sourceRef!.managedPageId,connectionVersion:a.connectionVersion},update:{active:true,facebookManagedPageId:a.sourceRef!.managedPageId,connectionVersion:a.connectionVersion}});
+   if(!connection||selection?.managedPageId!==originalSource.managedPageId)throw new HttpError(404,'Connection changed');
+   const asset=await tx.interactionAsset.upsert({where:{workspaceId_canonicalKey:{workspaceId:ctx.workspaceId,canonicalKey:a.canonicalKey}},create:{workspaceId:ctx.workspaceId,canonicalKey:a.canonicalKey,platform:a.platform,appNamespace:a.appNamespace,providerAssetId:a.providerAssetId,facebookManagedPageId:originalSource.managedPageId,connectionVersion:a.connectionVersion},update:{active:true,facebookManagedPageId:originalSource.managedPageId,connectionVersion:a.connectionVersion}});
    let count=0;
    for(const v of page.items){
     const ref=sourceSchema.parse(v.sourceRef),time=new Date(v.occurredAt);
-    if(!v.providerEventId||v.providerEventId.length>512||!Number.isFinite(time.getTime())||time.getTime()>Date.now()+300000||ref.managedPageId!==a.sourceRef?.managedPageId||ref.connectionId!==a.sourceRef?.connectionId||ref.connectionVersion!==a.connectionVersion)throw new HttpError(502,'Inconsistent provider identity');
+    if(!v.providerEventId||v.providerEventId.length>512||!Number.isFinite(time.getTime())||time.getTime()>Date.now()+300000||ref.managedPageId!==originalSource.managedPageId||ref.connectionId!==originalSource.connectionId||ref.connectionVersion!==a.connectionVersion)throw new HttpError(502,'Inconsistent provider identity');
     if(!ref.sourceRecordId){const where={managedPageId_providerId:{managedPageId:ref.managedPageId,providerId:v.providerEventId}},original=v.kind==='messages'?await tx.facebookInteractionMessage.findUnique({where,select:{id:true}}):await tx.facebookInteractionComment.findUnique({where,select:{id:true}});if(original)ref.sourceRecordId=original.id;}
     if(!await inboxSourceAlive(tx,ref,new Date()))continue;
     let identity=v.actorId?await tx.interactionIdentity.findUnique({where:{workspaceId_platform_appNamespace_assetId_providerActorId:{workspaceId:ctx.workspaceId,platform:a.platform,appNamespace:a.appNamespace,assetId:asset.id,providerActorId:v.actorId}}}):null;

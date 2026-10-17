@@ -3,6 +3,7 @@ import {HttpError} from '../utils/errors';import type {InboxAccess} from './acce
 import type {Scope,PageResult,CaseDto,AccountStatus,ResolvedAsset,Query,DetailDto} from './types';
 import {pendingInboxSend} from './sends';
 import {liveInboxCaseSql} from './sourceLifetime';
+import {sourceSchema} from './access';
 const rateScript="local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],60) end; return n";
 export function createInboxReads({db,access,registry,redis}:{db:PrismaClient;access:InboxAccess;registry:InboxRegistry;redis:Pick<Redis,'eval'>}){
  async function listCases(ctx:Scope,input:unknown):Promise<PageResult<CaseDto>>{
@@ -13,13 +14,13 @@ export function createInboxReads({db,access,registry,redis}:{db:PrismaClient;acc
   const statuses:AccountStatus[]=[],allowed:Array<{a:ResolvedAsset;id:string}>=[];let lastSuccess:string|null=null;
   for(const accountId of q.accountIds){
    try{const a=await access.resolveInboxAsset(ctx,accountId,`${q.kind}.read` as any),stored=await db.interactionAsset.findUnique({where:{workspaceId_canonicalKey:{workspaceId:ctx.workspaceId,canonicalKey:a.canonicalKey}}});
-    if(!stored||stored.connectionVersion!==a.connectionVersion||stored.facebookManagedPageId!==a.sourceRef?.managedPageId){statuses.push({accountId,status:'not_synced',count:null});continue;}
+    if(!stored||stored.connectionVersion!==a.connectionVersion||stored.facebookManagedPageId!==sourceSchema.parse(a.sourceRef).managedPageId){statuses.push({accountId,status:'not_synced',count:null});continue;}
     const sync=await db.interactionSyncState.findUnique({where:{assetId_kind:{assetId:stored.id,kind:q.kind}}});
     statuses.push({accountId,status:sync?.status==='ok'?'ok':sync?.status??'not_synced',count:null});allowed.push({a,id:stored.id});if(sync?.lastSuccessAt&&(!lastSuccess||sync.lastSuccessAt.toISOString()>lastSuccess))lastSuccess=sync.lastSuccessAt.toISOString();
    }catch{statuses.push({accountId,status:'unavailable',count:null});}
   }
   await access.require(ctx);if(!allowed.length)return{items:[],nextCursor:null,accountsStatus:statuses,partial:statuses.some(s=>s.status!=='ok'),observedAt:new Date().toISOString(),lastSuccessfulSyncAt:lastSuccess};
-  const assetClause=Prisma.join(allowed.map(({a,id})=>Prisma.sql`(c."assetId"=${id}::uuid AND c."sourceRef"->>'managedPageId'=${a.sourceRef!.managedPageId} AND c."sourceRef"->>'connectionId'=${a.sourceRef!.connectionId} AND c."sourceRef"->>'connectionVersion'=${String(a.connectionVersion)})`),' OR ');
+  const assetClause=Prisma.join(allowed.map(({a,id})=>Prisma.sql`(c."assetId"=${id}::uuid AND c."sourceRef"->>'managedPageId'=${sourceSchema.parse(a.sourceRef).managedPageId} AND c."sourceRef"->>'connectionId'=${a.sourceRef!.connectionId} AND c."sourceRef"->>'connectionVersion'=${String(a.connectionVersion)})`),' OR ');
   const clauses=[Prisma.sql`c."workspaceId"=${ctx.workspaceId}::uuid`,Prisma.sql`(${assetClause})`,Prisma.sql`c.kind=${q.kind}`,liveInboxCaseSql()];
   if(q.status)clauses.push(Prisma.sql`c.status=${q.status}`);
   if(q.from)clauses.push(Prisma.sql`COALESCE(c."lastInboundAt",c."createdAt")>=${new Date(q.from)}`);
