@@ -491,7 +491,7 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
           </section>
         ) : null}
 
-        <section className="panel channel-management" id="social-channels">
+        {!accountsOnly ? <section className="panel channel-management" id="social-channels">
           <div className="row">
             <div>
               <p className="section-kicker">{t("渠道管理", "Channel management")}</p>
@@ -624,7 +624,7 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
               <div className="connected-table-row empty-row">{t("暂未绑定社交账号", "No social accounts connected")}</div>
             ) : null}
           </div> : null}
-        </section>
+        </section> : null}
 
 
         {!accountsOnly ? <>

@@ -20,12 +20,10 @@ test("social accounts route focuses on workspace account management, not activit
   const html = renderPage(SocialAccountsPage, "/social-accounts");
   assert.match(html, /<h1>社交账号<\/h1>/);
   assert.match(html, /当前工作区/);
-  assert.match(html, /连接与授权状态/);
+  assert.doesNotMatch(html, /连接与授权状态|渠道管理|id="social-channels"/);
   assert.match(html, /aria-label="账号管理"/);
   assert.ok(html.indexOf('aria-label="账号管理"')>html.indexOf('当前工作区'));
-  assert.ok(html.indexOf('aria-label="账号管理"')<html.indexOf('id="social-channels"'));
   assert.doesNotMatch(html, /class="connected-table"/);
-  assert.match(html, /只有所有者和管理员可以绑定社交账号/);
   assert.doesNotMatch(html, /内容统计|待处理邀请|新工作区名称/);
   assert.match(html, /class="active" href="\/social-accounts"/);
 });

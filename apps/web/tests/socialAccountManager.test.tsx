@@ -77,6 +77,24 @@ async function withAccountPage(run:(f:any)=>Promise<void>,override:(url:URL,init
   });}finally{(globalThis as any).localStorage=previous.storage;(globalThis as any).self=previous.self;}
 }
 
+test('accountPageHidesChannelsButTopAddRetainsOfficialAndSharedAuthorization',async()=>{
+  await withAccountPage(async({view,requests}:any)=>{
+    assert.equal(view.root.findAllByProps({id:'social-channels'}).length,0);
+    await act(async()=>facebookButton(view,'添加账号').props.onClick());
+    const picker=view.root.findByProps({role:'dialog'});
+    await act(async()=>picker.findAllByType('button').find((b:any)=>b.props.children.includes('Instagram')).props.onClick());
+    assert.match(facebookText(view),/官方授权登录/);
+    assert.equal(facebookButton(view,'立即连接').props.disabled,false);
+    assert.equal(requests.filter((r:any)=>r.path.includes('/oauth/start')).length,0);
+    await act(async()=>facebookButton(view,'生成链接').props.onClick());
+    assert.ok(view.root.findAllByType('input').some((input:any)=>input.props.readOnly&&input.props.value==='https://example.test/shared-authorization'));
+    const writes=requests.filter((r:any)=>r.method==='POST');
+    assert.equal(writes.length,1);
+    assert.equal(writes[0].path,'/api/v1/workspaces/w1/social-accounts/authorization-links');
+    assert.deepEqual(writes[0].body,{platform:'instagram'});
+  },(url,init)=>url.pathname.endsWith('/authorization-links')&&init?.method==='POST'?Response.json({shareUrl:'https://example.test/shared-authorization',expiresAt:'2026-10-18T00:00:00Z'}):url.pathname.endsWith('/social-accounts')?Response.json([accounts[0]]):undefined);
+});
+
 test('realAccountPageConfirmsIdentityAndCancellationNeverDeletes',async()=>{
   let allowed=false,deleted=false;const confirmations:string[]=[];
   await withAccountPage(async({view,requests}:any)=>{
