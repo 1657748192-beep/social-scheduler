@@ -30,4 +30,4 @@ export async function withFacebookUI(element:React.ReactElement,run:(f:any)=>Pro
   finally{if(view!)await unmount();globalThis.fetch=old.fetch;(globalThis as any).window=old.window;(globalThis as any).document=old.document;}
 }
 export const facebookText=(view:ReactTestRenderer)=>JSON.stringify(view.toJSON());
-export const facebookButton=(view:ReactTestRenderer,label:string)=>view.root.findAllByType('button').find(button=>button.children.join('')===label)!;
+export const facebookButton=(view:ReactTestRenderer,label:string)=>{const text=(node:any):string=>typeof node==='string'?node:node?.props?.['aria-hidden']? '':(node?.children??[]).map(text).join('');return view.root.findAllByType('button').find(button=>button.props['aria-label']===label||text(button)===label)!;};

@@ -3,7 +3,7 @@ import test from 'node:test';import assert from 'node:assert/strict';import Reac
 test('same-case reload preserves unfinished internal input while customer data loads',async()=>{
  const {InteractionDetail}=await import('../components/inbox/unified/InteractionDetail');let reads=0,finish!:(r:Response)=>void;
  await withInboxUI(<InteractionDetail token="test" workspaceId="w1" item={inboxCase as any} accountName="Page" canWrite canManage onClose={()=>{}} onDirtyChange={()=>{}} onUpdated={()=>{}} onAccessDenied={()=>{}}/>,async({view}:any)=>{
-  await act(async()=>view.root.findByProps({'aria-label':'内部备注'}).props.onChange({target:{value:'unfinished private note'}}));
+  await act(async()=>view.root.findAllByType('textarea').find((n:any)=>n.props['aria-label']==='内部备注').props.onChange({target:{value:'unfinished private note'}}));
   await act(async()=>facebookButton(view,'刷新详情').props.onClick());assert.match(facebookText(view),/unfinished private note/);
   await act(async()=>finish(Response.json({id:inboxCase.customerId,version:1,name:'Customer',identities:[],tags:[],notes:[],cases:[]})));
  },url=>url.pathname.includes('/customers/')&&++reads>1?new Promise(resolve=>{finish=resolve;}):undefined);
