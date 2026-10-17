@@ -24,7 +24,7 @@ export function createFacebookPageSyncService(deps:{db:PrismaClient;store:Return
   },
   async view(ctx:SyncContext,id:string):Promise<SyncView>{
    const record=await pending(ctx,id),existing=new Set((await accounts(ctx,[...record.pages,...record.rejected].map(p=>p.pageId))).map(a=>a.providerAccountId));
-   return{syncId:id,workspaceId:ctx.workspaceId,expiresAt:new Date(record.expiresAt).toISOString(),status:record.status,result:record.result,pages:[...record.pages.map(p=>({pageId:p.pageId,name:p.name,avatarUrl:p.avatarUrl,profileUrl:p.profileUrl,existing:existing.has(p.pageId),eligible:!p.expiresAt||p.expiresAt.getTime()>Date.now()})),...record.rejected.map(p=>({...p,existing:existing.has(p.pageId)}))]};
+   return{syncId:id,workspaceId:ctx.workspaceId,expiresAt:new Date(record.expiresAt).toISOString(),status:record.status,result:record.result,selectedPageIds:record.selectedPageIds,pages:[...record.pages.map(p=>({pageId:p.pageId,name:p.name,avatarUrl:p.avatarUrl,profileUrl:p.profileUrl,existing:existing.has(p.pageId),eligible:!p.expiresAt||p.expiresAt.getTime()>Date.now()})),...record.rejected.map(p=>({...p,existing:existing.has(p.pageId)}))]};
   },
   async confirm(ctx:SyncContext,id:string,input:string[]):Promise<SyncResult>{
    const ids=[...new Set(selection.parse(input))].sort(),digest=hash(ids),record=await pending(ctx,id);
@@ -33,7 +33,7 @@ export function createFacebookPageSyncService(deps:{db:PrismaClient;store:Return
    const candidates=new Set([...record.pages,...record.rejected].map(p=>p.pageId));if(ids.some(pageId=>!candidates.has(pageId)))throw new HttpError(400,'Selection contains an unauthorized Page');
    const existing=new Set((await accounts(ctx,ids)).map(a=>a.providerAccountId));
    const toValidate=ids.filter(pageId=>!existing.has(pageId)).map(pageId=>{const p=record.pages.find(p=>p.pageId===pageId);if(!p||p.expiresAt&&p.expiresAt.getTime()<=Date.now())throw new HttpError(400,'Selected Page authorization is unavailable');return p;});
-   const claim=await store.claim(ctx,id,'confirm',digest);if(claim.leaseId==='completed')return replay(await pending(ctx,id),digest);
+   const claim=await store.claim(ctx,id,'confirm',digest,ids);if(claim.leaseId==='completed')return replay(await pending(ctx,id),digest);
    const verified=await graph.revalidate(toValidate);
    const result=await db.$transaction(async tx=>{
     await tx.$queryRaw`SELECT id FROM user_sessions WHERE id=${ctx.sessionId}::uuid FOR UPDATE`;

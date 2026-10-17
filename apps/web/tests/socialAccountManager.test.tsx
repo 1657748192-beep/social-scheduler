@@ -14,6 +14,12 @@ const accounts=[account('Brand Instagram','instagram',{profileUrl:'https://www.i
 const providers=[{platform:'instagram',platformParam:'instagram',displayName:'Instagram',configured:true},{platform:'facebook',platformParam:'facebook',displayName:'Facebook',configured:false}] as OAuthProviderStatus[];
 const panel=(overrides:any={})=><SocialAccountManager accounts={accounts} providers={providers} workspaceId="w1" token="test-token" canManage loading={false} failed={false} onAdd={()=>{}} onDisconnect={async()=>{}} {...overrides}/>;
 
+test('Facebook Page sync is separate from add and only enabled for configured manager access',async()=>{
+ let started=0;const configured=providers.map(p=>({...p,configured:true}));
+ await withFacebookUI(panel({providers:configured,onSyncFacebookPages:()=>{started++;}}),async({view,requests}:any)=>{const button=facebookButton(view,'同步公共主页');assert.ok(button);await act(async()=>button.props.onClick());assert.equal(started,1);assert.equal(requests.length,0);});
+ await withFacebookUI(panel({providers:configured,canManage:false,onSyncFacebookPages:()=>{started++;}}),async({view}:any)=>assert.equal(facebookButton(view,'同步公共主页'),undefined));
+});
+
 test('platform picker explains each supported account type before any authorization',async()=>{
   const allProviders=['facebook','instagram','tiktok','youtube','pinterest','linkedin'].map(platform=>({platform,platformParam:platform,displayName:platform,configured:true}));
   await withFacebookUI(panel({providers:allProviders}),async({view,requests}:any)=>{
@@ -77,7 +83,7 @@ test('loadingFailureAndWorkspaceChangesDoNotLeakOldAccountsOrInventEmptyResults'
 }));
 import {LanguageProvider as LanguageWrapper} from '../components/LanguageProvider';
 
-async function withAccountPage(run:(f:any)=>Promise<void>,override:(url:URL,init?:RequestInit)=>Response|Promise<Response>|undefined){
+async function withAccountPage(run:(f:any)=>Promise<void>,override:(url:URL,init?:RequestInit)=>Response|Promise<Response>|undefined,providerStatus=providers){
   const previous={storage:(globalThis as any).localStorage,self:(globalThis as any).self};
   (globalThis as any).localStorage={getItem:(key:string)=>key==='social_scheduler_token'?'test-token':null,removeItem(){}};
   (globalThis as any).self={setTimeout:()=>1,clearTimeout(){}};
@@ -85,10 +91,18 @@ async function withAccountPage(run:(f:any)=>Promise<void>,override:(url:URL,init
   try{await withFacebookUI(<AppRouterContext.Provider value={router}><PathnameContext.Provider value="/social-accounts"><DashboardPageContent accountsOnly/></PathnameContext.Provider></AppRouterContext.Provider>,run,(url,init)=>{
     if(url.pathname.endsWith('/auth/me'))return Response.json({id:'user',name:'Owner',email:'owner@example.test'});
     if(url.pathname.endsWith('/workspaces'))return Response.json([{id:'w1',name:'First workspace',role:'owner'},{id:'w2',name:'Second workspace',role:'owner'}]);
-    if(url.pathname.endsWith('/integrations/oauth/status'))return Response.json(providers);
+    if(url.pathname.endsWith('/integrations/oauth/status'))return Response.json(providerStatus);
     return override(url,init);
   });}finally{(globalThis as any).localStorage=previous.storage;(globalThis as any).self=previous.self;}
 }
+
+test('real social account page opens a separate sync dialog without starting OAuth or changing bindings',async()=>{
+ await withAccountPage(async({view,requests}:any)=>{
+  await act(async()=>facebookButton(view,'同步公共主页').props.onClick());
+  assert.match(facebookText(view),/仅导入新增主页/);assert.ok(facebookButton(view,'前往 Facebook 授权'));
+  assert.equal(requests.filter((r:any)=>r.method==='POST'||r.method==='DELETE').length,0);
+ },url=>url.pathname.endsWith('/social-accounts')?Response.json([accounts[0]]):undefined,providers.map(p=>({...p,configured:true})));
+});
 
 test('accountPageHidesChannelsButTopAddRetainsOfficialAndSharedAuthorization',async()=>{
   await withAccountPage(async({view,requests}:any)=>{

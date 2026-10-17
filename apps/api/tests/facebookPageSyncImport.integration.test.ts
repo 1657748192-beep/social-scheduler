@@ -39,7 +39,7 @@ test('lost database acknowledgement and Redis finish failure are safe to retry w
  const db=new Proxy(f.db,{get(target,key){if(key==='$transaction')return async(run:any,opts:any)=>{const value=await target.$transaction(run,opts);if(lost){lost=false;throw Error('COMMIT acknowledgement lost');}return value;};return Reflect.get(target,key);}});
  const store={...f.store,finish:async(...args:any[])=>{if(finishLost){finishLost=false;throw Error('Redis disconnected');}return f.store.finish(...args);}};
  const service=f.make({db,store}),before=await f.snapshot(),{id}=await f.prepare(service);
- await assert.rejects(service.confirm(f.ctx,id,['101']));const first=await f.db.socialAccount.findFirst({where:{workspaceId:f.ctx.workspaceId,providerAccountId:'101'},include:{credential:true}});assert.ok(first);
+ await assert.rejects(service.confirm(f.ctx,id,['101']));assert.deepEqual((await service.view(f.ctx,id)).selectedPageIds,['101']);const first=await f.db.socialAccount.findFirst({where:{workspaceId:f.ctx.workspaceId,providerAccountId:'101'},include:{credential:true}});assert.ok(first);
  await assert.rejects(service.confirm(f.ctx,id,['101']));assert.deepEqual(await service.confirm(f.ctx,id,['101']),{createdPageIds:['101'],skippedPageIds:[]});
  assert.deepEqual(await f.db.socialAccount.findUnique({where:{id:first.id},include:{credential:true}}),first);assert.deepEqual(await f.snapshot(),before);
 }));

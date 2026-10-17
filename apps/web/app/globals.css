@@ -1849,6 +1849,14 @@ textarea {
 .account-manager-detail-footer p { font-size: 13px; line-height: 1.5; }
 .account-manager-detail-footer .button { justify-self: start; }
 .account-manager-provider-picker { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.account-manager-dialog:has(.facebook-page-sync-list) { gap: 12px; align-content: start; }
+.account-manager-dialog:has(.facebook-page-sync-list) p { margin: 0; }
+.facebook-page-sync-list { max-height: min(360px,calc(100dvh - 340px)); overflow-y: auto; margin: 0; border: 1px solid var(--border, #dce8e3); border-radius: 12px; }
+.facebook-page-sync-row { display: flex; align-items: center; gap: 12px; padding: 12px; border-bottom: 1px solid #e4ece8; }
+.facebook-page-sync-row input { flex: 0 0 auto; width: 18px; height: 18px; }
+.facebook-page-sync-row img { object-fit: cover; border-radius: 50%; }
+.facebook-page-sync-row span { min-width: 0; overflow-wrap: anywhere; }
+.facebook-page-sync-row small { display: block; margin-top: 4px; }
 .account-manager-provider-picker .button { justify-content: flex-start; flex-wrap: wrap; }
 .account-manager-provider-picker img, .account-manager-provider-picker .official-platform-logo { width: 24px; height: 24px; }
 .account-manager-provider-picker small { flex-basis: 100%; text-align: left; }
