@@ -1,0 +1,9 @@
+'use client';
+import React from 'react';import {useLanguage} from '../../LanguageProvider';import type {InboxCase} from '../../../lib/interactionInbox';
+export function InteractionList({items,activeId,onSelect,loading,failed,hasMore,onMore}:{items:InboxCase[];activeId:string|null;onSelect:(c:InboxCase)=>void;loading:boolean;failed:boolean;hasMore:boolean;onMore:()=>void}){
+ const {t}=useLanguage();return <section className="inbox-list" aria-label={t('互动列表','Interactions')}>
+ {loading?<p role="status">{t('正在读取互动…','Loading interactions…')}</p>:null}{!loading&&!items.length?<p>{failed?t('当前读取不完整，请重试；不能认定为没有消息。','Reads are incomplete. Retry; this does not mean there are no messages.'):t('当前筛选下暂无已同步互动。','No synchronized interactions match this filter.')}</p>:null}
+ {items.map(c=><button type="button" className="inbox-case-row" aria-current={activeId===c.id?'true':undefined} key={c.id} onClick={()=>onSelect(c)}><strong>{c.customerName??t('匿名参与者','Anonymous participant')}</strong><small>{c.sourceLabel} · {c.kind==='comments'?t('评论','Comment'):c.kind==='messages'?t('私信','Message'):t('提及','Mention')}</small><span>{c.unread?t('未读','Unread'):t('已读','Read')} · {c.status==='resolved'?t('已解决','Resolved'):c.status==='in_progress'?t('处理中','In progress'):t('待处理','Pending')}</span><time>{c.lastInboundAt?new Date(c.lastInboundAt).toLocaleString():t('平台未提供时间','Timestamp unavailable')}</time>{c.tags.map(tag=><small key={tag.id} className="inbox-label">{tag.name}</small>)}</button>)}
+ {hasMore?<button type="button" className="button secondary" disabled={loading} onClick={onMore}>{t('加载更多互动','Load more interactions')}</button>:null}
+ </section>;
+}

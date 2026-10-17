@@ -1,3 +1,7 @@
-import { redirect } from 'next/navigation';
-
-export default function InboxPage() { redirect('/dashboard'); }
+'use client';
+import React,{useEffect,useState} from 'react';import {AppShell} from '../../components/AppShell';import {PlatformAdminOnly} from '../../components/facebook/PlatformAdminOnly';import {UnifiedInbox} from '../../components/inbox/unified/UnifiedInbox';import {apiRequest,type Workspace} from '../../lib/api';import {useLanguage} from '../../components/LanguageProvider';
+export default function InboxPage(){return <PlatformAdminOnly><InboxContent/></PlatformAdminOnly>;}
+function InboxContent(){const {t}=useLanguage(),[token,setToken]=useState<string|null>(null),[spaces,setSpaces]=useState<Workspace[]>([]),[error,setError]=useState(false);
+ useEffect(()=>{let current=true;const c=new AbortController();try{const stored=window.localStorage.getItem('social_scheduler_token');if(stored){setToken(stored);void apiRequest<Workspace[]>('/workspaces',{token:stored,signal:c.signal}).then(rows=>{if(current)setSpaces(rows);}).catch(()=>{if(current)setError(true);});}}catch{setError(true);}return()=>{current=false;c.abort();};},[]);
+ return <AppShell title={t('互动收件箱','Interaction inbox')} subtitle={t('评论、私信与提及 · 管理员内测','Comments, messages and mentions · administrator testing')} wide>{error?<p role="alert">{t('无法读取工作区，请重新登录。','Workspaces unavailable. Sign in again.')}</p>:token&&spaces.length?<UnifiedInbox token={token} workspaces={spaces}/>:<p role="status">{t('正在读取工作区，或尚未加入工作区。','Loading workspaces, or no membership is available.')}</p>}</AppShell>;
+}
