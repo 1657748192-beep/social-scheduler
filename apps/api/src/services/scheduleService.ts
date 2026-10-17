@@ -390,7 +390,7 @@ export async function listPublishedPosts(userId: string, workspaceId: string) {
         platform: connectedAccount.platform,
         avatarUrl: connectedAccount.avatarUrl
       } : null,
-      providerPostId: schedule.postVariant.platform === "instagram" ? providerPostId : null,
+      providerPostId: schedule.postVariant.platform === "instagram" || schedule.postVariant.platform === "facebook" ? providerPostId : null,
       instagramEngagement: schedule.postVariant.platform === "instagram" ? {
         accountLinkState: instagramAccountLinkState(savedProviderAccountId, connectedAccount?.providerAccountId ?? null),
         readPostActivity: scopes.includes("instagram_business_basic"),
