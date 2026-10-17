@@ -11,6 +11,7 @@ export function createInteractionInboxRouter(runtime:InboxRuntime,options:{authe
  const action=(f:(req:Request,ctx:Scope)=>Promise<unknown>):RequestHandler=>async(req,res,next)=>{try{res.json(await f(req,context(req)));}catch(e){next(e);}};
  const id=(req:Request)=>uuid.parse(req.params.id);
  router.get(base+'/accounts',action((req,ctx)=>runtime.directory.listInboxAccounts(ctx,z.object({platform:z.string().optional(),q:z.string().optional(),cursor:z.string().optional()}).strict().parse(req.query))));
+ router.get(base+'/assignees',action((_req,ctx)=>runtime.assignees(ctx)));
  router.get(base+'/capabilities',action(async(req,ctx)=>{
   if(!req.query.accountIds)return{accounts:[],authorizationEnabled:false};const ids=z.string().max(2000).parse(req.query.accountIds).split(',');z.array(uuid).min(1).max(50).parse(ids);
   const accounts=[];for(const accountId of ids){try{const a=await runtime.access.resolveInboxAsset(ctx,accountId);accounts.push({accountId,capabilities:await runtime.registry.getInboxAdapter(a.platform).capabilities(a)});}catch{accounts.push({accountId,capabilities:[],reason:'verification_unavailable'});}}await runtime.access.require(ctx);return{accounts,authorizationEnabled:false};
@@ -22,6 +23,7 @@ export function createInteractionInboxRouter(runtime:InboxRuntime,options:{authe
  router.patch(base+'/cases/:id',action((req,ctx)=>runtime.cases.updateCase(ctx,id(req),req.body)));
  router.post(base+'/cases/:id/read',action((req,ctx)=>runtime.cases.markRead(ctx,id(req),req.body)));
  router.post(base+'/cases/:id/replies',action((req,ctx)=>runtime.sends.replyToCase(ctx,id(req),req.body)));
+ router.post(base+'/cases/:id/send-check',action((req,ctx)=>runtime.sends.acknowledgeSend(ctx,id(req),req.body)));
  router.get(base+'/customers/:id',action((req,ctx)=>runtime.customers.getCustomer(ctx,id(req))));
  router.get(base+'/customers/:id/notes',action(async(req,ctx)=>(await runtime.customers.getCustomer(ctx,id(req))).notes));
  router.delete(base+'/customers/:id',action(async(req,ctx)=>{const v=z.object({version:z.number().int().positive()}).strict().parse(req.body);await runtime.customers.deleteCustomer(ctx,id(req),v.version);return{deleted:true};}));

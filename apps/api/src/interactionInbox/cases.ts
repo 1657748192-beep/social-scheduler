@@ -5,7 +5,7 @@ export async function presentInboxCase(db:InboxDb,ctx:Scope,id:string,accountId:
  const c=await db.interactionCase.findFirstOrThrow({where:{id,workspaceId:ctx.workspaceId},include:{asset:true,customer:{include:{identities:true}},tags:{where:{tag:{deletedAt:null}},include:{tag:true}},receipts:{where:{userId:ctx.userId}}}}),r=c.receipts[0];
  return{id:c.id,kind:c.kind as CaseDto['kind'],accountId,customerId:c.customerId,customerName:c.customer?.identities.find(i=>i.assetId===c.assetId)?.displayName??null,sourceLabel:c.asset.platform,status:c.status,version:c.version,lastInboundAt:c.lastInboundAt?.toISOString()??null,unread:!!c.lastInboundAt&&(!r||r.lastReadAt<c.lastInboundAt||r.lastReadKey!==c.lastInboundKey),tags:c.tags.map(({tag})=>({id:tag.id,kind:tag.kind,name:tag.name,color:tag.color,version:tag.version})),assigneeId:c.assigneeId,sentiment:c.sentiment};
 }
-export function createInboxCases({db,access}:{db:PrismaClient;access:InboxAccess}){
+export function createInboxCases({db,access,setCaseTags}:{db:PrismaClient;access:InboxAccess;setCaseTags?:(ctx:Scope,id:string,ids:string[],version:number)=>Promise<void>}){
  async function getCaseDto(ctx:Scope,id:string){const {asset}=await access.resolveCase(ctx,id);return presentInboxCase(db,ctx,id,asset.accountId);}
  async function updateCase(ctx:Scope,id:string,input:unknown){
   const v=z.object({status:z.enum(['pending','in_progress','resolved']).optional(),assigneeId:z.string().uuid().nullable().optional(),sentiment:z.enum(['positive','neutral','negative']).nullable().optional(),version:z.number().int().positive()}).strict().parse(input);
@@ -30,8 +30,8 @@ export function createInboxCases({db,access}:{db:PrismaClient;access:InboxAccess
   });
  }
  async function batchCases(ctx:Scope,operations:unknown){
-  const values=z.array(z.object({id:z.string().uuid(),version:z.number().int().positive(),status:z.enum(['pending','in_progress','resolved'])}).strict()).min(1).max(50).parse(operations);
-  const results=[];for(const v of values){try{await updateCase(ctx,v.id,{version:v.version,status:v.status});results.push({id:v.id,status:'ok'});}catch(e){results.push({id:v.id,status:e instanceof HttpError&&e.statusCode===409?'conflict':'unavailable'});}}return results;
+  const values=z.array(z.object({id:z.string().uuid(),version:z.number().int().positive(),status:z.enum(['pending','in_progress','resolved']).optional(),tagIds:z.array(z.string().uuid()).max(10).optional()}).strict().refine(v=>(v.status!==undefined)!==(v.tagIds!==undefined),'Choose exactly one local operation')).min(1).max(50).parse(operations);
+  const results=[];for(const v of values){try{if(v.tagIds){if(!setCaseTags)throw new HttpError(409,'Tag operation unavailable');await setCaseTags(ctx,v.id,v.tagIds,v.version);}else await updateCase(ctx,v.id,{version:v.version,status:v.status});results.push({id:v.id,status:'ok'});}catch(e){results.push({id:v.id,status:e instanceof HttpError&&e.statusCode===409?'conflict':'unavailable'});}}return results;
  }
  return{getCaseDto,updateCase,markRead,batchCases};
 }

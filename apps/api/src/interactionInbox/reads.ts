@@ -1,6 +1,7 @@
 import {Prisma,type PrismaClient} from '@prisma/client';import type Redis from 'ioredis';import {z} from 'zod';
 import {HttpError} from '../utils/errors';import type {InboxAccess} from './access';import type {InboxRegistry} from './adapters/registry';import {parseQuery} from './limits';import {encodeInboxCursor,decodeInboxCursor} from './cursor';import {presentInboxCase} from './cases';
 import type {Scope,PageResult,CaseDto,AccountStatus,ResolvedAsset,Query,DetailDto} from './types';
+import {pendingInboxSend} from './sends';
 const rateScript="local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],60) end; return n";
 export function createInboxReads({db,access,registry,redis}:{db:PrismaClient;access:InboxAccess;registry:InboxRegistry;redis:Pick<Redis,'eval'>}){
  async function listCases(ctx:Scope,input:unknown):Promise<PageResult<CaseDto>>{
@@ -38,7 +39,8 @@ export function createInboxReads({db,access,registry,redis}:{db:PrismaClient;acc
   await access.require(ctx);const last=rows[q.limit-1];return{items,nextCursor:rows.length>q.limit&&last?encodeInboxCursor(scope,{time:last.time.toISOString(),id:last.id}):null,accountsStatus:statuses,partial:statuses.some(s=>s.status!=='ok'),observedAt:new Date().toISOString(),lastSuccessfulSyncAt:lastSuccess};
  }
  async function getCase(ctx:Scope,id:string,input:unknown):Promise<DetailDto>{const q=parseQuery(input),{row,asset,source}=await access.resolveCase(ctx,id);if(!q.accountIds.includes(asset.accountId)||q.kind!==row.kind)throw new HttpError(404,'Interaction unavailable');
-  const detail=await registry.getInboxAdapter(asset.platform).detail(asset,source);await access.resolveCase(ctx,id);return{...await presentInboxCase(db,ctx,id,asset.accountId),...detail};
+  const cursorScope={ctx,id,connectionVersion:asset.connectionVersion,source};const position=q.cursor?z.object({after:z.string().max(2048)}).strict().parse(decodeInboxCursor(cursorScope,q.cursor)).after:undefined;
+  const detail=await registry.getInboxAdapter(asset.platform).detail(asset,source,position);await access.resolveCase(ctx,id);return{...await presentInboxCase(db,ctx,id,asset.accountId),...detail,nextCursor:detail.nextCursor?encodeInboxCursor(cursorScope,{after:detail.nextCursor}):null,readPosition:row.lastInboundAt&&row.lastInboundKey?{eventAt:row.lastInboundAt.toISOString(),eventKey:row.lastInboundKey}:null,pendingSend:await pendingInboxSend(db,ctx,id,source)};
  }
  return{listCases,getCase};
 }

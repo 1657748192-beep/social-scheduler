@@ -7,6 +7,12 @@ test('fivePlatformsThreeKindsAndExplicitSelectionLimits',async()=>{
   await act(async()=>facebookButton(view,'Instagram').props.onClick());assert.doesNotMatch(facebookText(view),/Customer One/);
  },url=>url.pathname.endsWith('/accounts')&&url.searchParams.get('platform')==='instagram'?Response.json(inboxPage([])):undefined);
 });
+test('bulk processing is an explicit local operation and never sends replies',async()=>{
+ const m=await import('../components/inbox/unified/UnifiedInbox');await withInboxUI(<m.UnifiedInbox token="test" workspaces={[{id:'w1',name:'Workspace',role:'owner'}] as any}/>,async({view,requests}:any)=>{
+  const input=view.root.findAllByType('input').find((i:any)=>i.props['aria-label']==='选择互动 Customer One');assert.ok(input,'bulk selection required');await act(async()=>input.props.onChange());await act(async()=>facebookButton(view,'批量标为已解决').props.onClick());
+  const writes=requests.filter((r:any)=>r.method==='POST');assert.equal(writes.length,1);assert.match(writes[0].path,/cases\/batch$/);assert.deepEqual(writes[0].body,{operations:[{id:inboxCase.id,version:1,status:'resolved'}]});
+ },url=>url.pathname.endsWith('/cases/batch')?Response.json([{id:inboxCase.id,status:'ok'}]):undefined);
+});
 test('staleResponseAndInjectedCursorNeverLeakPreviousScope',async()=>{
  const m=await import('../components/inbox/unified/UnifiedInbox').catch(()=>null);assert.ok(m);let finish!:(r:Response)=>void;
  await withInboxUI(<m.UnifiedInbox token="synthetic" workspaces={[{id:'w1',name:'Workspace',role:'owner'}] as any}/>,async({view}:any)=>{

@@ -7,4 +7,7 @@ test('unreadAndResolutionAreIndependent',async()=>withInboxFixture(async f=>{
  await s.markRead(f.adminCtx,c.id,{eventAt:c.lastInboundAt!.toISOString(),eventKey:'msg-1',version:2});assert.equal((await s.getCaseDto(f.adminCtx,c.id)).unread,false);
  await assert.rejects(s.markRead(f.adminCtx,c.id,{eventAt:new Date().toISOString(),eventKey:'future-fake',version:2}));
  assert.equal(await f.db.readReceipt.count({where:{userId:f.viewerCtx.userId}}),0);await assert.rejects(s.updateCase(f.viewerCtx,c.id,{status:'pending',version:2}));
+ const tag=await f.db.interactionTag.create({data:{workspaceId:c.workspaceId,kind:'case',name:'Inquiry',normalizedName:'inquiry',color:'blue'}});
+ const l=await import('../src/interactionInbox/labels');const labels=l.createInboxLabels({db:f.db,access:inboxTestAccess(f)}),batch=m.createInboxCases({db:f.db,access:inboxTestAccess(f),setCaseTags:(ctx:any,id:string,ids:string[],version:number)=>labels.setTags(ctx,{kind:'case',id},ids,version)});
+ const result=await batch.batchCases(f.adminCtx,[{id:c.id,version:2,tagIds:[tag.id]}]);assert.equal(result[0].status,'ok');assert.equal(await f.db.interactionCaseTag.count({where:{caseId:c.id}}),1);
 }));

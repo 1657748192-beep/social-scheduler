@@ -8,6 +8,7 @@ export function inboxResponse(url:URL,init?:RequestInit):Response{
  if(url.pathname.endsWith('/cases'))return Response.json(inboxPage([inboxCase]));
  if(url.pathname.endsWith('/tags'))return Response.json([]);
  if(url.pathname.endsWith('/members'))return Response.json([]);
+ if(url.pathname.endsWith('/assignees'))return Response.json([]);
  if(url.pathname.endsWith('/replies'))return Response.json({status:'unknown',diagnosticId:'synthetic'});
  if(url.pathname.includes('/customers/'))return Response.json({id:inboxCase.customerId,version:1,name:'Customer One',identities:[],tags:[],notes:[],cases:[inboxCase]});
  if(url.pathname.endsWith('/refresh'))return Response.json({results:[{accountId:inboxAccount.id,status:'ok'}],partial:false,nextCursor:null});
