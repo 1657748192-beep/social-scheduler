@@ -21,7 +21,7 @@ function PermissionCard({item,state}:{item:Omit<PermissionFeature,'grants'>;stat
  </article>;
 }
 export function AccountPermissionSummary({account,workspaceId,token}:{account:SocialAccount;workspaceId:string;token:string}){
- const {t}=useLanguage(),features=accountPermissionFeatures(account);
+ const {t}=useLanguage(),features=accountPermissionFeatures(account).filter(item=>account.platform!=='tiktok'||item.id!=='draft');
  const granted=features.filter(item=>item.state==='granted').length;
  const uncertain=features.some(item=>item.state==='unknown');
  return <section className="account-permission-summary" aria-label={t('授权功能','Authorized functions')}>

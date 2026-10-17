@@ -22,11 +22,23 @@ test('customer details retain Chinese functions but do not render technical iden
   await open(view);
   assert.equal(state(view,'读取头像和昵称'),'已授权');assert.equal(state(view,'直接发布视频'),'已授权');
   assert.equal(state(view,'读取账号统计'),'已授权');assert.equal(state(view,'读取公开视频'),'已授权');
-  assert.equal(state(view,'读取主页资料'),'未记录授权');assert.equal(state(view,'上传为 TikTok 草稿'),'未记录授权');
+  assert.equal(state(view,'读取主页资料'),'未记录授权');assert.doesNotMatch(facebookText(view),/上传为 TikTok 草稿/);
+  assert.match(facebookText(view),/已记录 4 \/ 5 项授权功能/);
   assert.equal(view.root.findAllByType('details').length,0);
   assert.doesNotMatch(facebookText(view),/技术详情|平台账号 ID|访问凭证到期时间|凭据更新时间|user\.info\.basic|video\.publish/);
   assert.equal(view.root.findAllByProps({'aria-label':'授权功能'}).length,1);
   assert.equal(requests.length,0);assert.equal(JSON.stringify(a),original);
+ });
+});
+
+test('TikTok draft remains hidden even with its grant while direct publishing and credentials remain intact',async()=>{
+ const a=account('tiktok',['user.info.basic','video.publish','user.info.stats','video.list','video.upload']);const original=JSON.stringify(a);
+ await withFacebookUI(panel(a),async({view,requests}:any)=>{
+  await open(view);
+  assert.doesNotMatch(facebookText(view),/上传为 TikTok 草稿|Upload TikTok drafts/);
+  assert.equal(view.root.findAllByProps({'data-account-feature':true}).length,5);
+  assert.equal(state(view,'直接发布视频'),'已授权');assert.match(facebookText(view),/已记录 4 \/ 5 项授权功能/);
+  assert.equal(JSON.stringify(a),original);assert.equal(requests.length,0);
  });
 });
 
