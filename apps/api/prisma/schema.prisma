@@ -183,6 +183,11 @@ model Workspace {
   facebookManagementConnections FacebookManagementConnection[]
   facebookManagementStates FacebookManagementOAuthState[]
   facebookManagementSelections FacebookManagementPageSelection[]
+  interactionConnections InteractionConnection[]
+  interactionAssets InteractionAsset[]
+  interactionCustomers InteractionCustomer[]
+  interactionTags InteractionTag[]
+  interactionAudits InteractionAudit[]
 
   @@map("workspaces")
 }
@@ -861,4 +866,244 @@ model PublishJob {
 
   @@index([workspaceId, status, createdAt])
   @@map("publish_jobs")
+}
+
+model InteractionConnection {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  platform String
+  appNamespace String
+  providerUserId String
+  tokenEncrypted String?
+  scopes String[] @default([])
+  expiresAt DateTime?
+  status String @default("inactive")
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  workspace Workspace @relation(fields:[workspaceId],references:[id],onDelete:Cascade)
+  assets InteractionAsset[]
+  @@unique([workspaceId,id])
+}
+
+model InteractionAsset {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  canonicalKey String
+  platform String
+  appNamespace String
+  providerAssetId String
+  connectionId String? @db.Uuid
+  facebookManagedPageId String? @db.Uuid
+  connectionVersion Int
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  workspace Workspace @relation(fields:[workspaceId],references:[id],onDelete:Cascade)
+  connection InteractionConnection? @relation(fields:[workspaceId,connectionId],references:[workspaceId,id],onDelete:NoAction)
+  identities InteractionIdentity[]
+  cases InteractionCase[]
+  syncs InteractionSyncState[]
+  sends InteractionSendAttempt[]
+  @@unique([workspaceId,id])
+  @@unique([workspaceId,canonicalKey])
+}
+
+model InteractionCustomer {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  version Int @default(1)
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  workspace Workspace @relation(fields:[workspaceId],references:[id],onDelete:Cascade)
+  identities InteractionIdentity[]
+  cases InteractionCase[]
+  tags InteractionCustomerTag[]
+  notes CustomerNote[]
+  @@unique([workspaceId,id])
+}
+
+model InteractionIdentity {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  assetId String @db.Uuid
+  customerId String @db.Uuid
+  platform String
+  appNamespace String
+  providerActorId String
+  displayName String?
+  username String?
+  avatarUrl String?
+  profileUrl String?
+  firstSeenAt DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  asset InteractionAsset @relation(fields:[workspaceId,assetId],references:[workspaceId,id],onDelete:Cascade)
+  customer InteractionCustomer @relation(fields:[workspaceId,customerId],references:[workspaceId,id],onDelete:Cascade)
+  @@unique([workspaceId,id])
+  @@unique([workspaceId,platform,appNamespace,assetId,providerActorId],map:"inbox_identity_scope_key")
+  @@index([workspaceId,displayName])
+}
+
+model InteractionCase {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  assetId String @db.Uuid
+  customerId String? @db.Uuid
+  kind String
+  providerThreadOrEventId String
+  sourceRef Json
+  lastInboundAt DateTime?
+  lastInboundKey String?
+  status String @default("pending")
+  assigneeId String? @db.Uuid
+  sentiment String?
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  asset InteractionAsset @relation(fields:[workspaceId,assetId],references:[workspaceId,id],onDelete:Cascade)
+  customer InteractionCustomer? @relation(fields:[workspaceId,customerId],references:[workspaceId,id],onDelete:NoAction)
+  items InteractionItem[]
+  tags InteractionCaseTag[]
+  receipts ReadReceipt[]
+  @@unique([workspaceId,id])
+  @@unique([workspaceId,assetId,id])
+  @@unique([workspaceId,assetId,kind,providerThreadOrEventId],map:"inbox_case_source_key")
+  @@index([workspaceId,assetId,kind,lastInboundAt,id])
+}
+
+model InteractionItem {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  assetId String @db.Uuid
+  caseId String @db.Uuid
+  platform String
+  providerEventId String
+  parentId String?
+  direction String
+  occurredAt DateTime
+  receivedAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  sourceRef Json
+  text String?
+  deleted Boolean @default(false)
+  case InteractionCase @relation(fields:[workspaceId,assetId,caseId],references:[workspaceId,assetId,id],onDelete:Cascade)
+  @@unique([workspaceId,id])
+  @@unique([workspaceId,assetId,providerEventId])
+  @@index([receivedAt])
+}
+
+model InteractionTag {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  kind String
+  name String
+  normalizedName String
+  color String
+  version Int @default(1)
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  workspace Workspace @relation(fields:[workspaceId],references:[id],onDelete:Cascade)
+  customers InteractionCustomerTag[]
+  cases InteractionCaseTag[]
+  @@unique([workspaceId,id])
+  @@unique([workspaceId,id,kind])
+}
+
+model InteractionCustomerTag {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  customerId String @db.Uuid
+  tagId String @db.Uuid
+  kind String @default("customer")
+  createdAt DateTime @default(now())
+  customer InteractionCustomer @relation(fields:[workspaceId,customerId],references:[workspaceId,id],onDelete:Cascade)
+  tag InteractionTag @relation(fields:[workspaceId,tagId,kind],references:[workspaceId,id,kind],onDelete:Cascade)
+  @@unique([workspaceId,id])
+  @@unique([customerId,tagId])
+}
+
+model InteractionCaseTag {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  caseId String @db.Uuid
+  tagId String @db.Uuid
+  kind String @default("case")
+  createdAt DateTime @default(now())
+  case InteractionCase @relation(fields:[workspaceId,caseId],references:[workspaceId,id],onDelete:Cascade)
+  tag InteractionTag @relation(fields:[workspaceId,tagId,kind],references:[workspaceId,id,kind],onDelete:Cascade)
+  @@unique([workspaceId,id])
+  @@unique([caseId,tagId])
+}
+
+model CustomerNote {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  customerId String @db.Uuid
+  authorId String @db.Uuid
+  text String
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  customer InteractionCustomer @relation(fields:[workspaceId,customerId],references:[workspaceId,id],onDelete:Cascade)
+  @@unique([workspaceId,id])
+}
+
+model ReadReceipt {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  caseId String @db.Uuid
+  userId String @db.Uuid
+  lastReadAt DateTime
+  lastReadKey String
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  case InteractionCase @relation(fields:[workspaceId,caseId],references:[workspaceId,id],onDelete:Cascade)
+  @@unique([workspaceId,id])
+  @@unique([caseId,userId])
+}
+
+model InteractionSyncState {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  assetId String @db.Uuid
+  kind String
+  cursor String?
+  revision Int @default(0)
+  status String @default("not_synced")
+  lastAttemptAt DateTime?
+  lastSuccessAt DateTime?
+  diagnosticId String?
+  createdAt DateTime @default(now())
+  asset InteractionAsset @relation(fields:[workspaceId,assetId],references:[workspaceId,id],onDelete:Cascade)
+  @@unique([workspaceId,id])
+  @@unique([assetId,kind])
+}
+
+model InteractionSendAttempt {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  assetId String @db.Uuid
+  requestKey String @db.Uuid
+  targetHash String
+  payloadHash String
+  status String @default("pending")
+  providerId String?
+  diagnosticId String?
+  createdAt DateTime @default(now())
+  asset InteractionAsset @relation(fields:[workspaceId,assetId],references:[workspaceId,id],onDelete:Cascade)
+  @@unique([workspaceId,id])
+  @@unique([assetId,requestKey])
+}
+
+model InteractionAudit {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  actorId String @db.Uuid
+  action String
+  targetId String
+  result String
+  createdAt DateTime @default(now())
+  workspace Workspace @relation(fields:[workspaceId],references:[id],onDelete:Cascade)
+  @@unique([workspaceId,id])
 }
