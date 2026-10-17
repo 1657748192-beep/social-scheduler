@@ -9,6 +9,7 @@ import { TikTokAccountStatsPanel } from "../../components/channels/TikTokAccount
 import { TikTokSandboxPanel } from "../../components/channels/TikTokSandboxPanel";
 import { SocialAccountProfileLink } from '../social/SocialAccountProfileLink';
 import { SocialAccountManager } from '../social/SocialAccountManager';
+import { SupportedAccountType } from '../social/SupportedAccountType';
 import {
   apiRequest,
   type CurrentUser,
@@ -796,6 +797,7 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
               </div>
 
               <div className="binding-modal-body">
+                <SupportedAccountType platform={bindingProvider.platform} explain/>
                 <div className="binding-modal-hero">
                   <div className={`channel-card-icon ${bindingProvider.platform}`}>
                     {platformLabel(bindingProvider.platform).slice(0, 1)}

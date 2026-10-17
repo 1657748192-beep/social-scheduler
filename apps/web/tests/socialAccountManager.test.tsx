@@ -14,6 +14,19 @@ const accounts=[account('Brand Instagram','instagram',{profileUrl:'https://www.i
 const providers=[{platform:'instagram',platformParam:'instagram',displayName:'Instagram',configured:true},{platform:'facebook',platformParam:'facebook',displayName:'Facebook',configured:false}] as OAuthProviderStatus[];
 const panel=(overrides:any={})=><SocialAccountManager accounts={accounts} providers={providers} workspaceId="w1" token="test-token" canManage loading={false} failed={false} onAdd={()=>{}} onDisconnect={async()=>{}} {...overrides}/>;
 
+test('platform picker explains each supported account type before any authorization',async()=>{
+  const allProviders=['facebook','instagram','tiktok','youtube','pinterest','linkedin'].map(platform=>({platform,platformParam:platform,displayName:platform,configured:true}));
+  await withFacebookUI(panel({providers:allProviders}),async({view,requests}:any)=>{
+    await act(async()=>facebookButton(view,'添加账号').props.onClick());
+    const picker=view.root.findByProps({role:'dialog'});
+    for(const [platform,label] of [['facebook','公共主页（不支持个人账号）'],['instagram','专业账号：商业／创作者'],['tiktok','个人／企业账号'],['youtube','YouTube 频道'],['pinterest','企业账号']]){
+      const button=picker.findAllByType('button').find((b:any)=>b.props.children.includes(platform));
+      assert.ok(button);assert.ok(button.findAllByType('small').some((node:any)=>node.props.children===label));
+    }
+    assert.doesNotMatch(facebookText(view),/linkedin/);assert.equal(requests.length,0);
+  });
+});
+
 test('platformAndSearchFiltersApplyTogetherAcrossCardsAndListWithoutRequests',async()=>withFacebookUI(panel(),async({view,requests}:any)=>{
   assert.doesNotMatch(facebookText(view),/Retired/);
   await act(async()=>view.root.findByProps({'aria-label':'Facebook (1)'}).props.onClick());
@@ -84,6 +97,8 @@ test('accountPageHidesChannelsButTopAddRetainsOfficialAndSharedAuthorization',as
     const picker=view.root.findByProps({role:'dialog'});
     await act(async()=>picker.findAllByType('button').find((b:any)=>b.props.children.includes('Instagram')).props.onClick());
     assert.match(facebookText(view),/官方授权登录/);
+    assert.match(facebookText(view),/支持绑定：.*专业账号：商业／创作者/);
+    assert.match(facebookText(view),/实际可用功能以完成授权后的账号详情为准/);
     assert.equal(facebookButton(view,'立即连接').props.disabled,false);
     assert.equal(requests.filter((r:any)=>r.path.includes('/oauth/start')).length,0);
     await act(async()=>facebookButton(view,'生成链接').props.onClick());
@@ -93,6 +108,15 @@ test('accountPageHidesChannelsButTopAddRetainsOfficialAndSharedAuthorization',as
     assert.equal(writes[0].path,'/api/v1/workspaces/w1/social-accounts/authorization-links');
     assert.deepEqual(writes[0].body,{platform:'instagram'});
   },(url,init)=>url.pathname.endsWith('/authorization-links')&&init?.method==='POST'?Response.json({shareUrl:'https://example.test/shared-authorization',expiresAt:'2026-10-18T00:00:00Z'}):url.pathname.endsWith('/social-accounts')?Response.json([accounts[0]]):undefined);
+});
+
+test('filtered add still explains account type in the authorization window without starting OAuth',async()=>{
+  await withAccountPage(async({view,requests}:any)=>{
+    await act(async()=>view.root.findByProps({'aria-label':'Instagram (1)'}).props.onClick());
+    await act(async()=>facebookButton(view,'添加账号').props.onClick());
+    assert.match(facebookText(view),/支持绑定：.*专业账号：商业／创作者/);
+    assert.equal(requests.filter((r:any)=>r.path.includes('/oauth/start')||r.method==='POST').length,0);
+  },url=>url.pathname.endsWith('/social-accounts')?Response.json([accounts[0]]):undefined);
 });
 
 test('realAccountPageConfirmsIdentityAndCancellationNeverDeletes',async()=>{
