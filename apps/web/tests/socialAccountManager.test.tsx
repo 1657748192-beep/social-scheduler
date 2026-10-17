@@ -1,0 +1,120 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import React from 'react';
+import {act} from 'react-test-renderer';
+import {SocialAccountManager} from '../components/social/SocialAccountManager';
+import {withFacebookUI,facebookButton,facebookText} from './helpers/facebookManagementUI';
+import type {SocialAccount,OAuthProviderStatus} from '../lib/api';
+import {AppRouterContext} from 'next/dist/shared/lib/app-router-context.shared-runtime';
+import {PathnameContext} from 'next/dist/shared/lib/hooks-client-context.shared-runtime';
+import DashboardPageContent from '../components/dashboard/DashboardPageContent';
+
+const account=(id:string,platform:SocialAccount['platform'],overrides:Partial<SocialAccount>={}):SocialAccount=>({id,platform,providerAccountId:id+'-provider',displayName:id,status:'active',capabilities:{},createdAt:'2026-10-17T01:00:00Z',...overrides});
+const accounts=[account('Brand Instagram','instagram',{profileUrl:'https://www.instagram.com/brand/'}),account('Factory Page','facebook',{accountType:'page',status:'permission_missing'}),account('TikTok Brand','tiktok',{credential:{scopes:['user.info.basic','user.info.stats','video.list'],updatedAt:'2026-10-17T01:00:00Z'}}),account('Retired','linkedin')];
+const providers=[{platform:'instagram',platformParam:'instagram',displayName:'Instagram',configured:true},{platform:'facebook',platformParam:'facebook',displayName:'Facebook',configured:false}] as OAuthProviderStatus[];
+const panel=(overrides:any={})=><SocialAccountManager accounts={accounts} providers={providers} workspaceId="w1" token="test-token" canManage loading={false} failed={false} onAdd={()=>{}} onDisconnect={async()=>{}} {...overrides}/>;
+
+test('platformAndSearchFiltersApplyTogetherAcrossCardsAndListWithoutRequests',async()=>withFacebookUI(panel(),async({view,requests}:any)=>{
+  assert.doesNotMatch(facebookText(view),/Retired/);
+  await act(async()=>view.root.findByProps({'aria-label':'Facebook (1)'}).props.onClick());
+  assert.match(facebookText(view),/Factory Page/);assert.doesNotMatch(facebookText(view),/Brand Instagram/);
+  await act(async()=>view.root.findByProps({'aria-label':'搜索账号'}).props.onChange({target:{value:' instagram '}}));
+  assert.match(facebookText(view),/没有匹配的账号/);
+  await act(async()=>facebookButton(view,'全部 (3)').props.onClick());
+  assert.match(facebookText(view),/Brand Instagram/);assert.doesNotMatch(facebookText(view),/Factory Page/);
+  await act(async()=>view.root.findByProps({'aria-label':'列表视图'}).props.onClick());
+  assert.equal(view.root.findAllByType('table').length,1);assert.match(facebookText(view),/Brand Instagram/);
+  assert.equal(requests.length,0);
+}));
+
+test('detailsKeepRealStateSafeProfileLinksAndManualStatisticsWithoutAutomaticAuthorization',async()=>withFacebookUI(panel(),async({view,requests}:any)=>{
+  await act(async()=>view.root.findByProps({'aria-label':'查看 Factory Page 详情'}).props.onClick());
+  const dialog=view.root.findByProps({role:'dialog'});assert.equal(dialog.props['aria-modal'],true);
+  assert.match(facebookText(view),/权限不足|主页链接暂不可用/);
+  assert.equal(view.root.findAllByType('a').filter((a:any)=>a.props.href==='javascript:bad').length,0);
+  await act(async()=>facebookButton(view,'关闭详情').props.onClick());
+  await act(async()=>view.root.findByProps({'aria-label':'查看 TikTok Brand 详情'}).props.onClick());
+  assert.match(facebookText(view),/查看账号数据/);assert.doesNotMatch(facebookText(view),/补充数据授权/);
+  assert.equal(requests.length,0);
+}));
+
+test('addAndDisconnectAreExplicitAndViewerHasNoMutationControls',async()=>{
+  const added:string[]=[],removed:string[]=[];
+  await withFacebookUI(panel({onAdd:(p:OAuthProviderStatus)=>added.push(p.platform),onDisconnect:async(id:string)=>{removed.push(id);}}),async({view}:any)=>{
+    await act(async()=>facebookButton(view,'添加账号').props.onClick());assert.deepEqual(added,[]);
+    const picker=view.root.findByProps({role:'dialog'});
+    assert.equal(picker.findAllByType('button').find((b:any)=>b.props.children.includes('Facebook')).props.disabled,true);
+    await act(async()=>picker.findAllByType('button').find((b:any)=>b.props.children.includes('Instagram')).props.onClick());assert.deepEqual(added,['instagram']);
+    await act(async()=>view.root.findByProps({'aria-label':'查看 Brand Instagram 详情'}).props.onClick());
+    assert.deepEqual(removed,[]);await act(async()=>facebookButton(view,'解除绑定').props.onClick());assert.deepEqual(removed,['Brand Instagram']);
+  });
+  await withFacebookUI(panel({canManage:false}),async({view}:any)=>{
+    assert.equal(facebookButton(view,'添加账号'),undefined);
+    await act(async()=>view.root.findByProps({'aria-label':'查看 Factory Page 详情'}).props.onClick());
+    assert.equal(facebookButton(view,'解除绑定'),undefined);
+  });
+});
+
+test('loadingFailureAndWorkspaceChangesDoNotLeakOldAccountsOrInventEmptyResults',async()=>withFacebookUI(panel(),async({view}:any)=>{
+  await act(async()=>view.root.findByProps({'aria-label':'查看 Brand Instagram 详情'}).props.onClick());
+  await act(async()=>view.update(<LanguageWrapper>{panel({workspaceId:'w2',accounts:[],loading:true})}</LanguageWrapper>));
+  assert.doesNotMatch(facebookText(view),/Brand Instagram|暂无社交账号/);assert.equal(view.root.findAllByProps({role:'dialog'}).length,0);
+  await act(async()=>view.update(<LanguageWrapper>{panel({workspaceId:'w2',accounts:[],loading:false,failed:true})}</LanguageWrapper>));
+  assert.match(facebookText(view),/账号读取失败/);assert.doesNotMatch(facebookText(view),/暂无社交账号/);
+}));
+import {LanguageProvider as LanguageWrapper} from '../components/LanguageProvider';
+
+async function withAccountPage(run:(f:any)=>Promise<void>,override:(url:URL,init?:RequestInit)=>Response|Promise<Response>|undefined){
+  const previous={storage:(globalThis as any).localStorage,self:(globalThis as any).self};
+  (globalThis as any).localStorage={getItem:(key:string)=>key==='social_scheduler_token'?'test-token':null,removeItem(){}};
+  (globalThis as any).self={setTimeout:()=>1,clearTimeout(){}};
+  const router={back(){},forward(){},refresh(){},push(){},replace(){},prefetch:async()=>{}};
+  try{await withFacebookUI(<AppRouterContext.Provider value={router}><PathnameContext.Provider value="/social-accounts"><DashboardPageContent accountsOnly/></PathnameContext.Provider></AppRouterContext.Provider>,run,(url,init)=>{
+    if(url.pathname.endsWith('/auth/me'))return Response.json({id:'user',name:'Owner',email:'owner@example.test'});
+    if(url.pathname.endsWith('/workspaces'))return Response.json([{id:'w1',name:'First workspace',role:'owner'},{id:'w2',name:'Second workspace',role:'owner'}]);
+    if(url.pathname.endsWith('/integrations/oauth/status'))return Response.json(providers);
+    return override(url,init);
+  });}finally{(globalThis as any).localStorage=previous.storage;(globalThis as any).self=previous.self;}
+}
+
+test('realAccountPageConfirmsIdentityAndCancellationNeverDeletes',async()=>{
+  let allowed=false,deleted=false;const confirmations:string[]=[];
+  await withAccountPage(async({view,requests}:any)=>{
+    (globalThis as any).window.confirm=(message:string)=>{confirmations.push(message);return allowed;};
+    await act(async()=>view.root.findByProps({'aria-label':'查看 Brand Instagram 详情'}).props.onClick());
+    await act(async()=>facebookButton(view,'解除绑定').props.onClick());
+    assert.equal(requests.filter((r:any)=>r.method==='DELETE').length,0);assert.equal(deleted,false);
+    assert.match(confirmations[0],/Brand Instagram/);assert.match(confirmations[0],/Instagram/);
+    allowed=true;await act(async()=>facebookButton(view,'解除绑定').props.onClick());
+    assert.equal(requests.filter((r:any)=>r.method==='DELETE').length,1);
+    assert.equal(view.root.findAllByProps({role:'dialog'}).length,0);
+  },(url,init)=>{
+    if(decodeURIComponent(url.pathname).endsWith('/social-accounts/Brand Instagram')&&init?.method==='DELETE'){deleted=true;return Response.json({disconnected:true});}
+    if(url.pathname.endsWith('/social-accounts'))return Response.json(deleted?[]:[accounts[0]]);
+  });
+});
+
+test('lateWorkspaceAccountResponseCannotReplaceCurrentWorkspaceOrReopenDetails',async()=>{
+  let resolve!:(response:Response)=>void;
+  await withAccountPage(async({view}:any)=>{
+    const selector=view.root.findAllByType('select')[0];
+    await act(async()=>selector.props.onChange({target:{value:'w2'}}));
+    assert.match(facebookText(view),/New Workspace Account/);
+    await act(async()=>resolve(Response.json([account('Old Workspace Account','instagram')])));
+    assert.match(facebookText(view),/New Workspace Account/);assert.doesNotMatch(facebookText(view),/Old Workspace Account/);
+  },url=>url.pathname.endsWith('/workspaces/w1/social-accounts')?new Promise<Response>(r=>{resolve=r;}):url.pathname.endsWith('/workspaces/w2/social-accounts')?Response.json([account('New Workspace Account','instagram')]):undefined);
+});
+
+test('disconnectCompletingAfterWorkspaceSwitchCannotInvalidateNewWorkspaceRead',async()=>{
+  let finishDelete!:(response:Response)=>void,finishSecondRead!:(response:Response)=>void;
+  await withAccountPage(async({view,requests}:any)=>{
+    (globalThis as any).window.confirm=()=>true;
+    await act(async()=>view.root.findByProps({'aria-label':'查看 Brand Instagram 详情'}).props.onClick());
+    await act(async()=>{void facebookButton(view,'解除绑定').props.onClick();});
+    await act(async()=>view.root.findAllByType('select')[0].props.onChange({target:{value:'w2'}}));
+    await act(async()=>finishDelete(Response.json({disconnected:true})));
+    await act(async()=>finishSecondRead(Response.json([account('New Workspace Account','instagram')])));
+    assert.match(facebookText(view),/New Workspace Account/);
+    assert.equal(requests.filter((r:any)=>r.path.endsWith('/workspaces/w1/social-accounts')).length,1);
+  },(url,init)=>init?.method==='DELETE'?new Promise<Response>(r=>{finishDelete=r;}):url.pathname.endsWith('/workspaces/w1/social-accounts')?Response.json([accounts[0]]):url.pathname.endsWith('/workspaces/w2/social-accounts')?new Promise<Response>(r=>{finishSecondRead=r;}):undefined);
+});

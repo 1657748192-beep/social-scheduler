@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "../../components/AppShell";
 import { DashboardSidebar } from "../../components/dashboard/DashboardSidebar";
@@ -8,6 +8,7 @@ import { DashboardActivity } from "../../components/dashboard/DashboardActivity"
 import { TikTokAccountStatsPanel } from "../../components/channels/TikTokAccountStatsPanel";
 import { TikTokSandboxPanel } from "../../components/channels/TikTokSandboxPanel";
 import { SocialAccountProfileLink } from '../social/SocialAccountProfileLink';
+import { SocialAccountManager } from '../social/SocialAccountManager';
 import {
   apiRequest,
   type CurrentUser,
@@ -106,6 +107,10 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
   const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([]);
   const [socialAccounts, setSocialAccounts] = useState<SocialAccount[]>([]);
   const [accountsWorkspaceId, setAccountsWorkspaceId] = useState<string | null>(null);
+  const [accountsReadFailed, setAccountsReadFailed] = useState(false);
+  const accountRequest = useRef(0);
+  const currentWorkspaceId = useRef(selectedWorkspaceId);
+  currentWorkspaceId.current = selectedWorkspaceId;
   const [oauthStatuses, setOAuthStatuses] = useState<OAuthProviderStatus[]>([]);
   const [authorizationLinks, setAuthorizationLinks] = useState<
     Record<string, OAuthAuthorizationLink>
@@ -132,11 +137,21 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
   }
 
   function selectWorkspace(workspaceId: string) {
+    currentWorkspaceId.current = workspaceId;
+    accountRequest.current += 1;
+    setAccountsReadFailed(false);
+    setBindingProvider(null);
+    setAuthorizationLinks({});
+    setError(null);
     setActiveWorkspaceId(workspaceId);
     setSelectedWorkspaceId(workspaceId);
   }
 
   async function loadWorkspaceDetails(storedToken: string, workspaceId: string) {
+    if (workspaceId !== currentWorkspaceId.current) return;
+    const request = ++accountRequest.current;
+    setAccountsReadFailed(false);
+    try {
     const [memberList, invitationList, socialAccountList, oauthStatusList] = await Promise.all([
       accountsOnly ? Promise.resolve([]) : apiRequest<WorkspaceMember[]>(`/workspaces/${workspaceId}/members`, { token: storedToken }),
       !accountsOnly && canManageMembers
@@ -149,12 +164,18 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
       }),
       apiRequest<OAuthProviderStatus[]>("/integrations/oauth/status", { token: storedToken })
     ]);
-
+    if (request !== accountRequest.current || workspaceId !== currentWorkspaceId.current) return;
     setMembers(memberList);
     setInvitations(invitationList);
     setSocialAccounts(socialAccountList);
     setAccountsWorkspaceId(workspaceId);
     setOAuthStatuses(oauthStatusList);
+    } catch (requestError) {
+      if (request === accountRequest.current && workspaceId === currentWorkspaceId.current) {
+        setAccountsReadFailed(true);
+        throw requestError;
+      }
+    }
   }
 
   useEffect(() => {
@@ -379,6 +400,7 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
     if (!token || !selectedWorkspace) {
       return;
     }
+    const workspaceId = selectedWorkspace.id;
 
     const account = socialAccounts.find((item) => item.id === accountId);
     if (!account) return;
@@ -387,14 +409,16 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
       await confirmAccountRemoval(platformLabel(account.platform), account.displayName,
         account.status === "disconnected", locale, (message) => window.confirm(message), async () => {
         setError(null);
-        await apiRequest(`/workspaces/${selectedWorkspace.id}/social-accounts/${accountId}`, {
+        await apiRequest(`/workspaces/${workspaceId}/social-accounts/${accountId}`, {
           method: "DELETE",
           token
         });
-        await loadWorkspaceDetails(token, selectedWorkspace.id);
+        await loadWorkspaceDetails(token, workspaceId);
       });
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "请求失败");
+      if (workspaceId === currentWorkspaceId.current) {
+        setError(requestError instanceof Error ? requestError.message : "请求失败");
+      }
     }
   }
 
@@ -426,6 +450,15 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
           />
         </DashboardActivity>
         )}
+
+        {accountsOnly ? <SocialAccountManager
+          accounts={accountsWorkspaceId === selectedWorkspaceId ? socialAccounts : []}
+          providers={accountsWorkspaceId === selectedWorkspaceId ? supportedOAuthStatuses : []}
+          workspaceId={selectedWorkspaceId} token={token ?? ''} canManage={canManageMembers}
+          loading={!accountsReadFailed && accountsWorkspaceId !== selectedWorkspaceId}
+          failed={accountsReadFailed} actionError={error}
+          onAdd={provider => setBindingProvider(provider)} onDisconnect={disconnectSocialAccount}
+        /> : null}
 
         {!accountsOnly && (selectedWorkspace?.publishingAccessExpiresAt ||
         selectedWorkspace?.publishingAccessStatus === "disabled" ||
@@ -490,7 +523,7 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
                       </span>
                     </div>
 
-                    {providerAccounts.length ? (
+                    {!accountsOnly && providerAccounts.length ? (
                       <div className="provider-account-list">
                         {providerAccounts.map((account) => (
                           <span className="provider-account-chip" key={account.id}>
@@ -550,7 +583,7 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
             <p className="muted">{t("只有所有者和管理员可以绑定社交账号。", "Only owners and admins can connect social accounts.")}</p>
           )}
 
-          <div className="connected-table">
+          {!accountsOnly ? <div className="connected-table">
             <div className="connected-table-head">
               <span>{t("平台", "Platform")}</span>
               <span>{t("账号", "Account")}</span>
@@ -590,7 +623,7 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
             {!socialAccounts.length ? (
               <div className="connected-table-row empty-row">{t("暂未绑定社交账号", "No social accounts connected")}</div>
             ) : null}
-          </div>
+          </div> : null}
         </section>
 
 
