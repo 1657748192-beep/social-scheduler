@@ -24,7 +24,7 @@ const navItems = [
   { href: "/posts", label: ["帖子管理", "Post manager"], helper: ["已发布与复用", "Published posts and reuse"] },
   { href: "/social-accounts", label: ["社交账号", "Social accounts"], helper: ["绑定、解绑与账号管理", "Connect and manage accounts"] }
 ] as const;
-const managementNavItems=[{href:'/facebook-management',label:['BM 主页管理','BM Page management'],helper:['只读目录与独立授权','Read-only directory and independent authorization']},{href:'/facebook-inbox',label:['Facebook 收件箱','Facebook inbox'],helper:['公共主页私信与人工回复','Page messages and manual replies']}] as const;
+const managementNavItems=[{href:'/facebook-management',label:['BM 主页管理','BM Page management'],helper:['只读目录与独立授权','Read-only directory and independent authorization']},{href:'/inbox',label:['互动收件箱','Interaction inbox'],helper:['评论、私信与客户管理','Comments, messages and customer management']}] as const;
 
 export function AppShell({ title, subtitle, userLabel, wide = false, children }: AppShellProps) {
   const pathname = usePathname();
@@ -32,6 +32,7 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
   const { t } = useLanguage();
   const [currentUserName, setCurrentUserName] = useState("");
   const [facebookManagementEnabled,setFacebookManagementEnabled]=useState(false);
+  const [inboxAdmin,setInboxAdmin]=useState(false);
   const accountName = userLabel?.trim() || currentUserName || t("账号", "Account");
 
   useEffect(() => {
@@ -48,7 +49,7 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
     let current=true;const controller=new AbortController();let token:string|null=null;
     try{token=localStorage.getItem('social_scheduler_token');}catch{return;}
     if(!token)return;const auth=token;
-    void apiRequest<CurrentUser>('/auth/me',{token:auth,signal:controller.signal}).then(user=>user.isPlatformAdmin===true?apiRequest<Workspace[]>('/workspaces',{token:auth,signal:controller.signal}):[]).then(async spaces=>{
+    void apiRequest<CurrentUser>('/auth/me',{token:auth,signal:controller.signal}).then(user=>{if(current)setInboxAdmin(user.isPlatformAdmin===true);return user.isPlatformAdmin===true?apiRequest<Workspace[]>('/workspaces',{token:auth,signal:controller.signal}):[];}).then(async spaces=>{
       if(!spaces.length)return {enabled:false,configured:false};
       return facebookManagementRequest<{enabled:boolean;configured:boolean}>(auth,spaces[0].id,'/status',{signal:controller.signal});
     }).then(result=>{if(current)setFacebookManagementEnabled(result.enabled===true&&result.configured===true);}).catch(()=>{});
@@ -86,7 +87,7 @@ export function AppShell({ title, subtitle, userLabel, wide = false, children }:
         </Link>
 
         <nav className="software-nav" aria-label="主导航">
-          {[...navItems,...(facebookManagementEnabled?managementNavItems:[])].map((item) => (
+          {[...navItems,...managementNavItems.filter(item=>item.href==='/inbox'?inboxAdmin:facebookManagementEnabled)].map((item) => (
             <Link
               className={pathname === item.href ? "active" : ""}
               href={item.href}

@@ -1,26 +1,18 @@
 'use client';
-import {Suspense,useEffect,useMemo,useState} from 'react';
-import {useRouter,useSearchParams} from 'next/navigation';
-import {AppShell} from '../../components/AppShell';
-import {FacebookInbox} from '../../components/inbox/FacebookInbox';
+import React,{useEffect,useState} from 'react';
+import {useRouter} from 'next/navigation';
 import {PlatformAdminOnly} from '../../components/facebook/PlatformAdminOnly';
-import {useLanguage} from '../../components/LanguageProvider';
 import {apiRequest,type Workspace} from '../../lib/api';
-export default function FacebookInboxPage(){return <PlatformAdminOnly><Suspense fallback={<p>Loading…</p>}><InboxPageContent/></Suspense></PlatformAdminOnly>;}
-function InboxPageContent(){
-  const router=useRouter(),params=useSearchParams(),{t}=useLanguage();
-  const [token,setToken]=useState<string|null>(null),[workspaces,setWorkspaces]=useState<Workspace[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(false);
-  const query=params.toString();const initialContext=useMemo(()=>{const search=new URLSearchParams(query);return search.get('managedPageId')?{workspaceId:search.get('workspaceId')??'',managedPageId:search.get('managedPageId')??'',connectionId:search.get('connectionId')??''}:undefined;},[query]);
-  useEffect(()=>{
-    let current=true;const controller=new AbortController();let stored:string|null=null;
-    try{stored=window.localStorage.getItem('social_scheduler_token');}catch{setError(true);setLoading(false);return;}
-    if(!stored){router.replace('/login');return;}setToken(stored);
-    void apiRequest<Workspace[]>('/workspaces',{token:stored,signal:controller.signal}).then(rows=>{if(current)setWorkspaces(rows);}).catch(()=>{if(current)setError(true);}).finally(()=>{if(current)setLoading(false);});
-    return()=>{current=false;controller.abort();};
-  },[router]);
-  return <AppShell title={t('Facebook 收件箱','Facebook inbox')} subtitle={t('公共主页 Messenger，非个人账号私人聊天','Page Messenger, not personal account private chats')} wide>
-    {loading?<p role="status">{t('正在读取工作区…','Loading workspaces…')}</p>:null}{error?<p role="alert" className="error">{t('无法读取工作区，请重新登录或稍后重试。','Could not load workspaces. Sign in again or retry later.')}</p>:null}
-    {token&&!loading&&!error&&workspaces.length?<FacebookInbox token={token} workspaces={workspaces} initialContext={initialContext}/>:null}
-    {!loading&&!error&&!workspaces.length?<section className="panel"><p>{t('暂无工作区，请先在控制台创建。','No workspaces. Create one in the dashboard first.')}</p></section>:null}
-  </AppShell>;
+import {parseLegacyInboxQuery} from '../../lib/interactionInbox';
+import {useLanguage} from '../../components/LanguageProvider';
+export default function FacebookInboxPage(){return <PlatformAdminOnly><LegacyInboxRedirect/></PlatformAdminOnly>;}
+function LegacyInboxRedirect(){
+ const router=useRouter(),{t}=useLanguage(),[failed,setFailed]=useState(false);
+ useEffect(()=>{let current=true;const controller=new AbortController();
+  void (async()=>{try{const token=window.localStorage.getItem('social_scheduler_token');if(!token)throw Error('Session required');const raw=new URLSearchParams(window.location.search),context=parseLegacyInboxQuery(window.location.search);if(['workspaceId','managedPageId','connectionId'].some(k=>raw.has(k))&&!context)throw Error('Invalid legacy context');
+   const spaces=await apiRequest<Workspace[]>('/workspaces',{token,signal:controller.signal});if(context&&!spaces.some(w=>w.id===context.workspaceId))throw Error('Workspace unavailable');
+   const next=new URLSearchParams({platform:'facebook',kind:'messages',...(context??{})});if(current)router.replace('/inbox?'+next.toString());
+  }catch{if(current)setFailed(true);}})();return()=>{current=false;controller.abort();};
+ },[router]);
+ return <section className="panel"><p role={failed?'alert':'status'}>{failed?t('原收件箱定位不可用，请从互动收件箱重新选择；不会自动换账号。','Legacy context unavailable. Select an account in the unified inbox; no automatic fallback occurs.'):t('正在验证工作区并打开互动收件箱…','Checking workspace access and opening the unified inbox…')}</p>{failed?<a href="/inbox">{t('打开互动收件箱','Open interaction inbox')}</a>:null}</section>;
 }

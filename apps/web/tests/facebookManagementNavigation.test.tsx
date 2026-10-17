@@ -19,11 +19,11 @@ test('BM navigationRequiresNewEnabledStatusAndNeverCallsRetiredAuthorization',as
   const router={back(){},forward(){},refresh(){},push(){},replace(){},prefetch:async()=>{}};
   const element=()=>React.createElement(AppRouterContext.Provider,{value:router},React.createElement(PathnameContext.Provider,{value:'/dashboard'},React.createElement(LanguageProvider,null,React.createElement(AppShell,{title:'Dashboard',children:null}))));
   try{
-    await act(async()=>{view=create(element());});assert.equal(view!.root.findAllByType('a').some(a=>a.props.href==='/facebook-management'),true);assert.equal(view!.root.findAllByType('a').some(a=>a.props.href==='/facebook-inbox'),true);
-    await act(async()=>view.unmount());enabled=false;await act(async()=>{view=create(element());});assert.equal(view!.root.findAllByType('a').some(a=>a.props.href==='/facebook-management'),false);assert.equal(view!.root.findAllByType('a').some(a=>a.props.href==='/facebook-inbox'),false);
+    await act(async()=>{view=create(element());});assert.equal(view!.root.findAllByType('a').some(a=>a.props.href==='/facebook-management'),true);assert.equal(view!.root.findAllByType('a').some(a=>a.props.href==='/inbox'),true);
+    await act(async()=>view.unmount());enabled=false;await act(async()=>{view=create(element());});assert.equal(view!.root.findAllByType('a').some(a=>a.props.href==='/facebook-management'),false);assert.equal(view!.root.findAllByType('a').some(a=>a.props.href==='/inbox'),true,'admin framework remains available without Facebook integration');
     assert.ok(requests.every(path=>!path.includes('facebook-engagement')));
     await act(async()=>view.unmount());enabled=true;isPlatformAdmin=false;requests.length=0;await act(async()=>{view=create(element());});
-    assert.equal(view!.root.findAllByType('a').some(a=>['/facebook-management','/facebook-inbox'].includes(a.props.href)),false);
+    assert.equal(view!.root.findAllByType('a').some(a=>['/facebook-management','/facebook-inbox','/inbox'].includes(a.props.href)),false);
     assert.ok(requests.every(path=>path.endsWith('/auth/me')),'customer navigation must not query management or workspace data');
   }finally{if(view!)await act(async()=>view.unmount());globalThis.fetch=saved.fetch;(globalThis as any).window=saved.window;(globalThis as any).document=saved.document;(globalThis as any).self=saved.self;(globalThis as any).localStorage=saved.storage;}
 });
