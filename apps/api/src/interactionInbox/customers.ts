@@ -1,0 +1,22 @@
+import type {PrismaClient} from '@prisma/client';import {z} from 'zod';import {HttpError} from '../utils/errors';
+import type {InboxAccess,InboxDb} from './access';import type {CustomerDto,Scope} from './types';import {safeInboxUrl} from './directory';import {presentInboxCase} from './cases';
+export async function resolveInboxCustomer(db:InboxDb,access:InboxAccess,ctx:Scope,id:string,write=false){
+ await access.require(ctx,write?'write':'read');const row=await db.interactionCustomer.findFirst({where:{id,workspaceId:ctx.workspaceId,deletedAt:null},include:{identities:{include:{asset:true}},cases:{select:{id:true}}}});
+ if(!row||!row.identities.length||!row.cases.length)throw new HttpError(404,'Customer unavailable');
+ for(const c of row.cases)await access.resolveCase(ctx,c.id,write?'write':'read',db);return row;
+}
+export function createInboxCustomers({db,access}:{db:PrismaClient;access:InboxAccess}){
+ async function getCustomer(ctx:Scope,id:string):Promise<CustomerDto>{
+  const row=await resolveInboxCustomer(db,access,ctx,id),tags=await db.interactionCustomerTag.findMany({where:{customerId:id,workspaceId:ctx.workspaceId,tag:{deletedAt:null}},include:{tag:true}}),notes=await db.customerNote.findMany({where:{customerId:id,workspaceId:ctx.workspaceId,deletedAt:null},orderBy:{createdAt:'desc'},take:100});
+  const identities=[];for(const i of row.identities){const account=await db.socialAccount.findFirst({where:{workspaceId:ctx.workspaceId,platform:i.platform as any,providerAccountId:i.asset.providerAssetId},select:{id:true}});if(!account)continue;identities.push({platform:i.platform,name:i.displayName,username:i.username,avatarUrl:safeInboxUrl(i.avatarUrl),profileUrl:safeInboxUrl(i.profileUrl),accountId:account.id});}
+  const cases=[];for(const c of row.cases.slice(0,50)){const {asset}=await access.resolveCase(ctx,c.id);cases.push(await presentInboxCase(db,ctx,c.id,asset.accountId));}
+  await access.require(ctx);return{id,version:row.version,name:identities[0]?.name??null,identities,tags:tags.map(({tag})=>({id:tag.id,kind:tag.kind,name:tag.name,color:tag.color,version:tag.version})),notes:notes.map(n=>({id:n.id,text:n.text,authorId:n.authorId,createdAt:n.createdAt.toISOString()})),cases};
+ }
+ async function saveNote(ctx:Scope,id:string,text:string){
+  const clean=z.string().trim().min(1).max(2000).parse(text);await resolveInboxCustomer(db,access,ctx,id,true);
+  return access.write(ctx,async tx=>{await tx.$queryRaw`SELECT id FROM "InteractionCustomer" WHERE id=${id}::uuid FOR UPDATE`;await resolveInboxCustomer(tx,access,ctx,id,true);if(await tx.customerNote.count({where:{customerId:id,deletedAt:null}})>=100)throw new HttpError(409,'Note limit reached');const n=await tx.customerNote.create({data:{workspaceId:ctx.workspaceId,customerId:id,authorId:ctx.userId,text:clean}});await tx.interactionAudit.create({data:{workspaceId:ctx.workspaceId,actorId:ctx.userId,action:'note.create',targetId:n.id,result:'ok'}});return{id:n.id,text:n.text,authorId:n.authorId,createdAt:n.createdAt.toISOString()};});
+ }
+ async function deleteNote(ctx:Scope,id:string,noteId:string){await resolveInboxCustomer(db,access,ctx,id,true);return access.write(ctx,async tx=>{await resolveInboxCustomer(tx,access,ctx,id,true);const n=await tx.customerNote.findFirst({where:{id:noteId,workspaceId:ctx.workspaceId,customerId:id,deletedAt:null}});if(!n)throw new HttpError(404,'Note unavailable');if(n.authorId!==ctx.userId)await access.require(ctx,'manage');await tx.customerNote.delete({where:{id:n.id}});await tx.interactionAudit.create({data:{workspaceId:ctx.workspaceId,actorId:ctx.userId,action:'note.delete',targetId:noteId,result:'ok'}});});}
+ async function deleteCustomer(ctx:Scope,id:string,version:number){await resolveInboxCustomer(db,access,ctx,id,true);return access.write(ctx,async tx=>{await resolveInboxCustomer(tx,access,ctx,id,true);const row=await tx.interactionCustomer.findFirst({where:{id,workspaceId:ctx.workspaceId,version}});if(!row)throw new HttpError(409,'Customer changed');await tx.interactionCase.updateMany({where:{workspaceId:ctx.workspaceId,customerId:id},data:{customerId:null,version:{increment:1}}});await tx.interactionCustomer.delete({where:{id}});await tx.interactionAudit.create({data:{workspaceId:ctx.workspaceId,actorId:ctx.userId,action:'customer.delete',targetId:id,result:'ok'}});},'manage');}
+ return{getCustomer,saveNote,deleteNote,deleteCustomer};
+}
