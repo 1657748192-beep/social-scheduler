@@ -32,6 +32,8 @@
 - 原有头像／名称自动同步不改动；只新增不会覆盖旧授权／凭据／排程，但既有资料同步仍可能正常更新展示信息。
 - Meta 在最后校验之后撤权无法与本地事务原子锁定；保留选中凭据校验及发布时校验，代价是之后被撤权的新主页可能需要重连。
 - 审查的 ID 类型问题按实际影响升级为 Important 并修复，无延后的小问题。
+- 按用户已明确选择的当前分支推送／部署执行，不另建 PR 或合并分支；精确版本与文件白名单防止错误版本上线，原有未提交文件保留。
+- Task 6 再次运行完整测试 614/614、0 失败／跳过，209517.2776ms。测试包装器只写日志导致 task-done 的 stdout 摘要步骤退出 1，测试进程本身已成功；重新用严格断言校验该完整日志后记账，不把空 stdout 当成失败或伪造测试。代价是日志断言必须与实际测试退出证据同时核对。
 
 ## 线上验证边界
 
@@ -39,3 +41,13 @@
 - 仅构建／重建 API 和网页；环境、旧账号／凭据／排程逐字段保护快照与 Worker／数据库／Redis／代理容器必须前后核对。
 - 上线不会自动导入任何真实主页，不自动发帖、评论或私信。真实 Facebook 官方登录与候选返回需要用户本人配合，未完成时必须明确写明待验证。
 - Graph 端点根据现有应用配置，不申请新 scope。参考 Meta 官方 Postman 请求： https://www.postman.com/meta/facebook/request/bqfxwbp/get-access-tokens-of-pages-you-manage 。Meta 文档站本次访问返回 429，未据第三方文章更改授权范围或版本。
+
+## 腾讯云部署结果（2026-10-17）
+
+- 已部署代码 `30736400e05e48193e189595a03010b6c20b3876`。TAT 准备 `inv-ia16weg13g`、构建核对 `inv-ia16xrg0uf`、激活 `inv-ia1703038w` 均成功；后者退出 0、无截断，UTC 08:57:42–08:57:51。
+- 仅构建／重建 API 与网页，页面 HTTP 200；健康返回 `ok:true,database:ok,redis:PONG`。公网 bundle 含同步入口与只新增提示。4 个未登录同步 API 均 401；无效 `fbps_` 回调重定向固定失败提示并 no-store，未进入普通绑定。
+- Worker 容器 `3cbc3bed8180…`、镜像 `18a02718a919…`、启动时间 `2026-10-13T06:01:58.401954871Z` 完全不变；Postgres、Redis、代理容器 ID／镜像／启动时间也不变。两份 env 文件 SHA 校验均 OK。
+- 原工作区只读 RepeatableRead 快照包括完整 socialAccount（含 credential）、schedule、publishJob、postVariant、facebookManagementConnection。部署前／后 8 个账号、42 条排程、42 个任务、42 个变体、1 条管理连接逐字段摘要一致；快照文件共同 SHA-256 `fe2b1af039dd641263c94478033135507ac6e562569d8822afe18452c85675be`。脱敏证据 TAT `inv-ja170qgpbe` 成功。
+- 新 API 容器 `6a644ea702b4…`、网页 `f39e83f8d9cf…`。磁盘可用 9.2G；未创建收费资源、存储桶或加速服务。
+- 旧镜像保留为 `social-scheduler-api:before-facebook-page-sync-20261017`、`social-scheduler-web:before-facebook-page-sync-20261017`；release 证据目录 `/opt/social-scheduler-releases/facebook-page-sync-20261017`。回退脚本只切换 API／网页，不恢复或删除数据库内容，本次未触发回退。
+- 未进行真实 Meta 登录或导入；真实候选列表及新增主页导入留给用户完成官方授权后验证。授权时保留原主页选择，回到软件后仅勾选要新增的主页再确认，不需解绑。
