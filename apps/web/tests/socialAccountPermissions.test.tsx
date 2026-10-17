@@ -16,15 +16,15 @@ const publishing=['pages_manage_posts','pages_read_engagement'];
 const page={id:'managed-1',connectionId:'connection-1',pageId:'100',name:'Different current name',publishingAccountId:'account-1',authorization:'available',selectedManagedPageId:'managed-1',businesses:[]};
 const caps={readComments:{status:'available'},replyComments:{status:'missing'},readMessages:{status:'unknown'},replyMessages:{status:'available'},subscription:{status:'available'}};
 
-test('TikTok detail translates per-account grants and collapses technical identifiers without new requests',async()=>{
+test('customer details retain Chinese functions but do not render technical identifiers or scope names',async()=>{
  const a=account('tiktok',['user.info.basic','video.publish','user.info.stats','video.list']);const original=JSON.stringify(a);
  await withFacebookUI(panel(a),async({view,requests}:any)=>{
   await open(view);
   assert.equal(state(view,'读取头像和昵称'),'已授权');assert.equal(state(view,'直接发布视频'),'已授权');
   assert.equal(state(view,'读取账号统计'),'已授权');assert.equal(state(view,'读取公开视频'),'已授权');
   assert.equal(state(view,'读取主页资料'),'未记录授权');assert.equal(state(view,'上传为 TikTok 草稿'),'未记录授权');
-  const technical=view.root.findByType('details');assert.equal(technical.props.open,undefined);
-  assert.equal(technical.findByType('summary').children.join(''),'技术详情');
+  assert.equal(view.root.findAllByType('details').length,0);
+  assert.doesNotMatch(facebookText(view),/技术详情|平台账号 ID|访问凭证到期时间|凭据更新时间|user\.info\.basic|video\.publish/);
   assert.equal(view.root.findAllByProps({'aria-label':'授权功能'}).length,1);
   assert.equal(requests.length,0);assert.equal(JSON.stringify(a),original);
  });
@@ -103,21 +103,26 @@ test('viewers can read permission summaries but have no disconnect or authorizat
  });
 });
 
-test('viewer keyboard navigation can reach technical details and wraps only after the final focusable control',async()=>{
+test('viewer keyboard navigation wraps safely when the hidden technical section leaves only Close',async()=>{
  let document:any;
  const close={focus(){if(document)document.activeElement=close;},getClientRects:()=>[{}]};
- const summary={focus(){if(document)document.activeElement=summary;},getClientRects:()=>[{}]};
  const nodeMock=(element:any)=>element.props.role==='dialog'?{
   querySelector:()=>close,
-  querySelectorAll:(selector:string)=>[close,...(selector.split(',').some(part=>part.trim()==='summary')?[summary]:[])]
+  querySelectorAll:()=>[close]
  }:null;
  await withFacebookUI(panel(account('instagram',['instagram_business_basic']),{canManage:false}),async(f:any)=>{
   document=f.document;await open(f.view);document.activeElement=close;
   const dialog=f.view.root.findByProps({role:'dialog'});let prevented=false;
   dialog.props.onKeyDown({key:'Tab',shiftKey:false,preventDefault(){prevented=true;}});
-  assert.equal(prevented,false,'Tab must reach the native technical-details summary instead of looping on Close');
-  document.activeElement=summary;
-  dialog.props.onKeyDown({key:'Tab',shiftKey:false,preventDefault(){prevented=true;}});
+  assert.equal(f.view.root.findAllByType('summary').length,0);
   assert.equal(prevented,true);assert.equal(document.activeElement,close);
  },undefined,nodeMock);
+});
+
+test('hiding technical details preserves renewal warnings and expired authorization states without requests',async()=>{
+ for(const [expiry,want] of [[new Date(Date.now()+3*86400000).toISOString(),'续期凭证即将到期'],['2020-01-01T00:00:00Z','续期凭证已到期']]){
+  await withFacebookUI(panel(account('tiktok',['user.info.basic'],{credential:{scopes:['user.info.basic'],refreshTokenExpiresAt:expiry,updatedAt:'2026-01-01T00:00:00Z'}})),async({view,requests}:any)=>{
+   await open(view);assert.match(facebookText(view),new RegExp(want));assert.equal(view.root.findAllByType('details').length,0);assert.equal(requests.length,0);
+  });
+ }
 });

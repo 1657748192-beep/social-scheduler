@@ -145,7 +145,7 @@ test('manual profile response updates name and image without reloading grants or
     assert.ok(view.root.findAllByType('img').some((img:any)=>img.props.src==='https://example.test/new-avatar.jpg'));
     const writes=requests.filter((r:any)=>r.method!=='GET');assert.equal(writes.length,1);
     assert.match(decodeURIComponent(writes[0].path),/social-accounts\/Brand Instagram\/refresh-profile$/);assert.deepEqual(writes[0].body,{mode:'manual'});
-    assert.match(facebookText(view),/Brand Instagram-provider/);
+    assert.doesNotMatch(facebookText(view),/Brand Instagram-provider/);
   },(url,init)=>url.pathname.endsWith('/refresh-profile')&&init?.method==='POST'?Response.json({status:'updated',id:'Brand Instagram',displayName:'Renamed Brand',avatarUrl:'https://example.test/new-avatar.jpg',profileUrl:'https://www.instagram.com/new_brand/',profileSync:{lastAttemptAt:new Date().toISOString(),lastSuccessAt:new Date().toISOString()}}):url.pathname.endsWith('/social-accounts')?Response.json([accounts[0]]):undefined);
 });
 
