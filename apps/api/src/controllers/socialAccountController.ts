@@ -21,6 +21,8 @@ import {
   startOAuthSchema
 } from "../services/socialAccountService";
 import { HttpError } from "../utils/errors";
+import {z} from 'zod';
+import {refreshSocialAccountProfile} from '../services/socialAccountAvatarService';
 import { facebookEngagementAuthorizationService, startFacebookEngagementAuthorization } from '../services/facebookEngagementAuthorization';
 import { ensureFacebookPageSubscription } from '../services/facebookSubscription';
 import { summarizeFacebookAuthorizationFailure } from '../integrations/oauth/facebookEngagementGateway';
@@ -89,6 +91,11 @@ export async function oauthCallbackController(req: Request, res: Response) {
 export async function listSocialAccountsController(req: Request, res: Response) {
   const accounts = await listSocialAccounts(req.user!.id, req.params.workspaceId);
   return res.json(accounts);
+}
+
+export async function refreshSocialAccountProfileController(req:Request,res:Response){
+  const {mode}=z.object({mode:z.enum(['auto','manual']).default('manual')}).strict().parse(req.body??{});
+  return res.json(await refreshSocialAccountProfile(req.user!.id,req.params.workspaceId,req.params.socialAccountId,mode));
 }
 
 export async function getTikTokCreatorPublishInfoController(req: Request, res: Response) {

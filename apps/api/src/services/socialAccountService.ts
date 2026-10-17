@@ -223,7 +223,7 @@ async function fetchProviderProfile(provider: OAuthProviderConfig, accessToken: 
   if (provider.platform === "pinterest") {
     return {
       providerAccountId: payload.id,
-      displayName: payload.profile_name || payload.username,
+      displayName: payload.business_name || payload.profile_name || payload.username,
       profileUsername: typeof payload.username === 'string' ? payload.username : undefined,
       avatarUrl: payload.profile_image,
       accountType: payload.account_type || "profile"

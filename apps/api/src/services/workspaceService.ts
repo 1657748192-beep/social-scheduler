@@ -92,8 +92,8 @@ export async function requireWorkspacePublishingAccess(userId: string, workspace
   return membership;
 }
 
-export async function requireWorkspaceManager(userId: string, workspaceId: string) {
-  const membership = await requireWorkspaceMembership(userId, workspaceId);
+export async function requireWorkspaceManager(userId: string, workspaceId: string, db: WorkspaceAccessDb = prisma) {
+  const membership = await requireWorkspaceMembership(userId, workspaceId, db);
   assertRoleCanManageMembers(membership.role);
   return membership;
 }

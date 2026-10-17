@@ -7,6 +7,7 @@ import {
   getPinterestBoardsController,
   getTikTokCreatorPublishInfoController,
   listSocialAccountsController,
+  refreshSocialAccountProfileController,
   oauthCallbackController,
   oauthProviderStatusController,
   startSharedOAuthController,
@@ -44,6 +45,11 @@ socialAccountRoutes.get(
   "/workspaces/:workspaceId/social-accounts",
   requireAuth,
   asyncHandler(listSocialAccountsController)
+);
+socialAccountRoutes.post(
+  '/workspaces/:workspaceId/social-accounts/:socialAccountId/refresh-profile',
+  requireAuth,
+  asyncHandler(refreshSocialAccountProfileController)
 );
 socialAccountRoutes.get(
   "/workspaces/:workspaceId/social-accounts/:socialAccountId/tiktok-publish-options",
