@@ -9,6 +9,21 @@ function client(handler: (url: URL, init?: RequestInit) => Promise<Response>) {
   return createFacebookEngagementClient({ ...options, fetchImpl: (async (url, init) => handler(new URL(String(url)), init)) as typeof fetch });
 }
 
+test('postIdentityReadDistinguishesUnavailableContentWithoutLeakingProviderText', async () => {
+  const c=client(async (url,init)=>{
+    assert.equal(init?.method,'GET');assert.equal(url.pathname,'/v20.0/200');
+    assert.equal(url.searchParams.get('fields'),'id,from{id}');
+    return json({id:'100_200',from:{id:'100'}});
+  });
+  assert.deepEqual(await c.getPostIdentity('200'),{id:'100_200',pageId:'100'});
+  for(const [code,subcode,kind] of [[100,33,'content_unavailable'],[100,0,'temporary_failure'],[200,0,'permission_missing'],[190,0,'authorization_invalid']] as const){
+    await assert.rejects(client(async()=>json({error:{code,error_subcode:subcode,message:'private-page-token'}},400)).getPostIdentity('200'),
+      (e:unknown)=>e instanceof FacebookEngagementError&&e.kind===kind&&!e.message.includes('private-page-token'));
+  }
+  await assert.rejects(client(async()=>json({error:{code:100,error_subcode:33}},400)).listComments('100_200'),
+    (e:unknown)=>e instanceof FacebookEngagementError&&e.kind==='content_unavailable');
+});
+
 test('capabilitiesDoNotAssumeRequestedScopes', async () => {
   const c = client(async url => {
     assert.equal(url.hostname, 'graph.facebook.com');

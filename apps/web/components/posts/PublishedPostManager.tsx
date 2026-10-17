@@ -549,8 +549,8 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
           );
           const composerUrl = `/composer?workspaceId=${encodeURIComponent(workspaceId)}&copyPostId=${encodeURIComponent(post.postId)}`;
           const mediaReuse = getMediaReuseStatus(post, now, locale);
-          const facebookPage=facebookEnabled&&facebookPages.key===token+':'+workspaceId&&post.platform==='facebook'&&post.socialAccount?.id&&post.providerPostId&&/^\d+_\d+$/.test(post.providerPostId)
-            ?facebookPages.items.find(page=>page.publishingAccountId===post.socialAccount!.id&&page.pageId===post.providerPostId!.split('_')[0]):undefined;
+          const facebookPage=facebookEnabled&&facebookPages.key===token+':'+workspaceId&&post.platform==='facebook'&&post.socialAccount?.id&&post.providerPostId&&/^\d+(?:_\d+)?$/.test(post.providerPostId)
+            ?facebookPages.items.find(page=>page.publishingAccountId===post.socialAccount!.id&&(!post.providerPostId!.includes('_')||page.pageId===post.providerPostId!.split('_')[0])):undefined;
           const facebookSelection=facebookPage?.connectionChoices?.find(choice=>choice.managedPageId===facebookPage.selectedManagedPageId&&choice.available);
 
           return (

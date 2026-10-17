@@ -51,6 +51,7 @@ export function createFacebookManagementRouter(runtime:FacebookManagementRuntime
   route('get','/pages/:managedPageId/conversations/:conversationId/messages','read',async(req,ctx)=>runtime.engagement.messages(page(req,ctx),identifier.parse(req.params.conversationId),cursor.parse(req.query.cursor)));
   route('post','/pages/:managedPageId/conversations/:conversationId/replies','write',async(req,ctx)=>runtime.engagement.replyMessage(page(req,ctx),{...reply(2000).parse(req.body),conversationId:identifier.parse(req.params.conversationId)}));
   route('get','/pages/:managedPageId/posts/:scheduleId/comments','read',async(req,ctx)=>runtime.engagement.comments(page(req,ctx),uuid.parse(req.params.scheduleId),cursor.parse(req.query.cursor)));
+  route('get','/pages/:managedPageId/posts/:scheduleId/availability','read',async(req,ctx)=>runtime.engagement.postAvailability(page(req,ctx),uuid.parse(req.params.scheduleId)));
   route('post','/pages/:managedPageId/posts/:scheduleId/comments/:commentId/replies','write',async(req,ctx)=>runtime.engagement.replyComment(page(req,ctx),{...reply(8000).parse(req.body),scheduleId:uuid.parse(req.params.scheduleId),commentId:identifier.parse(req.params.commentId)}));
   const errors:ErrorRequestHandler=(error,_req,res,_next)=>{
     let status=500,message='Facebook management unavailable';

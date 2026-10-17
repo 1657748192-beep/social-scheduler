@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { CapabilityState, FacebookCapabilities, FacebookComment, FacebookConversation, FacebookMessage, FacebookPage, FacebookSendResult } from './facebookEngagementTypes';
 
-export type FacebookFailureKind = 'permission_missing' | 'authorization_invalid' | 'task_missing' | 'access_level' | 'rate_limited' | 'temporary_failure' | 'invalid_response';
+export type FacebookFailureKind = 'permission_missing' | 'authorization_invalid' | 'task_missing' | 'access_level' | 'rate_limited' | 'temporary_failure' | 'invalid_response' | 'content_unavailable';
 export class FacebookEngagementError extends Error {
   constructor(public readonly kind: FacebookFailureKind, public readonly diagnosticId = randomUUID()) {
     super(`Facebook ${kind} (${diagnosticId}).`);
@@ -42,7 +42,7 @@ export function createFacebookEngagementClient(input: {
   id(input.pageId);
   if (!/^v\d+\.\d+$/.test(input.apiVersion)) throw new Error('Invalid Facebook Graph version.');
   const fetcher = input.fetchImpl ?? fetch;
-  async function request(path: string, params: Record<string,string> = {}, method = 'GET', body?: string, appAuth = false): Promise<RecordValue> {
+  async function request(path: string, params: Record<string,string> = {}, method = 'GET', body?: string, appAuth = false, contentRead = false): Promise<RecordValue> {
     const url = new URL(`https://graph.facebook.com/${input.apiVersion}/${path}`);
     for (const [key,value] of Object.entries(params)) url.searchParams.set(key,value);
     let response: Response;
@@ -55,7 +55,7 @@ export function createFacebookEngagementClient(input: {
     if (!response.ok || payload.error) {
       const error = record(payload.error);
       // Never copy Meta's message: it can contain credentials or customer content.
-      throw new FacebookEngagementError(classify(response.status,error.code));
+      throw new FacebookEngagementError(contentRead&&error.code===100&&error.error_subcode===33?'content_unavailable':classify(response.status,error.code));
     }
     if (!Object.keys(payload).length) throw new FacebookEngagementError('invalid_response');
     return payload;
@@ -85,6 +85,10 @@ export function createFacebookEngagementClient(input: {
     ['readComments','replyComments','readMessages','replyMessages','subscription'].map(key => [key,{status:'unknown',reason}])
   ) as FacebookCapabilities;
   return {
+    async getPostIdentity(postId:string):Promise<{id:string;pageId:string}>{
+      const raw=await request(id(postId),{fields:'id,from{id}'},'GET',undefined,false,true);
+      return {id:requiredString(raw.id),pageId:requiredString(record(raw.from).id)};
+    },
     async inspectCapabilities(): Promise<FacebookCapabilities> {
       if (!input.appId || !input.appSecret) return capabilitiesUnknown('App authorization inspection is not configured.');
       try {
@@ -107,7 +111,7 @@ export function createFacebookEngagementClient(input: {
       }
     },
     async listComments(postId: string, after?: string): Promise<FacebookPage<FacebookComment>> {
-      return page(await request(`${id(postId)}/comments`,{fields:'id,message,created_time,from',filter:'stream',limit:'25',...(after ? {after} : {})}), raw => comment(raw,postId));
+      return page(await request(`${id(postId)}/comments`,{fields:'id,message,created_time,from',filter:'stream',limit:'25',...(after ? {after} : {})},'GET',undefined,false,true), raw => comment(raw,postId));
     },
     async getComment(commentId: string): Promise<FacebookComment> {
       const raw=await request(id(commentId),{fields:'id,message,created_time,from,object{id}'});

@@ -7,6 +7,22 @@ import {PublishedPostManager} from '../components/posts/PublishedPostManager';
 import {AppRouterContext} from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import {withFacebookUI,facebookButton,facebookText,defaultFacebookResponse} from './helpers/facebookManagementUI';
 const comments=(overrides:any={})=><FacebookPostComments {...{token:'token',workspaceId:'w1',managedPageId:'p1',connectionId:'c1',scheduleId:'schedule',providerPostId:'100_1',pageName:'First Page',role:'owner',...overrides} as any}/>;
+
+test('historicalIdentityRequiresExplicitReadOnlyCheckAndDoesNotSuggestReauthorization',async()=>{
+  let status='content_unavailable';
+  await withFacebookUI(comments({providerPostId:'200'}),async({view,requests}:any)=>{
+    await act(async()=>facebookButton(view,'Facebook 评论').props.onClick());
+    assert.equal(requests.filter((r:any)=>r.path.endsWith('/comments')||r.path.endsWith('/availability')).length,0);
+    await act(async()=>facebookButton(view,'重新检查').props.onClick());
+    assert.match(facebookText(view),/平台内容暂不可读/);assert.doesNotMatch(facebookText(view),/已删除|请重新授权|评论读取尚未获准/);
+    assert.equal(facebookButton(view,'发送回复'),undefined);
+    status='readable';await act(async()=>facebookButton(view,'重新检查').props.onClick());
+    assert.match(facebookText(view),/comment-p1/);
+    assert.equal(requests.filter((r:any)=>r.path.endsWith('/availability')).length,2);
+    assert.ok(requests.every((r:any)=>!r.body));
+    assert.equal(facebookButton(view,'发送回复'),undefined);
+  },url=>url.pathname.endsWith('/availability')?Response.json({status,checkedAt:'2026-10-17T05:00:00Z'}):undefined);
+});
 test('commentsStartCollapsedAndReadThroughIndependentPageContext',async()=>withFacebookUI(comments(),async({view,requests}:any)=>{
   assert.equal(requests.filter((r:any)=>r.path.endsWith('/comments')).length,0);
   await act(async()=>facebookButton(view,'Facebook 评论').props.onClick());assert.match(facebookText(view),/comment-p1/);
@@ -37,9 +53,9 @@ test('publishedManagerShowsOnlyBoundVerifiedFacebookEntryAndNeverRestoresInstagr
   const post=(id:string,overrides:any={})=>({id,postId:'post-'+id,title:id,baseText:id,text:id,platform:'facebook',providerPostId:'100_1',socialAccount:{id:'publishing-p1',displayName:'First Page',platform:'facebook'},media:[],scheduledAt:'2026-10-16T08:00:00Z',publishedAt:'2026-10-16T08:00:00Z',...overrides});
   const router={back(){},forward(){},refresh(){},push(){},replace(){},prefetch:async()=>{}};
   try{await withFacebookUI(<AppRouterContext.Provider value={router}><PublishedPostManager token="token" workspaces={[{id:'w1',name:'Workspace',role:'owner'} as any]}/></AppRouterContext.Provider>,async({view,requests}:any)=>{
-    assert.equal(view.root.findAllByType('button').filter((button:any)=>button.children.join('')==='Facebook 评论').length,1);
+    assert.equal(view.root.findAllByType('button').filter((button:any)=>button.children.join('')==='Facebook 评论').length,2);
     assert.ok(requests.every((r:any)=>!r.path.includes('instagram/reception')&&!r.path.includes('instagram-engagement')));
     assert.equal(requests.filter((r:any)=>r.path.endsWith('/comments')).length,0);
-  },url=>url.pathname.endsWith('/published-posts')?Response.json([post('real'),post('simulated',{providerPostId:'mock-facebook'}),post('removed',{socialAccount:null}),post('foreign',{socialAccount:{id:'other-account',displayName:'Same name',platform:'facebook'}}),post('instagram',{platform:'instagram',socialAccount:{id:'ig',platform:'instagram',displayName:'Instagram'}})]):url.pathname.endsWith('/social-accounts')?Response.json([{id:'publishing-p1',platform:'facebook',accountType:'page',status:'active',displayName:'First Page'}]):undefined);
+  },url=>url.pathname.endsWith('/published-posts')?Response.json([post('real'),post('historical',{providerPostId:'200'}),post('wrong-page',{providerPostId:'999_1'}),post('simulated',{providerPostId:'mock-facebook'}),post('removed',{socialAccount:null}),post('foreign',{socialAccount:{id:'other-account',displayName:'Same name',platform:'facebook'}}),post('instagram',{platform:'instagram',socialAccount:{id:'ig',platform:'instagram',displayName:'Instagram'}})]):url.pathname.endsWith('/social-accounts')?Response.json([{id:'publishing-p1',platform:'facebook',accountType:'page',status:'active',displayName:'First Page'}]):undefined);
   }finally{(globalThis as any).self=oldSelf;}
 });

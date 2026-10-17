@@ -9,7 +9,7 @@ import type {createFacebookPageAccess} from './access';
 import type {createFacebookSendExecutor} from './sendAttempts';
 
 type Access=Awaited<ReturnType<ReturnType<typeof createFacebookPageAccess>['resolvePageAccess']>>;
-type Client=Pick<FacebookEngagementClient,'listConversations'|'getConversation'|'listMessages'|'listComments'|'replyComment'|'sendMessage'>;
+type Client=Pick<FacebookEngagementClient,'getPostIdentity'|'listConversations'|'getConversation'|'listMessages'|'listComments'|'replyComment'|'sendMessage'>;
 type Dependencies={db:PrismaClient;resolvePageAccess:ReturnType<typeof createFacebookPageAccess>['resolvePageAccess'];executeFacebookSend:ReturnType<typeof createFacebookSendExecutor>['executeFacebookSend'];
   createClient:(input:{pageId:string;accessToken:string})=>Client;now?:()=>Date;latestInbound?:(managedPageId:string,participantId:string)=>Promise<Date|null>;
   receivedMessages?:(managedPageId:string,participantId:string,conversationId:string)=>Promise<FacebookMessage[]>;
@@ -56,13 +56,19 @@ export function createFacebookManagementEngagement(deps:Dependencies){
     }
     return page;
   }
-  async function published(ctx:PageContext,access:Access,scheduleId:string){
+  async function published(ctx:PageContext,access:Access,scheduleId:string,allowHistorical=false){
     const schedule=await deps.db.schedule.findFirst({where:{id:scheduleId,workspaceId:ctx.workspaceId,status:'published'},include:{postVariant:{include:{post:true}},publishJobs:{where:{status:'succeeded'},orderBy:{createdAt:'desc'}}}});
     if(!schedule||schedule.postVariant.post.workspaceId!==ctx.workspaceId||schedule.postVariant.platform!=='facebook'||schedule.postVariant.socialAccountId!==access.publishingAccountId)throw new HttpError(404,'Published Facebook post unavailable');
     const job=schedule.publishJobs[0];
     const simulated=job?.rawResponse&&typeof job.rawResponse==='object'&&!Array.isArray(job.rawResponse)&&'simulated' in job.rawResponse&&job.rawResponse.simulated===true;
-    if(!job?.providerPostId||!new RegExp(`^${access.pageId}_[0-9]+$`).test(job.providerPostId)||simulated)throw new HttpError(409,'Verified Facebook post identity is unavailable');
+    if(!job?.providerPostId||!(new RegExp(`^${access.pageId}_[0-9]+$`).test(job.providerPostId)||allowHistorical&&/^\d{1,256}$/.test(job.providerPostId))||simulated)throw new HttpError(409,'Verified Facebook post identity is unavailable');
     return job.providerPostId;
+  }
+  async function verifiedHistorical(api:Client,access:Access,storedId:string){
+    const remote=await api.getPostIdentity(storedId);
+    if(remote.pageId!==access.pageId||!new RegExp(`^${access.pageId}_[0-9]+$`).test(remote.id)||
+      (storedId.includes('_')?remote.id!==storedId:remote.id.split('_')[1]!==storedId))return null;
+    return remote.id;
   }
   async function send(access:Access,action:()=>Promise<SendOutcome>):Promise<SendOutcome>{
     try{return await provider(access,action);}catch(error){
@@ -71,6 +77,17 @@ export function createFacebookManagementEngagement(deps:Dependencies){
     }
   }
   return {
+    async postAvailability(ctx:PageContext,scheduleId:string){
+      const {access,api}=await authorized(ctx,'readComments'),storedId=await published(ctx,access,scheduleId,true);
+      // Read only: do not invalidate grants, repair records, or infer deletion from 100/33.
+      let status:string;
+      try{
+        const postId=await verifiedHistorical(api,access,storedId);
+        if(postId){wrap(await api.listComments(postId));status='readable';}else status='identity_unverified';
+      }
+      catch(error){if(!(error instanceof FacebookEngagementError))throw error;status=error.kind;}
+      return {status,checkedAt:now().toISOString()};
+    },
     async capabilities(ctx:PageContext){return permissions(await deps.resolvePageAccess(ctx,{requirePublishingBinding:true}));},
     async conversations(ctx:PageContext,after?:string){
       validateAfter(after);const {access,api}=await authorized(ctx,'readMessages');
@@ -87,7 +104,9 @@ export function createFacebookManagementEngagement(deps:Dependencies){
       });
     },
     async comments(ctx:PageContext,scheduleId:string,after?:string){
-      validateAfter(after);const {access,api}=await authorized(ctx,'readComments');const postId=await published(ctx,access,scheduleId);
+      validateAfter(after);const {access,api}=await authorized(ctx,'readComments');const storedId=await published(ctx,access,scheduleId,true);
+      const postId=storedId.includes('_')?storedId:await provider(access,()=>verifiedHistorical(api,access,storedId));
+      if(!postId)throw new HttpError(409,'Verified Facebook post identity is unavailable');
       return provider(access,async()=>{
         const remote=wrap(await api.listComments(postId,after));
         const local=await deps.receivedComments?.(access.managedPageId,postId,remote.items.map(c=>c.id),!after)??[];

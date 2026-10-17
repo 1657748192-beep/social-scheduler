@@ -30,6 +30,7 @@ async function fixture(run:(f:any)=>Promise<void>){
     const now=new Date(),ctx={userId,workspaceId,sessionId,managedPageId:page.id},viewer={...ctx,userId:viewerId,sessionId:viewerSession};
     let messages=[{id:'m1',conversationId:'c1',senderId:'300',recipientId:'100',inbound:true,text:'Inbound',timestamp:new Date(now.getTime()-23*3600000-59*60000).toISOString()}],fail=false,tokenValid=true,calls=0;
     const api={
+      getPostIdentity:async(id:string)=>({id,pageId:'100'}),
       listConversations:async()=>{if(fail)throw new FacebookEngagementError('temporary_failure');return{items:[{id:'c1',counterpartyId:'300',counterpartyName:'Customer',updatedAt:now.toISOString()}],nextCursor:null};},
       getConversation:async(id:string)=>{if(id!=='c1')throw new FacebookEngagementError('invalid_response');return{id:'c1',counterpartyId:'300',updatedAt:now.toISOString()};},
       listMessages:async()=>({items:messages,nextCursor:null}),
@@ -42,6 +43,29 @@ async function fixture(run:(f:any)=>Promise<void>){
     await run({db,ctx,viewer,page,connection,account,schedule,job,snapshot,service,api,access,now,calls:()=>calls,setFail:(v:boolean)=>{fail=v;},setTokenValid:(v:boolean)=>{tokenValid=v;},setMessages:(v:any)=>{messages=v;}});
   }finally{await db.workspace.deleteMany({where:{id:workspaceId,ownerId:userId}});await db.user.deleteMany({where:{id:{in:[userId,viewerId]}}});await db.$disconnect();}
 }
+
+test('historicalPostCheckIsReadOnlyAndRequiresExactPageAndPostIdentity',async()=>fixture(async({db,ctx,connection,service,schedule,job,snapshot,api,calls}:any)=>{
+  await db.publishJob.update({where:{id:job.id},data:{providerPostId:'200',rawResponse:{id:'200'}}});
+  const before=await snapshot(),grant=await db.facebookManagementConnection.findUniqueOrThrow({where:{id:connection.id}});let reads=0;
+  api.getPostIdentity=async(id:string)=>{reads++;assert.equal(id,'200');throw new FacebookEngagementError('content_unavailable' as any);};
+  assert.equal((await service.postAvailability(ctx,schedule.id)).status,'content_unavailable');assert.equal(reads,1);
+  api.getPostIdentity=async()=>({id:'100_200',pageId:'999'});
+  assert.equal((await service.postAvailability(ctx,schedule.id)).status,'identity_unverified');
+  await assert.rejects(service.comments(ctx,schedule.id));
+  api.getPostIdentity=async()=>({id:'100_999',pageId:'100'});
+  assert.equal((await service.postAvailability(ctx,schedule.id)).status,'identity_unverified');
+  api.getPostIdentity=async()=>({id:'100_200',pageId:'100'});
+  assert.equal((await service.postAvailability(ctx,schedule.id)).status,'readable');
+  assert.equal((await service.comments(ctx,schedule.id)).items[0].postId,'100_200');
+  const list=api.listComments;api.listComments=async()=>{throw new FacebookEngagementError('permission_missing');};
+  assert.equal((await service.postAvailability(ctx,schedule.id)).status,'permission_missing');api.listComments=list;
+  for(const kind of ['permission_missing','temporary_failure','authorization_invalid']){
+    api.getPostIdentity=async()=>{throw new FacebookEngagementError(kind as any);};
+    assert.equal((await service.postAvailability(ctx,schedule.id)).status,kind);
+  }
+  assert.deepEqual(await snapshot(),before);assert.equal(calls(),0);
+  assert.deepEqual(await db.facebookManagementConnection.findUniqueOrThrow({where:{id:connection.id}}),grant);
+}));
 
 test('readsGraphWithoutWebhookHistory',async()=>fixture(async({db,ctx,service,schedule,snapshot,setFail,setTokenValid,calls}:any)=>{
   const before=await snapshot();assert.equal(await db.facebookInteractionEvent.count({where:{managedPageId:ctx.managedPageId}}),0);
