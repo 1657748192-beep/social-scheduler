@@ -28,16 +28,14 @@ import {createInteractionInboxRuntime} from './interactionInbox/runtime';
 import {createInteractionInboxRouter} from './interactionInbox/routes';
 import {prisma} from './prisma';
 import {redis} from './redis';
-import {getInstagramManagementConfig} from './instagramManagement/config';
-import {createInstagramManagementRuntime,type InstagramManagementRuntime} from './instagramManagement/runtime';
+import type {InstagramManagementRuntime} from './instagramManagement/runtime';
+import {getInstagramManagementRuntime} from './instagramManagement/defaultRuntime';
 import {createInstagramManagementRouter} from './instagramManagement/routes';
-import {createLiveInboxPolicy,parseLiveAssetRules} from './interactionInbox/livePolicy';
-import {encryptToken,decryptToken} from './utils/tokenCrypto';
 
 export function createApp(options:{facebookManagement?:FacebookManagementRuntime;instagramManagement?:InstagramManagementRuntime}={}) {
   const app = express();
   const management=options.facebookManagement??facebookManagementRuntime;
-  const instagram=options.instagramManagement??createInstagramManagementRuntime({db:prisma,config:getInstagramManagementConfig(process.env),policy:createLiveInboxPolicy(parseLiveAssetRules(process.env.META_INBOX_LIVE_ASSETS_JSON)),encrypt:encryptToken,decrypt:decryptToken});
+  const instagram=options.instagramManagement??getInstagramManagementRuntime();
 
   app.use(helmet());
   app.use(
@@ -47,6 +45,7 @@ export function createApp(options:{facebookManagement?:FacebookManagementRuntime
     })
   );
   if(management.enabled)app.use('/api/v1/webhooks/facebook',management.webhook);
+  if(instagram.receptionEnabled)app.use('/api/v1/webhooks/instagram',instagram.webhook);
   app.use(removedMetaEngagement);
   app.use(express.json({ limit: "1mb" }));
   morgan.token("safe-url", req => safeRequestLogUrl(req.url ?? ""));

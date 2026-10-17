@@ -14,7 +14,7 @@ test('managementApiEnforcesAdminAndDisabledStatusWithoutPublishingMutation',asyn
   assert.equal((await fetch(base+'/oauth/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accountId:f.instagramAccountIds[0]})})).status,403);
   assert.equal((await fetch(base+'/connections/'+f.instagramConnectionIds[0],{method:'DELETE'})).status,403);
   ctx=f.adminCtx;const status=await fetch(base+`/status?accountId=${f.instagramAccountIds[0]}`);assert.equal(status.status,200);assert.match(status.headers.get('cache-control')??'',/no-store/);assert.equal((await status.json()).enabled,false);
-  const callback=await fetch(`http://127.0.0.1:${port}/api/v1/integrations/instagram-management/oauth/callback?code=private-code&state=private-state`,{redirect:'manual'});assert.equal(callback.status,302);assert.equal(callback.headers.get('location'),'https://app.example.test/inbox?instagram_management=failed');
+  const callback=await fetch(`http://127.0.0.1:${port}/api/v1/integrations/instagram-management/oauth/callback?code=private-code&state=private-state`,{redirect:'manual'});assert.equal(callback.status,302);assert.equal(callback.headers.get('location'),'https://app.example.test/inbox?instagram_management=failed');assert.equal(callback.headers.get('referrer-policy'),'no-referrer');
   assert.deepEqual(await f.publishingSnapshot(),before);
   assert.doesNotMatch(safeRequestLogUrl(`/api/v1/workspaces/${f.adminCtx.workspaceId}/instagram-management/status?accountId=private-account`),/private-account|11111111/);
  }finally{server.closeAllConnections();await new Promise<void>(r=>server.close(()=>r()));}

@@ -9,7 +9,7 @@ export function createInstagramManagementRouter(runtime:InstagramManagementRunti
  const ctx=(req:Request):Scope=>{if(!req.user?.sessionId)throw new HttpError(401,'Authentication required');return{workspaceId:z.string().uuid().parse(req.params.workspaceId),userId:req.user.id,sessionId:req.user.sessionId};};
  const redirect=new URL('/inbox',options.webAppUrl);if(!['https:','http:'].includes(redirect.protocol)||redirect.username||redirect.password)throw new Error('Invalid web application origin');
  router.get('/integrations/instagram-management/oauth/callback',async(req,res)=>{
-  const target=new URL(redirect);res.setHeader('Cache-Control','no-store');
+  const target=new URL(redirect);res.setHeader('Cache-Control','no-store');res.setHeader('Referrer-Policy','no-referrer');
   try{const q=z.object({state:z.string().max(256),code:z.string().max(8192).optional(),error:z.string().max(256).optional()}).passthrough().parse(req.query);await runtime.oauth.callback(q);target.searchParams.set('instagram_management','success');}
   catch{target.searchParams.set('instagram_management','failed');}
   res.redirect(target.href);

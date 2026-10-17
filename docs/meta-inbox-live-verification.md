@@ -50,3 +50,11 @@ Not started. No official policy evidence, real grants, Webhook delivery, sending
 - Behavioral RED→GREEN: changing app namespace after provider read must reject projection; Page-task revocation during provider capability fetch must reject read; omitting kind-specific transaction check reproduced unauthorized projection, then restored check passes. Seven new Facebook tests pass; focused30/30 passed before final added transaction regression, and full final suite702/702 passes,0 failed/skipped,172146.5616ms. API build and diff check pass.
 - Existing management grants/selections and publishing snapshots remain unchanged during real service calls in local tests. Synthetic test setup deliberately mutates/restores its own Page metadata for race cases; these setup mutations are not production actions. Comments still explicitly cover verified software-published posts only.
 - Ruling: deleted-source marker scheme and cleanup wiring remain Task7; current source-expiry/deletion filters remain. No real activation before that lifecycle is complete.
+
+## Task 5 — signed Instagram reception
+
+- Raw-byte HMAC verification, bounded 1MiB parsing, durable database deduplication before acknowledgement, explicit app/asset routing and rejection of ambiguous workspace mappings. API-owned nonoverlapping pump processes at most50 events/tick with lease fencing; shutdown waits for in-flight work. Worker unchanged.
+- Behavioral RED→GREEN covered cross-app claim finalization, oversize error stack leakage, actual app callback mounting and expired raw data becoming fresh source. OAuth callback now sends no-referrer, verified with an initially failing HTTP assertion.
+- Final focused18/18, full719/719 passed,0 failed/skipped,184818.2568ms (`task-5-full.log`). API build exit0 and diff check passed. Existing React test-renderer deprecation warnings remain.
+- Independent source receivedAt preserves raw receipt time; completed raw events lose their body. Unknown/future inbound timestamps do not start a fresh reply window. Opaque local thread keys are not Graph conversation IDs.
+- Default runtime deliberately supplies no deletion guard until Task7; receiver remains closed. Local signed fixtures are not evidence of real Meta delivery, verified grants or policy compliance. No production/provider operations performed.
