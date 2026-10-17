@@ -17,7 +17,7 @@ export function defaultFacebookResponse(url:URL):Response{
   if(path.endsWith('/replies'))return Response.json({status:'sent',providerId:'sent-'+id});
   throw Error('Unexpected or retired fixture endpoint');
 }
-export async function withFacebookUI(element:React.ReactElement,run:(f:any)=>Promise<void>,override?:(url:URL,init?:RequestInit)=>Promise<Response>|Response|undefined){
+export async function withFacebookUI(element:React.ReactElement,run:(f:any)=>Promise<void>,override?:(url:URL,init?:RequestInit)=>Promise<Response>|Response|undefined,nodeMock?:(element:any)=>any){
   const old={fetch:globalThis.fetch,window:(globalThis as any).window,document:(globalThis as any).document};
   (globalThis as any).React=React;(globalThis as any).IS_REACT_ACT_ENVIRONMENT=true;
   const timers=new Map<number,{callback:()=>void;ms:number}>(),storage:Array<[string,string]>=[],requests:Array<{path:string;method:string;body:any}>=[];let timerId=0,disposed=false,view:ReactTestRenderer;
@@ -26,7 +26,7 @@ export async function withFacebookUI(element:React.ReactElement,run:(f:any)=>Pro
   (globalThis as any).document=document;
   globalThis.fetch=async(raw,init)=>{const url=new URL(String(raw));requests.push({path:url.pathname,method:init?.method??'GET',body:init?.body?JSON.parse(String(init.body)):null});return await override?.(url,init)??defaultFacebookResponse(url);};
   const unmount=async()=>{if(!disposed){disposed=true;await act(async()=>view.unmount());}};
-  try{await act(async()=>{view=create(<LanguageProvider>{element}</LanguageProvider>);});await run({view:view!,timers,document,requests,storage,unmount});}
+  try{await act(async()=>{view=create(<LanguageProvider>{element}</LanguageProvider>,nodeMock?{createNodeMock:nodeMock}:undefined);});await run({view:view!,timers,document,requests,storage,unmount});}
   finally{if(view!)await unmount();globalThis.fetch=old.fetch;(globalThis as any).window=old.window;(globalThis as any).document=old.document;}
 }
 export const facebookText=(view:ReactTestRenderer)=>JSON.stringify(view.toJSON());

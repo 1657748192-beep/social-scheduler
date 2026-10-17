@@ -9,10 +9,11 @@ import {PlatformLogo} from '../PlatformLogo';
 import {SocialAccountProfileLink} from './SocialAccountProfileLink';
 import {TikTokAccountStatsPanel} from '../channels/TikTokAccountStatsPanel';
 import {useAccountProfileSync,type ProfileRefresh} from './useAccountProfileSync';
+import {AccountPermissionSummary} from './AccountPermissionSummary';
 
 type Props={accounts:SocialAccount[];providers:OAuthProviderStatus[];workspaceId:string;token:string;canManage:boolean;loading:boolean;failed:boolean;actionError?:string|null;onAdd(provider:OAuthProviderStatus):void;onDisconnect(id:string):Promise<unknown>;onRefresh?:ProfileRefresh};
 
-function AccountDialog({title,onClose,closeLabel,children}:{title:string;onClose():void;closeLabel:string;children:ReactNode}){
+function AccountDialog({title,onClose,closeLabel,children,wide=false}:{title:string;onClose():void;closeLabel:string;children:ReactNode;wide?:boolean}){
   const titleId=useId(),container=useRef<HTMLElement>(null);
   useEffect(()=>{
     const previous=document.activeElement as HTMLElement|null;
@@ -20,10 +21,10 @@ function AccountDialog({title,onClose,closeLabel,children}:{title:string;onClose
     return()=>{if(previous?.isConnected)previous.focus?.();};
   },[]);
   return <div className="channel-modal-backdrop account-manager-backdrop" onClick={onClose}>
-    <section className="channel-modal account-manager-dialog" ref={container} role="dialog" aria-modal={true} aria-labelledby={titleId} onClick={e=>e.stopPropagation()} onKeyDown={e=>{
+    <section className={'channel-modal account-manager-dialog'+(wide?' account-details-dialog':'')} ref={container} role="dialog" aria-modal={true} aria-labelledby={titleId} onClick={e=>e.stopPropagation()} onKeyDown={e=>{
       if(e.key==='Escape'){e.preventDefault();e.stopPropagation();onClose();}
       if(e.key==='Tab'){
-        const nodes=Array.from(container.current?.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled)')??[]).filter(el=>el.getClientRects().length>0);
+        const nodes=Array.from(container.current?.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary')??[]).filter(el=>el.getClientRects().length>0);
         const first=nodes[0],last=nodes.at(-1);
         if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}
         else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}
@@ -78,9 +79,10 @@ function AccountManagerContent({accounts,providers,workspaceId,token,canManage,l
     </div>:<div className="account-manager-table-wrap"><table className="account-manager-table"><thead><tr><th>{t('账号名称','Account')}</th><th>{t('状态','Status')}</th><th>{t('操作','Actions')}</th></tr></thead><tbody>{visible.map(account=><tr key={account.id}><td>{identity(account)}</td><td>{status(account)}</td><td><div className="account-manager-actions"><SocialAccountProfileLink platform={account.platform} profileUrl={account.profileUrl}/>{detailButton(account)}</div></td></tr>)}</tbody></table></div>}
     {!loading&&!failed?<p className="account-manager-count muted" aria-live="polite">{t(`显示 ${visible.length} / ${supported.length} 个账号`,`Showing ${visible.length} of ${supported.length} accounts`)}</p>:null}
     {adding&&canManage&&!loading?<AccountDialog title={t('选择添加账号的平台','Choose an account platform')} closeLabel={t('取消','Cancel')} onClose={()=>setAdding(false)}><div className="account-manager-provider-picker">{configuredProviders.map(provider=><button className="button secondary" type="button" disabled={!provider.configured} key={provider.platform} onClick={()=>{setAdding(false);onAdd(provider);}}><PlatformLogo platform={provider.platform}/>{provider.displayName}{!provider.configured?<small>{t('未配置','Not configured')}</small>:null}</button>)}</div><p className="muted">{t('下一步可选择官方授权或分享授权，当前不会自动发起授权。','Next, choose official or shared authorization. No authorization starts automatically.')}</p></AccountDialog>:null}
-    {selected?<AccountDialog title={t('账号详情','Account details')} closeLabel={t('关闭详情','Close details')} onClose={()=>{if(!removing)setSelectedId(null);}}>
-      {identity(selected)}<div>{status(selected)}</div>
-      <dl className="account-manager-detail-fields"><div><dt>{t('平台账号 ID','Platform account ID')}</dt><dd>{selected.providerAccountId}</dd></div><div><dt>{t('绑定记录创建时间（北京时间）','Connection record created (Beijing time)')}</dt><dd>{date(selected.createdAt)}</dd></div><div><dt>{t('访问凭证到期时间','Access credential expires')}</dt><dd>{date(selected.credential?.expiresAt)}</dd></div><div><dt>{t('续期凭证到期时间','Renewal credential expires')}</dt><dd>{date(selected.credential?.refreshTokenExpiresAt)}</dd></div><div><dt>{t('已记录的授权权限','Recorded permission grants')}</dt><dd>{selected.credential?.scopes?.length?selected.credential.scopes.join(', '):t('暂无记录','Not available')}</dd></div></dl>
+    {selected?<AccountDialog wide title={t('账号详情','Account details')} closeLabel={t('关闭详情','Close details')} onClose={()=>{if(!removing)setSelectedId(null);}}>
+      <div className="account-detail-hero"><div>{identity(selected)}<p className="account-detail-binding muted">{t('绑定时间（北京时间）：','Connected (Beijing time): ')}<time dateTime={selected.createdAt}>{date(selected.createdAt)}</time></p></div><div>{status(selected)}</div></div>
+      <AccountPermissionSummary account={selected} workspaceId={workspaceId} token={token}/>
+      <details className="account-technical-details"><summary>{t('技术详情','Technical details')}</summary><p className="muted">{t('以下仅为授权记录与到期信息，不展示访问密钥。绑定时间不等同于平台审核或授权通过时间。','Stored grant and expiry details only; access secrets are not shown. Connection time is not the platform review or grant time.')}</p><dl className="account-manager-detail-fields"><div><dt>{t('平台账号 ID','Platform account ID')}</dt><dd>{selected.providerAccountId}</dd></div><div><dt>{t('绑定记录创建时间（北京时间）','Connection record created (Beijing time)')}</dt><dd>{date(selected.createdAt)}</dd></div><div><dt>{t('访问凭证到期时间','Access credential expires')}</dt><dd>{date(selected.credential?.expiresAt)}</dd></div><div><dt>{t('续期凭证到期时间','Renewal credential expires')}</dt><dd>{date(selected.credential?.refreshTokenExpiresAt)}</dd></div><div><dt>{t('凭据更新时间（北京时间）','Credential updated (Beijing time)')}</dt><dd>{date(selected.credential?.updatedAt)}</dd></div><div><dt>{t('已记录的授权权限','Recorded permission grants')}</dt><dd>{selected.credential?.scopes?.length?selected.credential.scopes.join(', '):t('暂无记录','Not available')}</dd></div></dl></details>
       <SocialAccountProfileLink platform={selected.platform} profileUrl={selected.profileUrl}/>
       <p className="muted">{t('最近成功同步资料：','Last successful profile sync: ')}{date(selected.capabilities.profileSync?.lastSuccessAt)}</p>
       {canManage&&onRefresh?<div><button type="button" className="button secondary" disabled={selected.status!=='active'||profileSync.pending.includes(selected.id)||removing} onClick={()=>profileSync.refresh(selected.id,'manual')}>{profileSync.pending.includes(selected.id)?t('正在同步…','Syncing…'):t('刷新账号资料','Refresh account profile')}</button><p className="muted">{t('进入此页时，超过 24 小时未同步的账号会在后台更新头像和名称。','On page entry, profiles not synced in 24 hours update their photo and name in the background.')}</p></div>:null}
