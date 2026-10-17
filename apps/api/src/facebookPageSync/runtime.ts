@@ -1,0 +1,11 @@
+import {prisma} from '../prisma';
+import {redis} from '../redis';
+import {config} from '../config';
+import {getOAuthProvider,redirectUriFor} from '../integrations/oauth/oauthProviders';
+import {encryptToken,decryptToken} from '../utils/tokenCrypto';
+import {createFacebookPageSyncGraph} from './graph';
+import {createFacebookPageSyncStore} from './store';
+import {createFacebookPageSyncService} from './service';
+const graph=()=>createFacebookPageSyncGraph({provider:getOAuthProvider('facebook'),appSecret:config.FACEBOOK_CLIENT_SECRET,callbackUrl:redirectUriFor('facebook'),loginConfigId:config.FACEBOOK_LOGIN_CONFIG_ID});
+const service=createFacebookPageSyncService({db:prisma,store:createFacebookPageSyncStore({redis,encrypt:encryptToken,decrypt:decryptToken}),graph:{authorizationUrl:state=>graph().authorizationUrl(state),discover:code=>graph().discover(code),revalidate:pages=>graph().revalidate(pages)},encrypt:encryptToken});
+export const getFacebookPageSyncRuntime=()=>service;
