@@ -28,10 +28,16 @@ import {createInteractionInboxRuntime} from './interactionInbox/runtime';
 import {createInteractionInboxRouter} from './interactionInbox/routes';
 import {prisma} from './prisma';
 import {redis} from './redis';
+import {getInstagramManagementConfig} from './instagramManagement/config';
+import {createInstagramManagementRuntime,type InstagramManagementRuntime} from './instagramManagement/runtime';
+import {createInstagramManagementRouter} from './instagramManagement/routes';
+import {createLiveInboxPolicy,parseLiveAssetRules} from './interactionInbox/livePolicy';
+import {encryptToken,decryptToken} from './utils/tokenCrypto';
 
-export function createApp(options:{facebookManagement?:FacebookManagementRuntime}={}) {
+export function createApp(options:{facebookManagement?:FacebookManagementRuntime;instagramManagement?:InstagramManagementRuntime}={}) {
   const app = express();
   const management=options.facebookManagement??facebookManagementRuntime;
+  const instagram=options.instagramManagement??createInstagramManagementRuntime({db:prisma,config:getInstagramManagementConfig(process.env),policy:createLiveInboxPolicy(parseLiveAssetRules(process.env.META_INBOX_LIVE_ASSETS_JSON)),encrypt:encryptToken,decrypt:decryptToken});
 
   app.use(helmet());
   app.use(
@@ -52,6 +58,7 @@ export function createApp(options:{facebookManagement?:FacebookManagementRuntime
   app.use("/api/v1", adminRoutes);
   app.use("/api/v1", workspaceRoutes);
   app.use('/api/v1',createFacebookManagementRouter(management,{webAppUrl:config.WEB_APP_URL}));
+  app.use('/api/v1',createInstagramManagementRouter(instagram,{webAppUrl:config.WEB_APP_URL}));
   app.use('/api/v1',createInteractionInboxRouter(createInteractionInboxRuntime({db:prisma,redis,facebook:management})));
   app.use("/api/v1", tiktokSandboxRoutes);
   app.use('/api/v1',createFacebookPageSyncRouter(getFacebookPageSyncRuntime,{webAppUrl:config.WEB_APP_URL}));
