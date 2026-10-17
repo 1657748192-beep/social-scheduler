@@ -118,3 +118,59 @@ test('concurrent refreshes issue one provider read and an in-flight credential r
   const saved=await f.db.socialAccount.findUnique({where:{id:a.id},include:{credential:true}});
   assert.equal(saved.displayName,'Old name');assert.equal(saved.credential.accessTokenEncrypted,'rotated-do-not-replace');
 }));
+
+test('TikTok signed CDN avatar refresh preserves the original image signature and existing credentials',async()=>withFacebookManagementFixture(async(f:any)=>{
+  // Rejecting a CDN refresh_token as OAuth breaks these real provider-shaped images.
+  const images=[
+    'https://p19-common-sign.tiktokcdn-us.com/tos-useast5-avt-0068-tx/avatar~c5_100x100.jpeg?dr=9640&refresh_token=cdn-only-fixture&x-expires=1800000000&x-signature=a%2Fb%2Bc%3D&t=4d5b0474',
+    'https://p16-common-sign.tiktokcdn-us.com/tos-useast5-avt-0068-tx/avatar.jpeg?refresh_token=cdn-only-fixture&x-expires=1800000000&x-signature=fixture',
+    'https://p16-sign-sg.tiktokcdn.com/tos-alisg-avt-0068/avatar.jpeg?refresh_token=cdn-only-fixture&x-expires=1800000000&x-signature=fixture'
+  ];
+  for(const image of images){
+    const a=await account(f,'tiktok');
+    const credential=await f.db.oauthCredential.findUniqueOrThrow({where:{socialAccountId:a.id}});
+    const result=await setup(f,(async()=>Response.json({data:{user:{open_id:'100',display_name:'Actual TikTok name',avatar_url:image}},error:{code:'ok'}})) as typeof fetch).refresh(f.userId,a.workspaceId,a.id,'manual');
+    assert.equal(result.status,'updated');assert.equal(result.avatarUrl,image);
+    const saved=await f.db.socialAccount.findUniqueOrThrow({where:{id:a.id}});
+    assert.equal(saved.avatarUrl,image);assert.equal(saved.displayName,'Actual TikTok name');
+    assert.equal(saved.providerAccountId,a.providerAccountId);assert.equal(saved.status,a.status);
+    assert.deepEqual(await f.db.oauthCredential.findUnique({where:{socialAccountId:a.id}}),credential);
+  }
+}));
+
+test('signed TikTok CDN exception cannot admit OAuth secrets, other platforms or deceptive/non-avatar URLs',async()=>withFacebookManagementFixture(async(f:any)=>{
+  const signed='?refresh_token=cdn-only-fixture&x-expires=1800000000&x-signature=fixture';
+  const good='https://p19-common-sign.tiktokcdn-us.com/tos-useast5-avt-0068-tx/avatar.jpeg';
+  const inputs=[
+    ['tiktok','https://p19-common-sign.tiktokcdn-us.com.evil.test/tos-useast5-avt-0068-tx/avatar.jpeg'+signed],
+    ['tiktok','https://eviltiktokcdn-us.com/tos-useast5-avt-0068-tx/avatar.jpeg'+signed],
+    ['tiktok','https://tiktokcdn-us.com@evil.test/tos-useast5-avt-0068-tx/avatar.jpeg'+signed],
+    ['tiktok','https://user:password@p19-common-sign.tiktokcdn-us.com/tos-useast5-avt-0068-tx/avatar.jpeg'+signed],
+    ['tiktok',good.replace('https:','http:')+signed],
+    ['tiktok',good.replace('.com/','.com:8443/')+signed],
+    ['tiktok','https://p19-common-sign.tiktokcdn-us.com/oauth/token'+signed],
+    ['tiktok',good+'?refresh_token=cdn-only-fixture&x-expires=1800000000'],
+    ['tiktok',good+'?refresh_token=cdn-only-fixture&x-signature=fixture'],
+    ['tiktok',good+'?refresh_token=cdn-only-fixture&x-expires=invalid&x-signature=fixture'],
+    ['tiktok',good+signed+'&access_token=oauth-do-not-persist'],
+    ['tiktok',good+signed+'&ACCESS_TOKEN=oauth-do-not-persist'],
+    ['tiktok',good+signed+'&client_secret=oauth-do-not-persist'],
+    ['tiktok',good+signed+'&token=oauth-do-not-persist'],
+    ['facebook',good+signed],['instagram',good+signed],['pinterest',good+signed],['youtube',good+signed]
+  ];
+  for(const [platform,image] of inputs){
+    const a=await account(f,platform);
+    const payload=platform==='tiktok'?{data:{user:{open_id:'100',display_name:'New',avatar_url:image}},error:{code:'ok'}}:
+      platform==='facebook'?{id:'100',name:'New',picture:{data:{url:image}}}:
+      platform==='instagram'?{user_id:'100',name:'New',username:'new',profile_picture_url:image}:
+      platform==='pinterest'?{id:'100',business_name:'New',profile_image:image}:
+      {items:[{id:a.providerAccountId,snippet:{title:'New',thumbnails:{medium:{url:image}}}}]};
+    const credential=await f.db.oauthCredential.findUniqueOrThrow({where:{socialAccountId:a.id}});
+    await assert.rejects(()=>setup(f,(async()=>Response.json(payload)) as typeof fetch).refresh(f.userId,a.workspaceId,a.id,'manual'),(error:any)=>{
+      assert.equal(error.statusCode,502);assert.doesNotMatch(JSON.stringify(error),/oauth-do-not-persist|cdn-only-fixture|test-access-token/);return true;
+    });
+    const saved=await f.db.socialAccount.findUniqueOrThrow({where:{id:a.id}});
+    assert.equal(saved.avatarUrl,a.avatarUrl);assert.equal(saved.displayName,a.displayName);assert.equal(saved.status,a.status);
+    assert.deepEqual(await f.db.oauthCredential.findUnique({where:{socialAccountId:a.id}}),credential);
+  }
+}));

@@ -12,12 +12,18 @@ type Dependencies={db:PrismaClient;fetch:typeof fetch;now:()=>Date;decrypt:(valu
 const day=86_400_000;
 function object(value:unknown):Record<string,any>{return value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,any>:{};}
 function text(value:unknown):string|undefined{return typeof value==='string'&&value.trim()&&value.length<=512?value.trim():undefined;}
-function avatar(value:unknown):string|undefined{
+function avatar(value:unknown,platform:SocialAccount['platform']):string|undefined{
   if(typeof value!=='string'||value.length>8192)return;
   try{
     const url=new URL(value);
     if(url.protocol!=='https:'||url.username||url.password||url.port||!url.hostname.includes('.')||/^\d+\.\d+\.\d+\.\d+$/.test(url.hostname)||url.hostname.endsWith('.localhost')||url.hostname.endsWith('.local'))return;
-    if([...url.searchParams.keys()].some(key=>/^(access_token|refresh_token|token|client_secret)$/i.test(key)))return;
+    // TikTok's signed avatar CDN uses refresh_token for image delivery, not OAuth.
+    // Keep its signature untouched; the exception is not valid on other hosts/platforms.
+    const signedTikTokAvatar=platform==='tiktok'&&
+      ['tiktokcdn.com','tiktokcdn-us.com'].some(domain=>url.hostname.endsWith('.'+domain))&&
+      /^\/tos-[a-z0-9-]*avt[a-z0-9-]*\//.test(url.pathname)&&
+      /^\d+$/.test(url.searchParams.get('x-expires')??'')&&!!url.searchParams.get('x-signature');
+    if([...url.searchParams.keys()].some(key=>/^(access_token|refresh_token|token|client_secret)$/i.test(key)&&!(signedTikTokAvatar&&key==='refresh_token')))return;
     return url.href;
   }catch{return;}
 }
@@ -64,7 +70,7 @@ async function readProfile(account:SocialAccount,token:string,request:typeof fet
     case 'tiktok':actualId=payload.data?.user?.open_id;name=payload.data?.user?.display_name;image=payload.data?.user?.avatar_url;break;
     case 'pinterest':actualId=payload.id;name=payload.business_name||payload.profile_name||payload.username;image=payload.profile_image;username=payload.username;break;
   }
-  const displayName=text(name),avatarUrl=avatar(image);
+  const displayName=text(name),avatarUrl=avatar(image,account.platform);
   if(typeof actualId!=='string'||actualId!==id||!displayName||!avatarUrl)throw new HttpError(502,'Platform returned incomplete or mismatched account details. Previous details have been retained.');
   const profileUsername=typeof username==='string'&&/^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$/.test(username)?username:undefined;
   return {displayName,avatarUrl,profileUsername};
