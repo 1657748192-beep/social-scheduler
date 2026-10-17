@@ -2,6 +2,7 @@ import {Prisma,type PrismaClient} from '@prisma/client';import type Redis from '
 import {HttpError} from '../utils/errors';import type {InboxAccess} from './access';import type {InboxRegistry} from './adapters/registry';import {parseQuery} from './limits';import {encodeInboxCursor,decodeInboxCursor} from './cursor';import {presentInboxCase} from './cases';
 import type {Scope,PageResult,CaseDto,AccountStatus,ResolvedAsset,Query,DetailDto} from './types';
 import {pendingInboxSend} from './sends';
+import {liveInboxCaseSql} from './sourceLifetime';
 const rateScript="local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],60) end; return n";
 export function createInboxReads({db,access,registry,redis}:{db:PrismaClient;access:InboxAccess;registry:InboxRegistry;redis:Pick<Redis,'eval'>}){
  async function listCases(ctx:Scope,input:unknown):Promise<PageResult<CaseDto>>{
@@ -19,7 +20,7 @@ export function createInboxReads({db,access,registry,redis}:{db:PrismaClient;acc
   }
   await access.require(ctx);if(!allowed.length)return{items:[],nextCursor:null,accountsStatus:statuses,partial:statuses.some(s=>s.status!=='ok'),observedAt:new Date().toISOString(),lastSuccessfulSyncAt:lastSuccess};
   const assetClause=Prisma.join(allowed.map(({a,id})=>Prisma.sql`(c."assetId"=${id}::uuid AND c."sourceRef"->>'managedPageId'=${a.sourceRef!.managedPageId} AND c."sourceRef"->>'connectionId'=${a.sourceRef!.connectionId} AND c."sourceRef"->>'connectionVersion'=${String(a.connectionVersion)})`),' OR ');
-  const clauses=[Prisma.sql`c."workspaceId"=${ctx.workspaceId}::uuid`,Prisma.sql`(${assetClause})`,Prisma.sql`c.kind=${q.kind}`];
+  const clauses=[Prisma.sql`c."workspaceId"=${ctx.workspaceId}::uuid`,Prisma.sql`(${assetClause})`,Prisma.sql`c.kind=${q.kind}`,liveInboxCaseSql()];
   if(q.status)clauses.push(Prisma.sql`c.status=${q.status}`);
   if(q.from)clauses.push(Prisma.sql`COALESCE(c."lastInboundAt",c."createdAt")>=${new Date(q.from)}`);
   if(q.to)clauses.push(Prisma.sql`COALESCE(c."lastInboundAt",c."createdAt")<=${new Date(q.to)}`);

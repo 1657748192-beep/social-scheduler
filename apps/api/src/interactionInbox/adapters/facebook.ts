@@ -35,15 +35,16 @@ export function createFacebookInboxAdapter({db,engagement}:{db:PrismaClient;enga
    if(s.conversationId)page=await engagement.messages(ctx,s.conversationId,cursor);
    else if(s.scheduleId)page=await engagement.comments(ctx,s.scheduleId,cursor);
    else throw new HttpError(404,'Source unavailable');
-   const items=page.items.map((v:any)=>({id:v.id,text:typeof v.text==='string'?v.text:null,occurredAt:v.timestamp,inbound:s.conversationId?!!v.inbound:true,senderName:v.senderName??null,deleted:!!v.deleted}));
-   return{items,nextCursor:page.nextCursor,officialUrl:s.postId?'https://www.facebook.com/'+encodeURIComponent(s.postId):'https://www.facebook.com/'+encodeURIComponent(a.providerAssetId),replyTarget:s.conversationId??s.commentId??null,capabilities:await caps(a)};
+   const selected=s.conversationId?page.items:page.items.filter((v:any)=>v.id===s.commentId);
+   const items=selected.map((v:any)=>({id:v.id,text:typeof v.text==='string'?v.text:null,occurredAt:v.timestamp,inbound:s.conversationId?!!v.inbound:true,senderName:v.senderName??null,deleted:!!v.deleted}));
+   return{items,nextCursor:page.nextCursor,officialUrl:s.postId?'https://www.facebook.com/'+encodeURIComponent(s.postId):'https://www.facebook.com/'+encodeURIComponent(a.providerAssetId),replyTarget:s.conversationId??(items.some((i:any)=>i.id===s.commentId&&!i.deleted)?s.commentId!:null),capabilities:await caps(a)};
   },
   async reply(a,ref,text,requestKey){const s=source(a,ref);return s.conversationId?engagement.replyMessage(context(a),{conversationId:s.conversationId,text,requestKey}):s.scheduleId&&s.commentId?engagement.replyComment(context(a),{scheduleId:s.scheduleId,commentId:s.commentId,text,requestKey}):Promise.reject(new HttpError(404,'Reply target unavailable'));},
   async normalizeVerifiedEvent(ids,a){
    if(ids.length>50)throw new HttpError(400,'Event batch too large');const ctx=context(a);
    const rows=await db.facebookInteractionMessage.findMany({where:{id:{in:ids},managedPageId:ctx.managedPageId},take:50});
    const items:VerifiedItem[]=[];
-   for(const m of rows){const thread=await db.facebookInteractionThread.findUnique({where:{managedPageId_participantId:{managedPageId:ctx.managedPageId,participantId:m.participantId}}});if(!thread?.providerId)continue;items.push(mapMessage(a,{...a.sourceRef!,conversationId:thread.providerId,participantId:m.participantId},{id:m.providerId,timestamp:m.occurredAt.toISOString(),inbound:!m.isEcho&&m.recipientId===a.providerAssetId},thread.participantName));}
+   for(const m of rows){const thread=await db.facebookInteractionThread.findUnique({where:{managedPageId_participantId:{managedPageId:ctx.managedPageId,participantId:m.participantId}}});if(!thread?.providerId)continue;items.push(mapMessage(a,{...a.sourceRef!,sourceRecordId:m.id,conversationId:thread.providerId,participantId:m.participantId},{id:m.providerId,timestamp:m.occurredAt.toISOString(),inbound:!m.isEcho&&m.recipientId===a.providerAssetId},thread.participantName));}
    return items;
   }
  };

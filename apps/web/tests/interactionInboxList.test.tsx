@@ -1,4 +1,14 @@
 import test from 'node:test';import assert from 'node:assert/strict';import React from 'react';import {act} from 'react-test-renderer';import {withInboxUI,inboxAccount,inboxPage,inboxCase} from './helpers/interactionInboxUI';import {facebookButton,facebookText} from './helpers/facebookManagementUI';
+
+test('history continuation is an explicit bounded refresh carrying the returned cursor',async()=>{
+ const {UnifiedInbox}=await import('../components/inbox/unified/UnifiedInbox');
+ await withInboxUI(<UnifiedInbox token="test" workspaces={[{id:'w1',name:'Workspace',role:'owner'}] as any}/>,async({view,requests}:any)=>{
+  await act(async()=>facebookButton(view,'立即更新').props.onClick());
+  assert.match(facebookText(view),/历史同步尚未完成/);
+  await act(async()=>facebookButton(view,'继续同步历史互动').props.onClick());
+  assert.equal(requests.filter((r:any)=>r.path.endsWith('/refresh'))[1].body.cursor,'history-cursor');
+ },url=>url.pathname.endsWith('/refresh')?Response.json({partial:true,nextCursor:'history-cursor',results:[]}):undefined);
+});
 test('fivePlatformsThreeKindsAndExplicitSelectionLimits',async()=>{
  const m=await import('../components/inbox/unified/UnifiedInbox').catch(()=>null);assert.ok(m,'unified inbox required');
  await withInboxUI(<m.UnifiedInbox token="synthetic" workspaces={[{id:'w1',name:'Workspace',role:'owner'}] as any}/>,async({view,requests}:any)=>{

@@ -5,8 +5,9 @@ import {LOGIN_SESSION_MAX_AGE_MS} from '../utils/sessionLifetime';
 import type {Capability,Scope,ResolvedAsset,SourceRef} from './types';
 import {platforms} from './types';
 import {z} from 'zod';
+import {inboxSourceAlive} from './sourceLifetime';
 export type InboxDb=PrismaClient|Prisma.TransactionClient;
-export const sourceSchema=z.object({managedPageId:z.string().uuid(),connectionId:z.string().uuid(),connectionVersion:z.number().int().positive(),scheduleId:z.string().uuid().optional(),postId:z.string().max(256).optional(),conversationId:z.string().max(256).optional(),commentId:z.string().max(256).optional(),participantId:z.string().max(256).optional()}).strict();
+export const sourceSchema=z.object({managedPageId:z.string().uuid(),connectionId:z.string().uuid(),connectionVersion:z.number().int().positive(),scheduleId:z.string().uuid().optional(),postId:z.string().max(256).optional(),conversationId:z.string().max(256).optional(),commentId:z.string().max(256).optional(),participantId:z.string().max(256).optional(),sourceRecordId:z.string().uuid().optional()}).strict();
 export async function requireInboxAccess(db:InboxDb,ctx:Scope,mode:'read'|'write'|'manage'='read'){
  const [session,member,user]=await Promise.all([db.userSession.findFirst({where:{id:ctx.sessionId,userId:ctx.userId,revokedAt:null,expiresAt:{gt:new Date()},createdAt:{gt:new Date(Date.now()-LOGIN_SESSION_MAX_AGE_MS)}}}),db.workspaceMember.findFirst({where:{userId:ctx.userId,workspaceId:ctx.workspaceId,status:'active'}}),db.user.findUnique({where:{id:ctx.userId},select:{email:true}})]);
  if(!session||!member||!user||!isPlatformAdmin(user.email)||(mode==='write'&&member.role==='viewer')||(mode==='manage'&&!['owner','admin'].includes(member.role)))throw new HttpError(403,'Interaction inbox access denied');
@@ -38,6 +39,7 @@ export function createInboxAccess(deps:{db:PrismaClient;facebookEnabled:boolean;
   const account=await tx.socialAccount.findFirst({where:{workspaceId:ctx.workspaceId,platform:row.asset.platform as any,providerAccountId:row.asset.providerAssetId,status:'active'}});
   if(!account)throw new HttpError(404,'Interaction unavailable');
   const resolved=await resolveInboxAsset(ctx,account.id,`${row.kind}.read` as Capability),source=sourceSchema.parse(row.sourceRef);
+  if(!await inboxSourceAlive(tx,source,row.createdAt))throw new HttpError(404,'Interaction source expired or deleted');
   if(resolved.canonicalKey!==row.asset.canonicalKey||resolved.connectionVersion!==row.asset.connectionVersion||source.connectionVersion!==resolved.connectionVersion||source.connectionId!==resolved.sourceRef?.connectionId||source.managedPageId!==resolved.sourceRef?.managedPageId)throw new HttpError(404,'Interaction connection changed');
   return{row,asset:resolved,source:source as SourceRef};
  }

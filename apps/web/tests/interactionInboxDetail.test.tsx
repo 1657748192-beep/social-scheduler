@@ -1,4 +1,33 @@
 import test from 'node:test';import assert from 'node:assert/strict';import React from 'react';import {act} from 'react-test-renderer';import {withInboxUI,inboxCase} from './helpers/interactionInboxUI';import {facebookButton,facebookText} from './helpers/facebookManagementUI';
+
+test('same-case reload preserves unfinished internal input while customer data loads',async()=>{
+ const {InteractionDetail}=await import('../components/inbox/unified/InteractionDetail');let reads=0,finish!:(r:Response)=>void;
+ await withInboxUI(<InteractionDetail token="test" workspaceId="w1" item={inboxCase as any} accountName="Page" canWrite canManage onClose={()=>{}} onDirtyChange={()=>{}} onUpdated={()=>{}} onAccessDenied={()=>{}}/>,async({view}:any)=>{
+  await act(async()=>view.root.findByProps({'aria-label':'内部备注'}).props.onChange({target:{value:'unfinished private note'}}));
+  await act(async()=>facebookButton(view,'刷新详情').props.onClick());assert.match(facebookText(view),/unfinished private note/);
+  await act(async()=>finish(Response.json({id:inboxCase.customerId,version:1,name:'Customer',identities:[],tags:[],notes:[],cases:[]})));
+ },url=>url.pathname.includes('/customers/')&&++reads>1?new Promise(resolve=>{finish=resolve;}):undefined);
+});
+
+test('late successful send cannot restore the previous platform list',async()=>{
+ const {UnifiedInbox}=await import('../components/inbox/unified/UnifiedInbox');let finish!:(r:Response)=>void;
+ await withInboxUI(<UnifiedInbox token="test" workspaces={[{id:'w1',name:'Workspace',role:'owner'}] as any}/>,async({view}:any)=>{
+  await act(async()=>view.root.findByProps({className:'inbox-case-row'}).props.onClick());
+  await act(async()=>view.root.findByProps({'aria-label':'回复正文'}).props.onChange({target:{value:'reply'}}));
+  await act(async()=>{void facebookButton(view,'发送公开回复').props.onClick();});
+  (globalThis as any).window.confirm=()=>true;await act(async()=>facebookButton(view,'Instagram').props.onClick());
+  await act(async()=>finish(Response.json({status:'sent'})));assert.doesNotMatch(facebookText(view),/Customer One|Actual fixture comment/);
+ },url=>url.pathname.endsWith('/replies')?new Promise(resolve=>{finish=resolve;}):undefined);
+});
+
+test('partial account access loss clears loaded bodies and drafts',async()=>{
+ const {UnifiedInbox}=await import('../components/inbox/unified/UnifiedInbox');let lost=false;
+ await withInboxUI(<UnifiedInbox token="test" workspaces={[{id:'w1',name:'Workspace',role:'owner'}] as any}/>,async({view}:any)=>{
+  await act(async()=>view.root.findByProps({className:'inbox-case-row'}).props.onClick());
+  await act(async()=>view.root.findByProps({'aria-label':'回复正文'}).props.onChange({target:{value:'private draft'}}));lost=true;
+  await act(async()=>facebookButton(view,'重新读取').props.onClick());assert.doesNotMatch(facebookText(view),/Actual fixture comment|private draft/);
+ },url=>lost&&url.pathname.endsWith('/cases')?Response.json({items:[],nextCursor:null,partial:true,accountsStatus:[{accountId:inboxCase.accountId,status:'unavailable'}]}):undefined);
+});
 test('replyAndInternalNoteCannotShareAction and unknown sends never auto-retry',async()=>{
  const m=await import('../components/inbox/unified/ReplyComposer').catch(()=>null);assert.ok(m,'reply composer required');let sends=0;
  await withInboxUI(<m.ReplyComposer detail={{...inboxCase,items:[],nextCursor:null,officialUrl:'https://www.facebook.com/100_1',replyTarget:'c1',capabilities:[{capability:'comments.reply',available:true,reason:'available',verifiedAt:null}]}} accountName="Factory Wholesale" canWrite onSend={async()=>{sends++;return{status:'unknown',diagnosticId:'synthetic'};}} onDirtyChange={()=>{}} onAcknowledge={async()=>{}}/>,async({view}:any)=>{

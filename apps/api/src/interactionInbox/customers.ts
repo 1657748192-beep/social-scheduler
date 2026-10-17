@@ -1,9 +1,10 @@
 import type {PrismaClient} from '@prisma/client';import {z} from 'zod';import {HttpError} from '../utils/errors';
 import type {InboxAccess,InboxDb} from './access';import type {CustomerDto,Scope} from './types';import {safeInboxUrl} from './directory';import {presentInboxCase} from './cases';
 export async function resolveInboxCustomer(db:InboxDb,access:InboxAccess,ctx:Scope,id:string,write=false){
- await access.require(ctx,write?'write':'read');const row=await db.interactionCustomer.findFirst({where:{id,workspaceId:ctx.workspaceId,deletedAt:null},include:{identities:{include:{asset:true}},cases:{select:{id:true}}}});
+ await access.require(ctx,write?'write':'read');const row=await db.interactionCustomer.findFirst({where:{id,workspaceId:ctx.workspaceId,deletedAt:null},include:{identities:{include:{asset:true},take:50},cases:{select:{id:true},orderBy:{createdAt:'desc'},take:50}}});
  if(!row||!row.identities.length||!row.cases.length)throw new HttpError(404,'Customer unavailable');
- for(const c of row.cases)await access.resolveCase(ctx,c.id,write?'write':'read',db);return row;
+ const valid:typeof row.cases=[];const assets=new Set<string>();for(const c of row.cases){try{const resolved=await access.resolveCase(ctx,c.id,write?'write':'read',db);if(ctx.accountIds&&!ctx.accountIds.includes(resolved.asset.accountId))continue;valid.push(c);assets.add(resolved.row.assetId);}catch{/* An old unavailable case must not block a currently accessible source. */}}
+ if(!valid.length)throw new HttpError(404,'Customer unavailable');return{...row,cases:valid,identities:row.identities.filter(i=>assets.has(i.assetId))};
 }
 export function createInboxCustomers({db,access}:{db:PrismaClient;access:InboxAccess}){
  async function getCustomer(ctx:Scope,id:string):Promise<CustomerDto>{

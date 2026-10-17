@@ -4,13 +4,9 @@ import test from "node:test";
 
 const inbox = readFileSync(new URL("../components/inbox/InstagramInbox.tsx", import.meta.url), "utf8");
 
-test("old inbox bookmarks redirect to the dashboard without opening conversations", async () => {
-  const { default: InboxPage } = await import('../app/inbox/page');
-  assert.throws(() => InboxPage(), (error: unknown) => {
-    assert.ok(error instanceof Error);
-    assert.equal((error as Error & { digest: string }).digest, 'NEXT_REDIRECT;replace;/dashboard;307;');
-    return true;
-  });
+test("inbox is now the administrator-only unified entry and does not mount the retired Instagram inbox", () => {
+  const entry=readFileSync(new URL('../app/inbox/page.tsx',import.meta.url),'utf8');
+  assert.match(entry,/PlatformAdminOnly/);assert.match(entry,/UnifiedInbox/);assert.doesNotMatch(entry,/InstagramInbox/);
 });
 
 test("inbox supports manual refresh and replies while viewers and missing permissions remain read-only", () => {

@@ -1,8 +1,10 @@
 import type {PrismaClient} from '@prisma/client';import {HttpError} from '../utils/errors';
 import type {InboxAccess} from './access';import {sourceSchema} from './access';
 import type {AdapterPage,ResolvedAsset,Scope} from './types';
-export function createInboxProjection({db,access}:{db:PrismaClient;access:InboxAccess}){
+import {inboxSourceAlive} from './sourceLifetime';
+export function createInboxProjection({db,access,policyVerified=false}:{db:PrismaClient;access:InboxAccess;policyVerified?:boolean}){
  return{async projectVerifiedPage(ctx:Scope,a:ResolvedAsset,page:AdapterPage){
+  if(!policyVerified)throw new HttpError(409,'Interaction data policy verification required');
   if(page.items.length>1250)throw new HttpError(502,'Provider result too large');
   const fresh=await access.resolveInboxAsset(ctx,a.accountId);if(fresh.canonicalKey!==a.canonicalKey||fresh.connectionVersion!==a.connectionVersion)throw new HttpError(409,'Connection changed');
   return access.write(ctx,async tx=>{
@@ -14,6 +16,8 @@ export function createInboxProjection({db,access}:{db:PrismaClient;access:InboxA
    for(const v of page.items){
     const ref=sourceSchema.parse(v.sourceRef),time=new Date(v.occurredAt);
     if(!v.providerEventId||v.providerEventId.length>512||!Number.isFinite(time.getTime())||time.getTime()>Date.now()+300000||ref.managedPageId!==a.sourceRef?.managedPageId||ref.connectionId!==a.sourceRef?.connectionId||ref.connectionVersion!==a.connectionVersion)throw new HttpError(502,'Inconsistent provider identity');
+    if(!ref.sourceRecordId){const where={managedPageId_providerId:{managedPageId:ref.managedPageId,providerId:v.providerEventId}},original=v.kind==='messages'?await tx.facebookInteractionMessage.findUnique({where,select:{id:true}}):await tx.facebookInteractionComment.findUnique({where,select:{id:true}});if(original)ref.sourceRecordId=original.id;}
+    if(!await inboxSourceAlive(tx,ref,new Date()))continue;
     let identity=v.actorId?await tx.interactionIdentity.findUnique({where:{workspaceId_platform_appNamespace_assetId_providerActorId:{workspaceId:ctx.workspaceId,platform:a.platform,appNamespace:a.appNamespace,assetId:asset.id,providerActorId:v.actorId}}}):null;
     if(v.actorId&&!identity){const customer=await tx.interactionCustomer.create({data:{workspaceId:ctx.workspaceId}});identity=await tx.interactionIdentity.create({data:{workspaceId:ctx.workspaceId,assetId:asset.id,customerId:customer.id,platform:a.platform,appNamespace:a.appNamespace,providerActorId:v.actorId,displayName:v.actorName,firstSeenAt:time,lastSeenAt:time}});}
     const key={workspaceId:ctx.workspaceId,assetId:asset.id,kind:v.kind,providerThreadOrEventId:v.threadId};

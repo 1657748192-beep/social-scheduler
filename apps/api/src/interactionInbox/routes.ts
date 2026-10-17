@@ -8,7 +8,7 @@ export function createInteractionInboxRouter(runtime:InboxRuntime,options:{authe
   const raw=z.object({accountIds:z.string().min(1).max(2000),kind:z.enum(['comments','messages','mentions']),status:z.string().optional(),unread:z.enum(['true','false']).optional(),tagIds:z.string().optional(),from:z.string().optional(),to:z.string().optional(),q:z.string().optional(),searchMessages:z.enum(['true','false']).optional(),cursor:z.string().optional(),limit:z.string().regex(/^\d{1,2}$/).optional()}).strict().parse(req.query);
   return parseQuery({...raw,accountIds:raw.accountIds.split(','),tagIds:raw.tagIds?.split(','),limit:raw.limit?Number(raw.limit):undefined,searchMessages:raw.searchMessages==='true',unread:raw.unread===undefined?undefined:raw.unread==='true'});
  }
- const action=(f:(req:Request,ctx:Scope)=>Promise<unknown>):RequestHandler=>async(req,res,next)=>{try{res.json(await f(req,context(req)));}catch(e){next(e);}};
+ const action=(f:(req:Request,ctx:Scope)=>Promise<unknown>):RequestHandler=>async(req,res,next)=>{try{const ctx=context(req);if(req.path.includes('/customers/')){const raw=z.object({accountIds:z.string().min(1).max(2000)}).strict().parse(req.query);ctx.accountIds=z.array(uuid).min(1).max(50).parse(raw.accountIds.split(','));}res.json(await f(req,ctx));}catch(e){next(e);}};
  const id=(req:Request)=>uuid.parse(req.params.id);
  router.get(base+'/accounts',action((req,ctx)=>runtime.directory.listInboxAccounts(ctx,z.object({platform:z.string().optional(),q:z.string().optional(),cursor:z.string().optional()}).strict().parse(req.query))));
  router.get(base+'/assignees',action((_req,ctx)=>runtime.assignees(ctx)));
