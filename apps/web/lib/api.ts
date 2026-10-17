@@ -258,6 +258,7 @@ export type SocialAccount = {
   accountType?: string;
   status: "active" | "disconnected" | "token_expired" | "authorization_invalid" | "permission_missing";
   capabilities: {
+    profileSync?: {lastAttemptAt?:string|null;lastSuccessAt?:string|null};
     oauth2?: boolean;
     scopes?: string[];
     pinterestApiEnvironment?: "production" | "sandbox";
@@ -274,6 +275,11 @@ export type SocialAccount = {
     refreshTokenExpiresAt?: string | null;
     updatedAt: string;
   };
+};
+
+export type SocialAccountProfileRefresh = {
+  status:'updated'|'skipped';id:string;displayName:string;avatarUrl:string|null;profileUrl:string|null;
+  profileSync:{lastAttemptAt:string|null;lastSuccessAt:string|null};
 };
 
 export type OAuthStartResponse = {

@@ -9,7 +9,7 @@ import {AppRouterContext} from 'next/dist/shared/lib/app-router-context.shared-r
 import {PathnameContext} from 'next/dist/shared/lib/hooks-client-context.shared-runtime';
 import DashboardPageContent from '../components/dashboard/DashboardPageContent';
 
-const account=(id:string,platform:SocialAccount['platform'],overrides:Partial<SocialAccount>={}):SocialAccount=>({id,platform,providerAccountId:id+'-provider',displayName:id,status:'active',capabilities:{},createdAt:'2026-10-17T01:00:00Z',...overrides});
+const account=(id:string,platform:SocialAccount['platform'],overrides:Partial<SocialAccount>={}):SocialAccount=>({id,platform,providerAccountId:id+'-provider',displayName:id,status:'active',capabilities:{profileSync:{lastAttemptAt:new Date().toISOString(),lastSuccessAt:new Date().toISOString()}},createdAt:'2026-10-17T01:00:00Z',...overrides});
 const accounts=[account('Brand Instagram','instagram',{profileUrl:'https://www.instagram.com/brand/'}),account('Factory Page','facebook',{accountType:'page',status:'permission_missing'}),account('TikTok Brand','tiktok',{credential:{scopes:['user.info.basic','user.info.stats','video.list'],updatedAt:'2026-10-17T01:00:00Z'}}),account('Retired','linkedin')];
 const providers=[{platform:'instagram',platformParam:'instagram',displayName:'Instagram',configured:true},{platform:'facebook',platformParam:'facebook',displayName:'Facebook',configured:false}] as OAuthProviderStatus[];
 const panel=(overrides:any={})=><SocialAccountManager accounts={accounts} providers={providers} workspaceId="w1" token="test-token" canManage loading={false} failed={false} onAdd={()=>{}} onDisconnect={async()=>{}} {...overrides}/>;
@@ -135,4 +135,26 @@ test('disconnectCompletingAfterWorkspaceSwitchCannotInvalidateNewWorkspaceRead',
     assert.match(facebookText(view),/New Workspace Account/);
     assert.equal(requests.filter((r:any)=>r.path.endsWith('/workspaces/w1/social-accounts')).length,1);
   },(url,init)=>init?.method==='DELETE'?new Promise<Response>(r=>{finishDelete=r;}):url.pathname.endsWith('/workspaces/w1/social-accounts')?Response.json([accounts[0]]):url.pathname.endsWith('/workspaces/w2/social-accounts')?new Promise<Response>(r=>{finishSecondRead=r;}):undefined);
+});
+
+test('manual profile response updates name and image without reloading grants or changing account identity',async()=>{
+  await withAccountPage(async({view,requests}:any)=>{
+    await act(async()=>view.root.findByProps({'aria-label':'查看 Brand Instagram 详情'}).props.onClick());
+    await act(async()=>facebookButton(view,'刷新账号资料').props.onClick());
+    assert.match(facebookText(view),/Renamed Brand/);
+    assert.ok(view.root.findAllByType('img').some((img:any)=>img.props.src==='https://example.test/new-avatar.jpg'));
+    const writes=requests.filter((r:any)=>r.method!=='GET');assert.equal(writes.length,1);
+    assert.match(decodeURIComponent(writes[0].path),/social-accounts\/Brand Instagram\/refresh-profile$/);assert.deepEqual(writes[0].body,{mode:'manual'});
+    assert.match(facebookText(view),/Brand Instagram-provider/);
+  },(url,init)=>url.pathname.endsWith('/refresh-profile')&&init?.method==='POST'?Response.json({status:'updated',id:'Brand Instagram',displayName:'Renamed Brand',avatarUrl:'https://example.test/new-avatar.jpg',profileUrl:'https://www.instagram.com/new_brand/',profileSync:{lastAttemptAt:new Date().toISOString(),lastSuccessAt:new Date().toISOString()}}):url.pathname.endsWith('/social-accounts')?Response.json([accounts[0]]):undefined);
+});
+
+test('late automatic profile response cannot leak the old workspace name or avatar into the new one',async()=>{
+  let finish!:(response:Response)=>void;
+  await withAccountPage(async({view,requests}:any)=>{
+    assert.equal(requests.filter((r:any)=>r.path.endsWith('/refresh-profile')).length,1);
+    await act(async()=>view.root.findAllByType('select')[0].props.onChange({target:{value:'w2'}}));
+    await act(async()=>finish(Response.json({status:'updated',id:'Brand Instagram',displayName:'Wrong workspace name',avatarUrl:'https://example.test/wrong-avatar.jpg',profileSync:{lastAttemptAt:new Date().toISOString(),lastSuccessAt:new Date().toISOString()}})));
+    assert.match(facebookText(view),/New Workspace Account/);assert.doesNotMatch(facebookText(view),/Wrong workspace name|wrong-avatar/);
+  },(url,init)=>url.pathname.endsWith('/refresh-profile')&&init?.method==='POST'?new Promise<Response>(r=>{finish=r;}):url.pathname.endsWith('/workspaces/w1/social-accounts')?Response.json([{...accounts[0],capabilities:{}}]):url.pathname.endsWith('/workspaces/w2/social-accounts')?Response.json([account('New Workspace Account','instagram')]):undefined);
 });

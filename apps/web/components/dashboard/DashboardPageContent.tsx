@@ -16,6 +16,7 @@ import {
   type OAuthProviderStatus,
   type OAuthStartResponse,
   type SocialAccount,
+  type SocialAccountProfileRefresh,
   type Workspace,
   type WorkspaceInvitation,
   type WorkspaceMember
@@ -111,6 +112,8 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
   const accountRequest = useRef(0);
   const currentWorkspaceId = useRef(selectedWorkspaceId);
   currentWorkspaceId.current = selectedWorkspaceId;
+  const currentToken = useRef(token);
+  currentToken.current = token;
   const [oauthStatuses, setOAuthStatuses] = useState<OAuthProviderStatus[]>([]);
   const [authorizationLinks, setAuthorizationLinks] = useState<
     Record<string, OAuthAuthorizationLink>
@@ -211,6 +214,18 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
     ? connectedAccounts.filter((account) => account.platform === bindingProvider.platform)
     : [];
   const bindingShareLink = bindingProvider ? authorizationLinks[bindingProvider.platform] : undefined;
+
+  async function refreshAccountProfile(accountId:string,mode:'auto'|'manual'){
+    const workspaceId=selectedWorkspaceId,request=accountRequest.current,requestToken=token;
+    if(!requestToken||!canManageMembers||currentWorkspaceId.current!==workspaceId)return null;
+    const result=await apiRequest<SocialAccountProfileRefresh>(`/workspaces/${workspaceId}/social-accounts/${encodeURIComponent(accountId)}/refresh-profile`,{token:requestToken,method:'POST',body:{mode}});
+    if(currentWorkspaceId.current!==workspaceId||currentToken.current!==requestToken||accountRequest.current!==request)return null;
+    setSocialAccounts(current=>current.map(account=>account.id===accountId&&result.id===accountId?{
+      ...account,displayName:result.displayName,avatarUrl:result.avatarUrl??undefined,profileUrl:result.profileUrl,
+      capabilities:{...account.capabilities,profileSync:result.profileSync}
+    }:account));
+    return result;
+  }
 
   async function createWorkspace(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -458,6 +473,7 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
           loading={!accountsReadFailed && accountsWorkspaceId !== selectedWorkspaceId}
           failed={accountsReadFailed} actionError={error}
           onAdd={provider => setBindingProvider(provider)} onDisconnect={disconnectSocialAccount}
+          onRefresh={refreshAccountProfile}
         /> : null}
 
         {!accountsOnly && (selectedWorkspace?.publishingAccessExpiresAt ||
