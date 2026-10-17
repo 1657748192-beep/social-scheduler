@@ -8,7 +8,11 @@
 - Task1–12按具名测试RED→GREEN执行，含真实隔离DB、Redis、JWT子进程HTTP和真实React组件；新增模型仅迁移命名本机测试数据库。
 - 新增两份迁移仅创建新互动表/索引及约束；生成器带出的历史发布表漂移已在执行前剔除。未改发布表数据、权限、凭据、Worker、云环境或依赖。
 - 全流程保护测试通过：mock平台读取/回复、客户资料、标签、备注、处理、删除、失权之后，全测试库发布账号及凭据、OAuth状态/共享授权、帖子/变体/媒体关联、排程/任务、原独立管理连接/资产/选择快照相等；另一工作区无新互动行。真实发送次数为0。
-- 初轮API/Web生产构建通过。最终完整回归、浏览器QA及一次独立审查正在进行，不以局部测试代替最终验收。
+- 最终交付完整默认测试 **656/656通过**，0失败、0取消、0跳过，165645.6198ms；由task-done在已提交代码8396c63上重新执行，不复用旧日志冒充运行。前一轮656/656也通过（215475.3188ms）。
+- API `npm.cmd run build -w apps/api`、Web `npm.cmd run build -w apps/web` 最终生产构建均退出0；`git diff --check`退出0。既有Next多lockfile提示与react-test-renderer弃用警告未作无关依赖变更。
+- 本地生产浏览器合成QA通过：1440×1000桌面、360×800手机、25账号/长中文名、客户标签和内部备注、unknown结果仅1次合成回复且不能重发、部分失败非假空、普通客户不挂载收件箱、手机返回、Tab焦点留在弹窗、Escape关闭。手机document.scrollWidth=360、innerWidth=360，无横向溢出。三张截图已逐张检查，测试用浏览器及网页服务已关闭。
+- QA夹具及截图仅为合成数据：`output/playwright/unified-inbox-browser.cjs`、`unified-inbox-desktop.png`、`unified-inbox-mobile.png`、`unified-inbox-accounts-mobile.png`，不提交为客户或真实授权证据。fixture的about:blank初始化有localStorage安全提示，不宣称控制台完全无提示；实际页面流程与断言通过。
+- 一次独立审查发现的问题已在集中修复中处理，未派第二次审查。所有13项本地实施任务完成；仅保留本地分支和现有工作树，不合并、不推送、不部署。未改动原有未提交文档。
 
 ## 实施裁决与边界
 
