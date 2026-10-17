@@ -25,3 +25,11 @@ Before changes: 658 passed, 0 failed/skipped, 167701.5956 ms (`meta-inbox-baseli
 ## Activation / real acceptance
 
 Not started. No official policy evidence, real grants, Webhook delivery, sending, or platform receipt has been inferred from local tests. Both platforms must separately pass the approved acceptance checklist before recording-readiness is claimed.
+
+## Task 2 — independent Instagram storage
+
+- Added connection/OAuth state, raw events, message/comment sources, independent send attempts and deletion request/marker models. Only InteractionAsset gains an optional independent Instagram link; original publishing tables/records are not rewritten.
+- Captured missing independent model RED; then model tests4/4 passed. Test applies actual Prisma migration to the validated isolated DB while original account credentials, post, schedule and publish job rows exist, and compares full protected snapshots afterward.
+- Composite workspace/app/asset constraints reject foreign connections; same provider event/actor ID in different apps/platforms stays separate. Correctly scoped Instagram asset insertion succeeds, so negative tests do not pass merely because all inserts fail.
+- Full suite675/675 passed,0 failed/skipped,190363.3113ms. API build exit0, diff check passed. Migration SQL reviewed: only eight new interaction tables and InteractionAsset altered; no old publishing DML/DDL. Generated Prisma client was refreshed locally, no dependency changes.
+- Ruling: keep independent-account deletion cascades compatible with a future explicitly requested original-account unbind; Task7 must purge orphaned covered customer notes/identities as part of deletion lifecycle before real activation. Shared type module deferred to Task3, its first consumer; no unused aliases added.

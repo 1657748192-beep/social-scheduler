@@ -130,6 +130,9 @@ model User {
   facebookManagementConnections FacebookManagementConnection[]
   facebookManagementStates FacebookManagementOAuthState[]
 
+  instagramManagementConnections InstagramManagementConnection[]
+  instagramManagementStates InstagramManagementOAuthState[]
+
   @@map("users")
 }
 
@@ -188,6 +191,11 @@ model Workspace {
   interactionCustomers InteractionCustomer[]
   interactionTags InteractionTag[]
   interactionAudits InteractionAudit[]
+
+  instagramManagementConnections InstagramManagementConnection[]
+  instagramManagementStates InstagramManagementOAuthState[]
+  metaInboxDeletionRequests MetaInboxDeletionRequest[]
+  metaInboxDeletionMarkers MetaInboxDeletionMarker[]
 
   @@map("workspaces")
 }
@@ -253,6 +261,7 @@ model SocialAccount {
   instagramReceivedComments InstagramReceivedComment[]
   instagramReceivedThreads InstagramReceivedThread[]
   instagramReceptionState InstagramReceptionState?
+  independentInstagramConnections InstagramManagementConnection[]
 
   @@unique([workspaceId, platform, providerAccountId])
   @@map("social_accounts")
@@ -895,11 +904,13 @@ model InteractionAsset {
   providerAssetId String
   connectionId String? @db.Uuid
   facebookManagedPageId String? @db.Uuid
+  instagramConnectionId String? @db.Uuid
   connectionVersion Int
   active Boolean @default(true)
   createdAt DateTime @default(now())
   workspace Workspace @relation(fields:[workspaceId],references:[id],onDelete:Cascade)
   connection InteractionConnection? @relation(fields:[workspaceId,connectionId],references:[workspaceId,id],onDelete:NoAction)
+  instagramConnection InstagramManagementConnection? @relation(fields:[workspaceId,instagramConnectionId,appNamespace,providerAssetId],references:[workspaceId,id,appId,providerAccountId],onDelete:Cascade)
   identities InteractionIdentity[]
   cases InteractionCase[]
   syncs InteractionSyncState[]
@@ -1106,4 +1117,165 @@ model InteractionAudit {
   createdAt DateTime @default(now())
   workspace Workspace @relation(fields:[workspaceId],references:[id],onDelete:Cascade)
   @@unique([workspaceId,id])
+}
+
+model InstagramManagementConnection {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  userId String @db.Uuid
+  platform Platform @default(instagram)
+  appId String
+  providerAccountId String
+  providerUserId String
+  displayName String?
+  tokenEncrypted String?
+  scopes String[] @default([])
+  expiresAt DateTime?
+  status String @default("inactive")
+  version Int @default(1)
+  notificationsEnabled Boolean @default(false)
+  subscribedFields String[] @default([])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  workspace Workspace @relation(fields:[workspaceId],references:[id],onDelete:Cascade)
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  account SocialAccount @relation(fields:[workspaceId,platform,providerAccountId],references:[workspaceId,platform,providerAccountId],onDelete:Cascade)
+  assets InteractionAsset[]
+  events InstagramInteractionEvent[]
+  messages InstagramInteractionMessage[]
+  comments InstagramInteractionComment[]
+  sends InstagramInteractionSendAttempt[]
+  @@unique([workspaceId,id])
+  @@unique([workspaceId,id,appId,providerAccountId],map:"ig_management_asset_scope")
+  @@unique([workspaceId,appId,providerAccountId],map:"ig_management_connection_namespace")
+  @@index([appId,providerAccountId,status])
+}
+
+model InstagramManagementOAuthState {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  userId String @db.Uuid
+  sessionId String @db.Uuid
+  accountId String @db.Uuid
+  appId String
+  expectedProviderAccountId String
+  stateHash String @unique
+  callbackUrl String
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+  workspace Workspace @relation(fields:[workspaceId],references:[id],onDelete:Cascade)
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  @@index([expiresAt])
+}
+
+model InstagramInteractionEvent {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  connectionId String @db.Uuid
+  connectionVersion Int
+  eventKey String
+  payload Json
+  status String @default("pending")
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now())
+  claimToken String? @db.Uuid
+  leaseExpiresAt DateTime?
+  receivedAt DateTime @default(now())
+  processedAt DateTime?
+  connection InstagramManagementConnection @relation(fields:[workspaceId,connectionId],references:[workspaceId,id],onDelete:Cascade)
+  @@unique([workspaceId,id])
+  @@unique([connectionId,connectionVersion,eventKey],map:"ig_interaction_event_dedup")
+  @@index([status,nextAttemptAt])
+  @@index([receivedAt])
+}
+
+model InstagramInteractionMessage {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  connectionId String @db.Uuid
+  connectionVersion Int
+  providerId String
+  conversationId String
+  actorId String
+  inbound Boolean
+  text String?
+  occurredAt DateTime
+  receivedAt DateTime @default(now())
+  deleted Boolean @default(false)
+  connection InstagramManagementConnection @relation(fields:[workspaceId,connectionId],references:[workspaceId,id],onDelete:Cascade)
+  @@unique([workspaceId,id])
+  @@unique([connectionId,connectionVersion,providerId],map:"ig_interaction_message_dedup")
+  @@index([connectionId,conversationId,occurredAt])
+  @@index([receivedAt])
+}
+
+model InstagramInteractionComment {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  connectionId String @db.Uuid
+  connectionVersion Int
+  providerId String
+  mediaId String
+  actorId String?
+  actorName String?
+  parentId String?
+  inbound Boolean @default(true)
+  text String?
+  occurredAt DateTime
+  receivedAt DateTime @default(now())
+  deleted Boolean @default(false)
+  connection InstagramManagementConnection @relation(fields:[workspaceId,connectionId],references:[workspaceId,id],onDelete:Cascade)
+  @@unique([workspaceId,id])
+  @@unique([connectionId,connectionVersion,providerId],map:"ig_interaction_comment_dedup")
+  @@index([connectionId,mediaId,occurredAt])
+  @@index([receivedAt])
+}
+
+model InstagramInteractionSendAttempt {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  connectionId String @db.Uuid
+  connectionVersion Int
+  requestKey String @db.Uuid
+  targetHash String
+  payloadHash String
+  status String @default("pending")
+  providerId String?
+  diagnosticId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  connection InstagramManagementConnection @relation(fields:[workspaceId,connectionId],references:[workspaceId,id],onDelete:Cascade)
+  @@unique([workspaceId,id])
+  @@unique([connectionId,connectionVersion,requestKey],map:"ig_interaction_send_key")
+}
+
+model MetaInboxDeletionRequest {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  platform String
+  appId String
+  subjectKind String
+  subjectHash String
+  reason String
+  status String @default("pending")
+  confirmationCode String @unique
+  claimToken String? @db.Uuid
+  leaseExpiresAt DateTime?
+  createdAt DateTime @default(now())
+  completedAt DateTime?
+  workspace Workspace @relation(fields:[workspaceId],references:[id],onDelete:Cascade)
+  @@index([status,createdAt])
+}
+
+model MetaInboxDeletionMarker {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  platform String
+  appId String
+  subjectKind String
+  subjectHash String
+  createdAt DateTime @default(now())
+  workspace Workspace @relation(fields:[workspaceId],references:[id],onDelete:Cascade)
+  @@unique([workspaceId,platform,appId,subjectKind,subjectHash],map:"meta_inbox_deleted_subject")
 }
