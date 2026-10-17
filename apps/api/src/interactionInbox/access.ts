@@ -2,10 +2,10 @@ import type {PrismaClient,Prisma} from '@prisma/client';
 import {HttpError} from '../utils/errors';
 import {isPlatformAdmin} from '../utils/platformAdmin';
 import {LOGIN_SESSION_MAX_AGE_MS} from '../utils/sessionLifetime';
-import type {Capability,Scope,ResolvedAsset,SourceRef} from './types';
-import {platforms} from './types';
+import type {Capability,Scope} from './types';
 import {parseInboxSource} from './source';
 import {createLiveInboxPolicy,type LiveInboxPolicy} from './livePolicy';
+import {createInboxConnectionAccess,type InboxConnectionAccess} from './connectionAccess';
 import {inboxSourceAlive} from './sourceLifetime';
 export type InboxDb=PrismaClient|Prisma.TransactionClient;
 // Compatibility boundary for existing Facebook-only callers. Never parses Instagram.
@@ -15,26 +15,10 @@ export async function requireInboxAccess(db:InboxDb,ctx:Scope,mode:'read'|'write
  if(!session||!member||!user||!isPlatformAdmin(user.email)||(mode==='write'&&member.role==='viewer')||(mode==='manage'&&!['owner','admin'].includes(member.role)))throw new HttpError(403,'Interaction inbox access denied');
  return member;
 }
-export function createInboxAccess(deps:{db:PrismaClient;facebookEnabled:boolean;policy?:LiveInboxPolicy;verifyFacebook:(ctx:Scope&{managedPageId:string})=>Promise<Record<string,{status:string}>>}){
+export function createInboxAccess(deps:{db:PrismaClient;facebookEnabled:boolean;policy?:LiveInboxPolicy;connections?:InboxConnectionAccess;verifyFacebook:(ctx:Scope&{managedPageId:string})=>Promise<Record<string,{status:string}>>}){
  const {db}=deps,policy=deps.policy??createLiveInboxPolicy([]);
- async function resolveInboxAsset(ctx:Scope,accountId:string,capability?:Capability):Promise<ResolvedAsset>{
-  await requireInboxAccess(db,ctx,capability?.endsWith('.reply')?'write':'read');
-  const account=await db.socialAccount.findFirst({where:{id:accountId,workspaceId:ctx.workspaceId}});
-  if(!account||!platforms.includes(account.platform as any))throw new HttpError(404,'Account unavailable');
-  if(account.status!=='active')throw new HttpError(403,'Account unavailable');
-  if(account.platform!=='facebook')throw new HttpError(409,'Platform not integrated');
-  if(!deps.facebookEnabled)throw new HttpError(409,'Interaction integration is disabled');
-  const selection=await db.facebookManagementPageSelection.findUnique({where:{workspaceId_pageId:{workspaceId:ctx.workspaceId,pageId:account.providerAccountId}},include:{page:{include:{connection:true}}}});
-  const page=selection?.page,c=page?.connection;
-  if(!page||!c||c.workspaceId!==ctx.workspaceId||c.status!=='active'||!page.active||!page.pageTokenEncrypted||!c.userTokenEncrypted||!page.tasks.length||page.expiresAt&&page.expiresAt<=new Date()||c.expiresAt&&c.expiresAt<=new Date()||account.accountType!=='page')throw new HttpError(404,'Independent interaction connection unavailable');
-  policy.requireAsset({workspaceId:ctx.workspaceId,platform:'facebook',appId:c.appId,providerAssetId:page.pageId},capability?.endsWith('.reply')?'send':'read');
-  const owner=await db.workspaceMember.findFirst({where:{workspaceId:ctx.workspaceId,userId:c.userId,status:'active',role:{in:['owner','admin']}}});if(!owner)throw new HttpError(404,'Independent interaction connection unavailable');
-  const grants=await deps.verifyFacebook({...ctx,managedPageId:page.id});
-  const key=capability==='comments.read'?'readComments':capability==='comments.reply'?'replyComments':capability==='messages.read'?'readMessages':capability==='messages.reply'?'replyMessages':null;
-  if(capability&&(!key||grants[key]?.status!=='available'))throw new HttpError(403,'Interaction permission unavailable');
-  await requireInboxAccess(db,ctx,capability?.endsWith('.reply')?'write':'read');
-  return{ctx,accountId,platform:'facebook',canonicalKey:JSON.stringify(['facebook',c.appId,page.pageId]),appNamespace:c.appId,providerAssetId:page.pageId,connectionVersion:c.version,sourceRef:{platform:'facebook',managedPageId:page.id,connectionId:c.id,connectionVersion:c.version}};
- }
+ const connections=deps.connections??createInboxConnectionAccess({...deps,policy,authorize:requireInboxAccess});
+ const resolveInboxAsset=connections.resolve;
  async function resolveCase(ctx:Scope,id:string,mode:'read'|'write'='read',tx:InboxDb=db){
   await requireInboxAccess(tx,ctx,mode);
   const row=await tx.interactionCase.findFirst({where:{id,workspaceId:ctx.workspaceId},include:{asset:true,customer:{include:{identities:true}}}});
@@ -55,6 +39,6 @@ export function createInboxAccess(deps:{db:PrismaClient;facebookEnabled:boolean;
    await requireInboxAccess(tx,ctx,mode);const value=await action(tx);await requireInboxAccess(tx,ctx,mode);return value;
   },{timeout:30000});
  }
- return{require:(ctx:Scope,mode:'read'|'write'|'manage'='read')=>requireInboxAccess(db,ctx,mode),resolveInboxAsset,resolveCase,write};
+ return{require:(ctx:Scope,mode:'read'|'write'|'manage'='read')=>requireInboxAccess(db,ctx,mode),resolveInboxAsset,resolveCase,write,assertCurrent:connections.assertCurrent};
 }
 export type InboxAccess=ReturnType<typeof createInboxAccess>;

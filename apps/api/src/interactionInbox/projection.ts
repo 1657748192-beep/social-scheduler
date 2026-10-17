@@ -1,6 +1,6 @@
 import type {PrismaClient} from '@prisma/client';import {HttpError} from '../utils/errors';
 import type {InboxAccess} from './access';import {sourceSchema} from './access';
-import type {AdapterPage,ResolvedAsset,Scope} from './types';
+import type {AdapterPage,ResolvedAsset,Scope,Capability} from './types';
 import {inboxSourceAlive} from './sourceLifetime';
 import {createLiveInboxPolicy,type LiveInboxPolicy} from './livePolicy';
 export function createInboxProjection({db,access,policy=createLiveInboxPolicy([])}:{db:PrismaClient;access:InboxAccess;policy?:LiveInboxPolicy}){
@@ -10,10 +10,11 @@ export function createInboxProjection({db,access,policy=createLiveInboxPolicy([]
   const originalSource=sourceSchema.parse(a.sourceRef);
   if(page.items.length>1250)throw new HttpError(502,'Provider result too large');
   const fresh=await access.resolveInboxAsset(ctx,a.accountId);if(fresh.canonicalKey!==a.canonicalKey||fresh.connectionVersion!==a.connectionVersion)throw new HttpError(409,'Connection changed');
+  const required=[...new Set(page.items.map(item=>`${item.kind}.read` as Capability))];
+  for(const capability of required)await access.resolveInboxAsset(ctx,a.accountId,capability);
   return access.write(ctx,async tx=>{
-   const connection=await tx.facebookManagementConnection.findFirst({where:{id:a.sourceRef?.connectionId,workspaceId:ctx.workspaceId,status:'active',version:a.connectionVersion}});
-   const selection=await tx.facebookManagementPageSelection.findUnique({where:{workspaceId_pageId:{workspaceId:ctx.workspaceId,pageId:a.providerAssetId}}});
-   if(!connection||selection?.managedPageId!==originalSource.managedPageId)throw new HttpError(404,'Connection changed');
+   await access.assertCurrent(tx,{...a,ctx});
+   for(const capability of required)await access.assertCurrent(tx,{...a,ctx},capability);
    const asset=await tx.interactionAsset.upsert({where:{workspaceId_canonicalKey:{workspaceId:ctx.workspaceId,canonicalKey:a.canonicalKey}},create:{workspaceId:ctx.workspaceId,canonicalKey:a.canonicalKey,platform:a.platform,appNamespace:a.appNamespace,providerAssetId:a.providerAssetId,facebookManagedPageId:originalSource.managedPageId,connectionVersion:a.connectionVersion},update:{active:true,facebookManagedPageId:originalSource.managedPageId,connectionVersion:a.connectionVersion}});
    let count=0;
    for(const v of page.items){
