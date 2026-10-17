@@ -41,6 +41,12 @@ The reviewer explicitly did not judge live Meta scopes, delivery, replies or pro
 
 ## Separate external acceptance gate (not performed)
 
+### Independent Meta configuration, 2026-10-17
+
+After specific user authorization, added `pages_manage_engagement` and `pages_read_user_content` to review preparation; both visibly show “准备测试”, not approval or a submitted whole-app review. Created `Social Scheduler BM Inbox`, config ID `1046726461751818`, standard login/user access token, with business_management, pages_manage_engagement, pages_manage_metadata, pages_messaging, pages_read_engagement, pages_read_user_content and pages_show_list. Creation-success dialog verified. pages_manage_posts was explicitly unselected. Original Page Publish and Engagement entries retain IDs 1748083276619458 and 1119177347324881. App remains unpublished. Added only the new facebook-management OAuth callback to the existing three callback entries and saved; no token consent performed.
+
+Second server read-only check succeeded (console 09:39:01): original HEAD unchanged, tracked tree clean, Compose files docker-compose.yml + docker-compose.server.yml, environment files .env + .env.sandbox.local. API image sha256:9400ef3207847cf6393e76c5c5fcdf408e6ec5ab9ba99adf1e7f8b5b50cbbdd6; Web image sha256:e5f6965c2765a7ce07c7f94705d7867544c08f07fc1ce688e449219255c92a01; network social-scheduler_default; database 16 MB; root disk still 9.7G available. Production migration/build/restart not yet performed.
+
 ### Authorized preparation, 2026-10-16
 
 ### Live preflight, 2026-10-17
