@@ -3,7 +3,7 @@ import React,{useEffect,useRef,useState} from 'react';
 import {useLanguage} from '../LanguageProvider';
 import {AccountDialog} from './SocialAccountManager';
 import {facebookPageSyncRequest,type FacebookSyncResult,type FacebookSyncView} from '../../lib/facebookPageSync';
-type Props={token:string;workspaceId:string;canManage:boolean;initialSyncId?:string;onClose():void;onImported():Promise<void>};
+type Props={token:string;workspaceId:string;canManage:boolean;initialSyncId?:string;onClose(keepPending?:boolean):void;onImported():Promise<void>};
 export function FacebookPageSyncDialog(props:Props){return props.canManage?<SyncContent key={props.token+':'+props.workspaceId+':'+props.initialSyncId} {...props}/>:null;}
 function SyncContent({token,workspaceId,initialSyncId,onClose,onImported}:Props){
  const {t}=useLanguage(),[view,setView]=useState<FacebookSyncView|null>(null),[selected,setSelected]=useState<string[]>([]),[review,setReview]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[result,setResult]=useState<FacebookSyncResult|null>(null);
@@ -13,8 +13,10 @@ function SyncContent({token,workspaceId,initialSyncId,onClose,onImported}:Props)
  async function authorize(){if(lock.current)return;lock.current=true;setBusy(true);setError('');try{const response=await facebookPageSyncRequest<{authorizationUrl:string}>(token,workspaceId,'/start',{method:'POST',body:{},signal:abort.current?.signal});const url=new URL(response.authorizationUrl);if(url.protocol!=='https:'||url.hostname!=='www.facebook.com'||url.username||url.password)throw Error();if(alive.current)window.location.assign(url.href);}catch{if(alive.current)setError(t('无法开始同步，请检查 Facebook 配置或稍后重试。','Unable to start sync. Check configuration or try later.'));}finally{if(alive.current){lock.current=false;setBusy(false);}}}
  async function confirm(){if(lock.current||!view||!selected.length)return;lock.current=true;setBusy(true);setError('');accepted.current=true;try{const response=await facebookPageSyncRequest<FacebookSyncResult>(token,workspaceId,'/'+encodeURIComponent(view.syncId)+'/confirm',{method:'POST',body:{pageIds:selected},signal:abort.current?.signal});if(alive.current){setResult(response);setReview(false);try{await onImported();}catch{if(alive.current)setError(t('导入结果已保存，账号列表刷新失败，请刷新页面查看。','Import saved. Refresh the page to reload accounts.'));}}}catch{if(alive.current)setError(t('导入结果尚未确认，请重试原选择；已有主页不会被覆盖。','Import result is unconfirmed. Retry the same selection; existing Pages will not be overwritten.'));}finally{if(alive.current){lock.current=false;setBusy(false);}}}
  const expired=!!view&&Date.parse(view.expiresAt)<=Date.now();
- return <AccountDialog title={t('同步公共主页','Sync Facebook Pages')} closeLabel={t('关闭','Close')} onClose={()=>{void cancel();}} wide>
+ return <AccountDialog title={t('同步公共主页','Sync Facebook Pages')} closeLabel={t('关闭','Close')} onClose={()=>{abort.current?.abort();onClose(!result&&accepted.current);}} wide>
   <p>{t('仅导入新增主页，不更新已有绑定；需要 Facebook 官方授权。','Import only new Pages. Existing connections remain unchanged. Official Facebook authorization is required.')}</p>
+  {!initialSyncId?<p>{t('在 Facebook 授权页面请保留原有主页的授权选择，避免在平台侧撤销旧主页权限。','Keep previously authorized Pages selected on Facebook to avoid revoking their existing platform permissions.')}</p>:null}
+  {accepted.current&&!result?<p role="status">{t('导入已提交；关闭窗口不代表取消，可通过恢复同步继续核对原选择。','Import submitted. Closing does not cancel it; resume this sync to check the original selection.')}</p>:null}
   {busy?<p role="status">{t('正在处理，请稍候…','Processing…')}</p>:null}{error?<p role="alert" className="error">{error}</p>:null}
   {result?<div role="status"><h3>{t(`新增 ${result.createdPageIds.length} 个，已存在跳过 ${result.skippedPageIds.length} 个。`,`${result.createdPageIds.length} added; ${result.skippedPageIds.length} existing Pages skipped.`)}</h3><p>{t('已有主页的权限、凭据和排程未作更新。','Existing Page permissions, credentials and schedules were not updated.')}</p></div>:view?<>
    <p className="muted">{t('已有主页不可选择；每次最多导入 50 个新增主页。','Existing Pages cannot be selected. Import up to 50 new Pages at a time.')}</p>

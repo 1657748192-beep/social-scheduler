@@ -4,6 +4,7 @@ import Redis from 'ioredis';
 import {withFacebookManagementFixture} from './helpers/facebookManagementFixture';
 import {createFacebookPageSyncStore} from '../src/facebookPageSync/store';
 import {encryptToken,decryptToken} from '../src/utils/tokenCrypto';
+import {lockFacebookPage} from '../src/services/facebookSubscription';
 const page=(id:string)=>({pageId:id,name:'New '+id,avatarUrl:null,profileUrl:'https://www.facebook.com/'+id,pageToken:'new-secret-'+id,scopes:['pages_manage_posts','pages_read_engagement'],expiresAt:null});
 async function fixture(run:(f:any)=>Promise<void>){
  const mod=await import('../src/facebookPageSync/service').catch(()=>null);assert.ok(mod,'additive import service must exist');
@@ -48,4 +49,13 @@ test('transaction failure rolls back all new pages and manager demotion during r
  const {service,id}=await f.prepare(f.make({db})),before=await f.snapshot();await assert.rejects(service.confirm(f.ctx,id,['101','102']));assert.equal(await f.db.socialAccount.count({where:{workspaceId:f.ctx.workspaceId,providerAccountId:{in:['101','102']}}}),0);assert.deepEqual(await f.snapshot(),before);
  const graph={...f.graph,revalidate:async(p:any)=>{await f.db.workspaceMember.updateMany({where:{workspaceId:f.ctx.workspaceId,userId:f.userId},data:{role:'viewer'}});return p;}};
  const next=await f.prepare(f.make({graph}));await assert.rejects(next.service.confirm(f.ctx,next.id,['101']));assert.equal(await f.db.socialAccount.count({where:{workspaceId:f.ctx.workspaceId,providerAccountId:'101'}}),0);
+}));
+
+test('login expiration while waiting for a Page lock rolls back any new account creation',async()=>fixture(async(f:any)=>{
+ const {service,id}=await f.prepare(),before=await f.snapshot();let release!:()=>void,locked!:()=>void;
+ const ready=new Promise<void>(r=>{locked=r;}),held=new Promise<void>(r=>{release=r;});
+ const blocker=f.db.$transaction(async(tx:any)=>{await lockFacebookPage(tx,'101');locked();await held;},{timeout:10000});await ready;
+ await f.db.userSession.update({where:{id:f.sessionId},data:{expiresAt:new Date(Date.now()+800)}});
+ const attempt=service.confirm(f.ctx,id,['101']);const rejected=assert.rejects(attempt);await new Promise(r=>setTimeout(r,1100));release();await blocker;await rejected;
+ assert.equal(await f.db.socialAccount.count({where:{workspaceId:f.ctx.workspaceId,providerAccountId:'101'}}),0);assert.deepEqual(await f.snapshot(),before);
 }));

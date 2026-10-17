@@ -43,6 +43,7 @@ export function createFacebookPageSyncService(deps:{db:PrismaClient;store:Return
     const result:SyncResult={createdPageIds:[],skippedPageIds:[]};
     for(const pageId of ids){
      await lockFacebookPage(tx,pageId);
+     await requirePageSyncAccess(tx,ctx);
      if(record.expiresAt<=Date.now())throw new HttpError(410,'Page sync expired');
      const old=await tx.socialAccount.findUnique({where:{workspaceId_platform_providerAccountId:{workspaceId:ctx.workspaceId,platform:'facebook',providerAccountId:pageId}},select:{capabilities:true}});
      if(old){const caps=old.capabilities as Record<string,unknown>;if(caps.pageSyncImportId===id)result.createdPageIds.push(pageId);else result.skippedPageIds.push(pageId);continue;}
@@ -50,6 +51,8 @@ export function createFacebookPageSyncService(deps:{db:PrismaClient;store:Return
      await tx.socialAccount.create({data:{workspaceId:ctx.workspaceId,platform:'facebook',providerAccountId:p.pageId,displayName:p.name,avatarUrl:p.avatarUrl,accountType:'page',status:'active',capabilities:{oauth2:true,pagePublishing:true,scopes:p.scopes,profileUrl:p.profileUrl,pageSyncImportId:id},credential:{create:{accessTokenEncrypted:encrypt(p.pageToken),tokenType:'Bearer',scopes:p.scopes,expiresAt:p.expiresAt}}}});
      result.createdPageIds.push(pageId);
     }
+    await requirePageSyncAccess(tx,ctx);
+    if(record.expiresAt<=Date.now())throw new HttpError(410,'Page sync expired');
     return result;
    },{timeout:30000,maxWait:10000});
    try{await store.finish(ctx,id,claim.leaseId,result);}catch{throw new HttpError(503,'Page import result needs reconciliation. Retry the same selection safely.',{code:'sync_reconcile'});}

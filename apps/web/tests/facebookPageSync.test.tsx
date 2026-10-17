@@ -39,3 +39,24 @@ test('a late candidate response cannot enter the next workspace or account sessi
   assert.doesNotMatch(facebookText(view),/Old private Page/);assert.match(facebookText(view),/New workspace Page/);
  },url=>url.pathname.includes('/workspaces/w1/')?new Promise(resolve=>{finish=resolve;}):Response.json({...viewData,workspaceId:'w2',pages:[{pageId:'101',name:'New workspace Page',existing:false,eligible:true}]}));
 });
+
+test('expired and accepted syncs can be dismissed without claiming that dismissal cancels an import',async()=>{
+ const mod=await load();assert.ok(mod);let closed=0,keepPending:unknown;
+ await withFacebookUI(<mod.FacebookPageSyncDialog token="token" workspaceId="w1" canManage initialSyncId={viewData.syncId} onClose={()=>{closed++;}} onImported={async()=>{}}/>,async({view,requests}:any)=>{
+  await act(async()=>facebookButton(view,'关闭').props.onClick());assert.equal(closed,1);assert.equal(requests.filter((r:any)=>r.method==='DELETE').length,0);
+ },()=>Response.json({message:'expired'},{status:410}));
+ await withFacebookUI(<mod.FacebookPageSyncDialog token="token" workspaceId="w1" canManage initialSyncId={viewData.syncId} onClose={(keep?:boolean)=>{keepPending=keep;}} onImported={async()=>{}}/>,async({view}:any)=>{
+  await act(async()=>facebookButton(view,'取消同步').props.onClick());assert.match(facebookText(view),/取消未完成/);
+  await act(async()=>facebookButton(view,'关闭').props.onClick());assert.equal(keepPending,true);
+ },(_url,init)=>init?.method==='DELETE'?Response.json({message:'accepted'},{status:409}):Response.json({...viewData,status:'importing',selectedPageIds:['101']}));
+});
+
+test('dashboard navigation restores only an opaque pending sync in the same authenticated browser session',async()=>{
+ const mod=await import('../lib/facebookPageSync').catch(()=>null);assert.ok(mod?.recoverFacebookSyncNavigation,'recovery helper must exist');
+ let href='https://app.example.test/social-accounts?facebookPageSync='+viewData.syncId+'&syncWorkspace=w1',state:any={__NA:true};
+ const browser:any={location:{get href(){return href;}},history:{get state(){return state;},replaceState(next:any,_unused:string,url:string){state=next;href=new URL(url,href).href;}}};
+ const initial=await mod.recoverFacebookSyncNavigation('same-token',browser);assert.equal(initial?.syncId,viewData.syncId);assert.equal(new URL(href).searchParams.has('facebookPageSync'),false);assert.equal(state.__NA,true);assert.doesNotMatch(JSON.stringify(state),/same-token|pageToken/);
+ assert.deepEqual(await mod.recoverFacebookSyncNavigation('same-token',browser),initial);
+ assert.equal(await mod.recoverFacebookSyncNavigation('different-session-token',browser),null);
+ mod.clearFacebookSyncNavigation(browser);assert.equal(await mod.recoverFacebookSyncNavigation('same-token',browser),null);
+});

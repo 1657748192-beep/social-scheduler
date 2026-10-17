@@ -54,14 +54,14 @@ export function createFacebookPageSyncGraph(input:{provider:OAuthProviderConfig;
    const long=endpoint('oauth/access_token');long.search=new URLSearchParams({grant_type:'fb_exchange_token',client_id:provider.clientId,client_secret:appSecret,fb_exchange_token:token}).toString();
    token=(await request(long,{},b))?.access_token;if(typeof token!=='string'||!token||token.length>16384)throw fail('authorization_invalid',400);
    const userGrant=await inspect(token,'USER',undefined,b),identity=await request(endpoint('me'),{headers:{Authorization:'Bearer '+token}},b);
-   if(!numeric.test(identity?.id)||identity.id!==userGrant.userId)throw fail('authorization_invalid',400);
+   if(typeof identity?.id!=='string'||!numeric.test(identity.id)||identity.id!==userGrant.userId)throw fail('authorization_invalid',400);
    const raw=new Map<string,VerifiedPage>(),rejected:PageCandidate[]=[],seenCursors=new Set<string>();let cursor='';let total=0;
    while(true){
     const url=endpoint('me/accounts');url.search=new URLSearchParams({fields:'id,name,access_token,picture{url}',limit:'100',...(cursor?{after:cursor}:{})}).toString();
     const payload=await request(url,{headers:{Authorization:'Bearer '+token}},b);if(!Array.isArray(payload?.data))throw fail();
     total+=payload.data.length;if(total>2000)throw fail('directory_too_large',400);
     for(const row of payload.data){
-     if(!numeric.test(row?.id)||typeof row.name!=='string'||!row.name.trim()||row.name.length>200)throw fail('invalid_page_metadata',400);
+     if(typeof row?.id!=='string'||!numeric.test(row.id)||typeof row.name!=='string'||!row.name.trim()||row.name.length>200)throw fail('invalid_page_metadata',400);
      let avatarUrl:string|null=null;if(row.picture?.data?.url){try{const avatar=new URL(row.picture.data.url);if(avatar.protocol!=='https:'||avatar.username||avatar.password||avatar.href.length>4096)throw Error();avatarUrl=avatar.href;}catch{throw fail('invalid_page_metadata',400);}}
      const base={pageId:row.id,name:row.name,avatarUrl,profileUrl:`https://www.facebook.com/${row.id}`};
      if(typeof row.access_token!=='string'||!row.access_token||row.access_token.length>16384){if(!raw.has(row.id)&&!rejected.some(p=>p.pageId===row.id))rejected.push({...base,existing:false,eligible:false,reason:'permission_missing'});continue;}

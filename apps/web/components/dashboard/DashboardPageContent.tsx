@@ -11,6 +11,7 @@ import { SocialAccountProfileLink } from '../social/SocialAccountProfileLink';
 import { SocialAccountManager } from '../social/SocialAccountManager';
 import { SupportedAccountType } from '../social/SupportedAccountType';
 import {FacebookPageSyncDialog} from '../social/FacebookPageSyncDialog';
+import {recoverFacebookSyncNavigation,clearFacebookSyncNavigation} from '../../lib/facebookPageSync';
 import {
   apiRequest,
   type CurrentUser,
@@ -108,14 +109,14 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>("");
   const [pageSync,setPageSync]=useState<{workspaceId:string;syncId?:string}|null>(null);
   const [pageSyncNotice,setPageSyncNotice]=useState('');
+  const [syncDismissed,setSyncDismissed]=useState(false);
   useEffect(()=>{
-    if(!accountsOnly)return;
-    const params=new URLSearchParams(window.location.search),id=params.get('facebookPageSync');if(!id)return;
-    const workspaceId=params.get('syncWorkspace');
-    if(/^[A-Za-z0-9_-]{43}$/.test(id)&&workspaceId)setPageSync({workspaceId,syncId:id});
-    else setPageSyncNotice(t('Facebook 同步授权未完成，原有账号和排程未改动。','Facebook sync authorization did not complete. Existing accounts and schedules are unchanged.'));
-    try{const url=new URL(window.location.href);url.searchParams.delete('facebookPageSync');url.searchParams.delete('syncWorkspace');window.history.replaceState(null,'',url.pathname+url.search+url.hash);}catch{/* Stored credentials are never placed in callback parameters. */}
-  },[accountsOnly]);
+    if(!accountsOnly||!token)return;
+    let active=true;
+    if(new URLSearchParams(window.location.search).get('facebookPageSync')==='failed')setPageSyncNotice(t('Facebook 同步授权未完成，原有账号和排程未改动。','Facebook sync authorization did not complete. Existing accounts and schedules are unchanged.'));
+    void recoverFacebookSyncNavigation(token).then(pending=>{if(!active)return;if(pending){setPageSync(pending);setSyncDismissed(false);}}).catch(()=>{if(active)setPageSyncNotice(t('无法恢复同步，请重新发起授权。原有账号和排程未改动。','Unable to resume sync. Authorize again; existing accounts and schedules are unchanged.'));});
+    return()=>{active=false;};
+  },[accountsOnly,token]);
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([]);
   const [socialAccounts, setSocialAccounts] = useState<SocialAccount[]>([]);
@@ -486,11 +487,12 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
           failed={accountsReadFailed} actionError={error}
           onAdd={provider => setBindingProvider(provider)} onDisconnect={disconnectSocialAccount}
           onRefresh={refreshAccountProfile}
-          onSyncFacebookPages={()=>setPageSync({workspaceId:selectedWorkspaceId})}
+          onSyncFacebookPages={()=>{setSyncDismissed(false);setPageSync({workspaceId:selectedWorkspaceId});}}
         /> : null}
         {accountsOnly&&pageSyncNotice?<p role="alert" className="error">{pageSyncNotice}</p>:null}
         {accountsOnly&&pageSync&&selectedWorkspaceId&&pageSync.workspaceId!==selectedWorkspaceId?<p role="status">{t('请切回发起同步的原工作区查看候选，不会自动切换或导入主页。','Return to the workspace that started this sync. No automatic switching or import occurs.')}</p>:null}
-        {accountsOnly&&token&&pageSync&&pageSync.workspaceId===selectedWorkspaceId&&canManageMembers?<FacebookPageSyncDialog key={token+':'+selectedWorkspaceId+':'+pageSync.syncId} token={token} workspaceId={selectedWorkspaceId} canManage={canManageMembers} initialSyncId={pageSync.syncId} onClose={()=>setPageSync(null)} onImported={async()=>{if(currentWorkspaceId.current===selectedWorkspaceId&&currentToken.current===token)await loadWorkspaceDetails(token,selectedWorkspaceId);}}/>:null}
+        {accountsOnly&&pageSync&&syncDismissed?<button className="button secondary" type="button" onClick={()=>setSyncDismissed(false)}>{t('恢复同步','Resume sync')}</button>:null}
+        {accountsOnly&&token&&pageSync&&!syncDismissed&&pageSync.workspaceId===selectedWorkspaceId&&canManageMembers?<FacebookPageSyncDialog key={token+':'+selectedWorkspaceId+':'+pageSync.syncId} token={token} workspaceId={selectedWorkspaceId} canManage={canManageMembers} initialSyncId={pageSync.syncId} onClose={(keepPending)=>{if(keepPending)setSyncDismissed(true);else{clearFacebookSyncNavigation();setPageSync(null);setSyncDismissed(false);}}} onImported={async()=>{if(currentWorkspaceId.current===selectedWorkspaceId&&currentToken.current===token)await loadWorkspaceDetails(token,selectedWorkspaceId);}}/>:null}
 
         {!accountsOnly && (selectedWorkspace?.publishingAccessExpiresAt ||
         selectedWorkspace?.publishingAccessStatus === "disabled" ||
