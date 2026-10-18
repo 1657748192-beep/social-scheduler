@@ -4,7 +4,7 @@ import {HttpError} from '../utils/errors';
 import {z} from 'zod';
 export type MetaDeletionAsset={workspaceId:string;platform:'facebook'|'instagram';appId:string;providerAssetId:string;connectionId:string;connectionVersion:number};
 export type MetaDeletionSubject=Omit<MetaDeletionAsset,'connectionId'>&{actorId?:string;providerEventId:string;eventKind?:'comments'|'messages';occurredAt:Date};
-export type MetaDeletionTarget={asset:MetaDeletionAsset;kind:'item'|'actor'|'asset';eventKind?:'comments'|'messages';subjectId?:string;phase:'pending'|'messages'|'comments'|'sources_done';rawAfter?:string;sourceIds?:string[];activeCaseId?:string;cleanupCustomerId?:string;unmappedRaw?:boolean};
+export type MetaDeletionTarget={asset:MetaDeletionAsset;kind:'item'|'actor'|'asset';eventKind?:'comments'|'messages';subjectId?:string;phase:'pending'|'messages'|'comments'|'sources_done';rawAfter?:string;sourceIds?:string[];activeCaseId?:string;cleanupCustomerId?:string;unmappedRaw?:boolean;unmappedItem?:boolean};
 type Deps={db:PrismaClient;hmacKey:string;encrypt:(value:string)=>string;decrypt:(value:string)=>string;now?:()=>Date};
 const validId=(v:unknown)=>typeof v==='string'&&v.length>0&&v.length<=256;
 /** Internal transactional admission only. Not a frontend-selected deletion API. */
@@ -35,7 +35,7 @@ export function createMetaInboxDeletion({db,hmacKey,encrypt,decrypt,now=()=>new 
  }
  function decode(request:{workspaceId:string;platform:string;appId:string;subjectKind:string;requestKey:string|null;targetEncrypted:string|null}){
   let t:MetaDeletionTarget;
-  try{t=z.object({asset:z.object({workspaceId:z.string().uuid(),platform:z.enum(['facebook','instagram']),appId:z.string().regex(/^\d{1,256}$/),providerAssetId:z.string().regex(/^\d{1,256}$/),connectionId:z.string().uuid(),connectionVersion:z.number().int().positive()}),kind:z.enum(['item','actor','asset']),eventKind:z.enum(['comments','messages']).optional(),subjectId:z.string().min(1).max(256).optional(),phase:z.enum(['pending','messages','comments','sources_done']),rawAfter:z.string().uuid().optional(),sourceIds:z.array(z.string().uuid()).max(50).optional(),activeCaseId:z.string().uuid().optional(),cleanupCustomerId:z.string().uuid().optional(),unmappedRaw:z.boolean().optional()}).strict().parse(JSON.parse(decrypt(request.targetEncrypted!)));}catch{throw new HttpError(409,'Meta purge locator unavailable');}
+  try{t=z.object({asset:z.object({workspaceId:z.string().uuid(),platform:z.enum(['facebook','instagram']),appId:z.string().regex(/^\d{1,256}$/),providerAssetId:z.string().regex(/^\d{1,256}$/),connectionId:z.string().uuid(),connectionVersion:z.number().int().positive()}),kind:z.enum(['item','actor','asset']),eventKind:z.enum(['comments','messages']).optional(),subjectId:z.string().min(1).max(256).optional(),phase:z.enum(['pending','messages','comments','sources_done']),rawAfter:z.string().uuid().optional(),sourceIds:z.array(z.string().uuid()).max(50).optional(),activeCaseId:z.string().uuid().optional(),cleanupCustomerId:z.string().uuid().optional(),unmappedRaw:z.boolean().optional(),unmappedItem:z.boolean().optional()}).strict().parse(JSON.parse(decrypt(request.targetEncrypted!)));}catch{throw new HttpError(409,'Meta purge locator unavailable');}
   const a=t.asset,parts=[t.eventKind??null,t.subjectId??null,a.connectionVersion];
   if(a.platform!=='instagram'||request.workspaceId!==a.workspaceId||request.appId!==a.appId||request.platform!==a.platform||request.subjectKind!==t.kind||request.requestKey!==digest(a,'request',[t.kind,...parts])||t.kind==='item'&&(!t.eventKind||!t.subjectId)||t.kind==='actor'&&!t.subjectId)throw new HttpError(409,'Meta purge scope unavailable');return t;
  }
@@ -45,7 +45,8 @@ export function createMetaInboxDeletion({db,hmacKey,encrypt,decrypt,now=()=>new 
    return db.$transaction(async tx=>{
     await connection(tx,a);const at=now(),where={workspaceId:a.workspaceId,connectionId:a.connectionId,connectionVersion:{lte:a.connectionVersion},providerId:eventId};
     const sources=eventKind==='messages'?await tx.instagramInteractionMessage.findMany({where,take:51,select:{id:true}}):await tx.instagramInteractionComment.findMany({where,take:51,select:{id:true}});if(sources.length>50)throw new HttpError(409,'Meta deletion admission exceeds bounded source mapping');
-    await marker(tx,a,'item',[eventKind,eventId],at);return queue(tx,{asset:a,kind:'item',eventKind,subjectId:eventId,sourceIds:sources.map(v=>v.id),phase:'pending'},'verified_content_deletion',at);
+    const indexed=eventKind==='messages'&&!sources.length?await tx.interactionItem.findFirst({where:{workspaceId:a.workspaceId,platform:'instagram',providerEventId:eventId,case:{asset:{canonicalKey:JSON.stringify([a.platform,a.appId,a.providerAssetId]),instagramConnectionId:a.connectionId}},AND:[{sourceRef:{path:['connectionId'],equals:a.connectionId}},{sourceRef:{path:['connectionVersion'],lte:a.connectionVersion}}]},select:{id:true}}):null;
+    await marker(tx,a,'item',[eventKind,eventId],at);return queue(tx,{asset:a,kind:'item',eventKind,subjectId:eventId,sourceIds:sources.map(v=>v.id),unmappedItem:eventKind==='messages'&&!sources.length&&!indexed,phase:'pending'},'verified_content_deletion',at);
    });
   },
   async markActor(a:MetaDeletionAsset,actorId:string){
@@ -125,9 +126,12 @@ export function createMetaInboxDeletion({db,hmacKey,encrypt,decrypt,now=()=>new 
     await tx.$queryRaw`SELECT id FROM "MetaInboxDeletionRequest" WHERE "confirmationCode"=${code} FOR UPDATE`;
     const request=await tx.metaInboxDeletionRequest.findUniqueOrThrow({where:{confirmationCode:code}});if(request.status==='completed')return{purged:0,complete:true,blocked:null};if(request.status!=='pending')throw new HttpError(409,'Meta deletion changed');const t=decode(request),a=t.asset;
     if(t.phase!=='sources_done')throw new HttpError(409,'Meta source purge not complete');
-    const ia=await tx.interactionAsset.findFirst({where:{workspaceId:a.workspaceId,canonicalKey:JSON.stringify([a.platform,a.appId,a.providerAssetId]),platform:a.platform,appNamespace:a.appId,providerAssetId:a.providerAssetId,instagramConnectionId:a.connectionId}});
+    const assetScope={workspaceId:a.workspaceId,canonicalKey:JSON.stringify([a.platform,a.appId,a.providerAssetId]),platform:a.platform,appNamespace:a.appId,providerAssetId:a.providerAssetId,instagramConnectionId:a.connectionId};
+    let ia=await tx.interactionAsset.findFirst({where:assetScope});
     if(!ia)return{purged:0,complete:false,blocked:'asset_scope_unavailable'};
     await tx.$queryRaw`SELECT id FROM "InteractionAsset" WHERE id=${ia.id}::uuid FOR UPDATE`;
+    ia=await tx.interactionAsset.findFirst({where:{...assetScope,id:ia.id}});
+    if(!ia)return{purged:0,complete:false,blocked:'asset_scope_unavailable'};
     const result=async(purged=0,blocked:string|null=null)=>{await tx.metaInboxDeletionRequest.update({where:{id:request.id},data:{targetEncrypted:encrypt(JSON.stringify(t))}});return{purged,complete:false,blocked};};
     const oldSource:Prisma.InteractionItemWhereInput={workspaceId:a.workspaceId,assetId:ia.id,platform:'instagram',AND:[{sourceRef:{path:['platform'],equals:'instagram'}},{sourceRef:{path:['connectionId'],equals:a.connectionId}},{sourceRef:{path:['connectionVersion'],lte:a.connectionVersion}}]};
     const rootSource:Prisma.InteractionCaseWhereInput={AND:[{sourceRef:{path:['connectionId'],equals:a.connectionId}},{sourceRef:{path:['connectionVersion'],lte:a.connectionVersion}}]};
@@ -135,9 +139,14 @@ export function createMetaInboxDeletion({db,hmacKey,encrypt,decrypt,now=()=>new 
     if(t.kind==='item')scope={kind:t.eventKind,OR:[{items:{some:{...oldSource,providerEventId:t.subjectId}}},...(t.eventKind==='comments'?[{sourceRef:{path:['commentId'],equals:t.subjectId!}}]:[]),...(t.sourceIds??[]).map(id=>({sourceRef:{path:['sourceRecordId'],equals:id}}))]};
     if(t.kind==='actor')scope={customer:{is:{identities:{some:{workspaceId:a.workspaceId,assetId:ia.id,providerActorId:t.subjectId}}}},OR:[{kind:'comments'},{sourceRef:{path:['participantId'],equals:t.subjectId!}}]};
     const eligible:Prisma.InteractionCaseWhereInput={workspaceId:a.workspaceId,assetId:ia.id,AND:[scope,{OR:[rootSource,{items:{some:oldSource}}]}]};
-    const c=t.activeCaseId?await tx.interactionCase.findFirst({where:{id:t.activeCaseId,workspaceId:a.workspaceId,assetId:ia.id}}):await tx.interactionCase.findFirst({where:eligible,orderBy:{id:'asc'}});
+    const c=t.activeCaseId?await tx.interactionCase.findFirst({where:{id:t.activeCaseId,workspaceId:a.workspaceId,assetId:ia.id,...(t.kind==='item'?{kind:t.eventKind}:{}),AND:[{OR:[rootSource,{items:{some:oldSource}}]}]}}):await tx.interactionCase.findFirst({where:eligible,orderBy:{id:'asc'}});
+    if(t.activeCaseId&&!c)return result(0,'case_scope_changed');
+    if(!c&&(t.unmappedItem??(t.kind==='item'&&t.eventKind==='messages'&&!t.sourceIds?.length))&&await tx.interactionCase.count({where:{workspaceId:a.workspaceId,assetId:ia.id,kind:'messages',AND:[{OR:[rootSource,{items:{some:oldSource}}]}]}}))return result(0,'item_scope_unavailable');
     if(c){
      t.activeCaseId=c.id;await tx.$queryRaw`SELECT id FROM "InteractionCase" WHERE id=${c.id}::uuid FOR UPDATE`;
+     // READ COMMITTED selection can precede a blocked lock: verify the locked row,
+     // not the snapshot observed before another writer committed its changes.
+     if(!await tx.interactionCase.findFirst({where:{id:c.id,workspaceId:a.workspaceId,assetId:ia.id,customerId:c.customerId,kind:c.kind,sourceRef:{equals:c.sourceRef as Prisma.InputJsonValue}},select:{id:true}}))return result(0,'case_scope_changed');
      if(t.kind==='actor'&&(!c.customerId||await tx.interactionIdentity.count({where:{workspaceId:a.workspaceId,customerId:c.customerId,assetId:ia.id,providerActorId:{not:t.subjectId}}})))return result(0,'ambiguous_case_scope');
      const items=await tx.interactionItem.findMany({where:{...oldSource,caseId:c.id,...(t.kind==='item'?{providerEventId:t.subjectId}:{})},take:limit,select:{id:true}});
      if(items.length)return result((await tx.interactionItem.deleteMany({where:{workspaceId:a.workspaceId,assetId:ia.id,caseId:c.id,id:{in:items.map(v=>v.id)}}})).count);

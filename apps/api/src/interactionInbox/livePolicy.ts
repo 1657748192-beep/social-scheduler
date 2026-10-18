@@ -27,7 +27,12 @@ export function parseLiveAssetRules(value:string|undefined):LiveAssetRule[]{
 }
 export function createLiveInboxPolicy(input:LiveAssetRule[],now:()=>Date=()=>new Date()){
  const rules=new Map(parseRules(input).map(rule=>[assetKey(rule),rule]));
- return{requireAsset(key:LiveAssetKey,mode:'read'|'send'):LivePolicyEvidence{
+ return{retentionForAsset(key:LiveAssetKey):{rawRetentionDays:number;contentRetentionDays:number}{
+  // Cleanup is not an access grant: disabling a rule must not extend its retention.
+  // With no reviewed rule, enforce the existing product caps, never enable collection.
+  const rule=rules.get(assetKey(key));
+  return rule?.policy.reviewed&&Date.parse(rule.policy.checkedAt)<=now().getTime()?{rawRetentionDays:rule.policy.rawRetentionDays,contentRetentionDays:rule.policy.contentRetentionDays}:{rawRetentionDays:7,contentRetentionDays:90};
+ },requireAsset(key:LiveAssetKey,mode:'read'|'send'):LivePolicyEvidence{
   const rule=rules.get(assetKey(key));
   if(!rule||!rule.readEnabled||mode==='send'&&!rule.sendEnabled||!rule.policy.reviewed||Date.parse(rule.policy.checkedAt)>now().getTime())throw new HttpError(409,'Interaction policy or asset access is not enabled');
   // A rule is an operational gate, not a substitute for the recorded official policy review.

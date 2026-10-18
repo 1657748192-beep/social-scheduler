@@ -109,7 +109,7 @@ test('newerConversationScopeStaysPendingRatherThanErasingFreshCustomerState',asy
  await f.db.interactionItem.create({data:{workspaceId:a.workspaceId,assetId:own.asset.id,caseId:own.cases[1].id,platform:'instagram',providerEventId:next.providerId,direction:'inbound',occurredAt:next.occurredAt,sourceRef:source}});
  await f.db.interactionCase.update({where:{id:own.cases[1].id},data:{sourceRef:source}});await purgeAllSources(d,receipt.confirmationCode);let blocked:string|null=null;
  for(let i=0;i<50&&!blocked;i++)blocked=(await d.purgeDerived(receipt.confirmationCode,2)).blocked;
- assert.equal(blocked,'newer_scope_present');assert.equal(await d.status(receipt.confirmationCode),'pending');assert.ok(await f.db.instagramInteractionMessage.findUnique({where:{id:next.id}}));const saved=await f.db.interactionCase.findUniqueOrThrow({where:{id:own.cases[1].id}});assert.equal((saved.sourceRef as any).sourceRecordId,next.id);assert.equal((saved.sourceRef as any).connectionVersion,2);assert.ok(await f.db.customerNote.findUnique({where:{id:own.note.id}}));
+ assert.ok(blocked==='newer_scope_present'||blocked==='case_scope_changed');assert.equal(await d.status(receipt.confirmationCode),'pending');assert.ok(await f.db.instagramInteractionMessage.findUnique({where:{id:next.id}}));const saved=await f.db.interactionCase.findUniqueOrThrow({where:{id:own.cases[1].id}});assert.equal((saved.sourceRef as any).sourceRecordId,next.id);assert.equal((saved.sourceRef as any).connectionVersion,2);assert.ok(await f.db.customerNote.findUnique({where:{id:own.note.id}}));
 }));
 test('unmappedProcessedRawMetadataCannotReceiveACompletedDeletionReceipt',async()=>withMetaInboxFixture(async f=>{
  const d=service(f),own=await seedDeletionCustomer(f),a=asset(f);
@@ -129,4 +129,24 @@ test('assetDisconnectPurgesDerivedFamiliesAndScrubsOnlyItsOldSendAudit',async()=
  const row=await f.db.interactionSendAttempt.create({data:{workspaceId:f.adminCtx.workspaceId,assetId:own.asset.id,requestKey:randomUUID(),targetHash:'old-asset-target',payloadHash:'old-asset-payload',status:'sent',providerId:'old-provider'}});
  const receipt=await d.disconnect(asset(f));await purgeAllSources(d,receipt.confirmationCode);await purgeAllDerived(d,receipt.confirmationCode);
  const saved=await f.db.interactionSendAttempt.findUniqueOrThrow({where:{id:row.id}});assert.notEqual(saved.targetHash,row.targetHash);assert.notEqual(saved.payloadHash,row.payloadHash);assert.equal(saved.providerId,null);assert.equal(saved.status,'unknown');assert.equal((await f.db.interactionAsset.findUniqueOrThrow({where:{id:own.asset.id}})).active,false);assert.deepEqual(await f.publishingSnapshot(),before);
+}));
+
+test('missingMessageMappingCannotFalselyCompleteDeletionOfAnUnindexedConversation',async()=>withMetaInboxFixture(async f=>{
+ const d=service(f),own=await seedDeletionCustomer(f),before=await f.publishingSnapshot();
+ await f.db.instagramInteractionMessage.delete({where:{id:own.message.id}});
+ await f.db.interactionItem.deleteMany({where:{caseId:own.cases[1].id}});
+ const receipt=await d.markItem(asset(f),'messages',own.message.providerId);await purgeAllSources(d,receipt.confirmationCode);
+ const result=await d.purgeDerived(receipt.confirmationCode,2);
+ assert.equal(result.complete,false);assert.equal(result.blocked,'item_scope_unavailable');assert.equal(await d.status(receipt.confirmationCode),'pending');
+ assert.ok(await f.db.interactionCase.findUnique({where:{id:own.cases[1].id}}));assert.ok(await f.db.customerNote.findUnique({where:{id:own.note.id}}));assert.deepEqual(await f.publishingSnapshot(),before);
+}));
+
+test('continuedPurgeCannotClearReceiptsAfterCaseMovesToANewerConnectionVersion',async()=>withMetaInboxFixture(async f=>{
+ const d=service(f),own=await seedDeletionCustomer(f),a=asset(f),receipt=await d.markItem(a,'messages',own.message.providerId);await purgeAllSources(d,receipt.confirmationCode);
+ const first=await d.purgeDerived(receipt.confirmationCode,1);assert.equal(first.purged,1);
+ const ref={platform:'instagram',instagramAccountId:f.instagramAccountIds[0],connectionId:a.connectionId,connectionVersion:2,sourceRecordId:randomUUID(),conversationId:own.message.conversationId,participantId:'300'};
+ await f.db.interactionCase.update({where:{id:own.cases[1].id},data:{sourceRef:ref}});
+ const result=await d.purgeDerived(receipt.confirmationCode,1);
+ assert.equal(result.complete,false);assert.equal(result.blocked,'case_scope_changed');assert.equal(await d.status(receipt.confirmationCode),'pending');
+ assert.equal(await f.db.readReceipt.count({where:{caseId:own.cases[1].id}}),1);assert.equal(await f.db.interactionCaseTag.count({where:{caseId:own.cases[1].id}}),1);
 }));
