@@ -1,0 +1,14 @@
+import test from 'node:test';import assert from 'node:assert/strict';import React from 'react';import {act} from 'react-test-renderer';import {withInboxUI,inboxCase} from './helpers/interactionInboxUI';import {facebookButton,facebookText} from './helpers/facebookManagementUI';
+
+test('topThreeTabsRemainAndOAuthOutcomeNeverEchoesProviderQuery',async()=>{
+ const {UnifiedInbox}=await import('../components/inbox/unified/UnifiedInbox');await withInboxUI(<UnifiedInbox token="test" workspaces={[{id:'w1',name:'Workspace',role:'owner'}] as any}/>,async({view,requests}:any)=>{for(const label of ['评论','私信','@提及'])assert.ok(facebookButton(view,label));assert.match(facebookText(view),/独立互动授权/);assert.ok(requests.every((r:any)=>r.method==='GET'));});
+ const helpers=await import('../lib/interactionInbox');assert.equal(typeof (helpers as any).instagramManagementOutcome,'function');assert.equal((helpers as any).instagramManagementOutcome('?instagram_management=failed&code=secret'),'failed');assert.equal((helpers as any).instagramManagementOutcome('?instagram_management=secret'),null);
+});
+
+test('unverifiedWindowBlocksReplyAndInternalNoteNeverHitsProvider',async()=>{
+ const {ReplyComposer}=await import('../components/inbox/unified/ReplyComposer');let sent=0,notes=0;await withInboxUI(<ReplyComposer detail={{...inboxCase,kind:'messages',items:[],nextCursor:null,officialUrl:null,replyTarget:'thread',capabilities:[{capability:'messages.reply',available:false,reason:'reply_window_unverified',verifiedAt:null}]}} accountName="Instagram test" canWrite onSend={async()=>{sent++;return{status:'sent',providerId:'not-called'};}} onSaveNote={async()=>{notes++;}} onDirtyChange={()=>{}} onAcknowledge={async()=>{}}/>,async({view}:any)=>{assert.equal(facebookButton(view,'发送私信').props.disabled,true);await act(async()=>facebookButton(view,'内部备注').props.onClick());await act(async()=>view.root.findAllByType('textarea').find((v:any)=>v.props['aria-label']==='内部备注').props.onChange({target:{value:'Local follow-up'}}));await act(async()=>facebookButton(view,'保存内部备注').props.onClick());assert.equal(notes,1);assert.equal(sent,0);});
+});
+
+test('partialRefreshKeepsDraftAndWarns',async()=>{
+ const {UnifiedInbox}=await import('../components/inbox/unified/UnifiedInbox');await withInboxUI(<UnifiedInbox token="test" workspaces={[{id:'w1',name:'Workspace',role:'owner'}] as any}/>,async({view}:any)=>{await act(async()=>view.root.findByProps({className:'inbox-case-row'}).props.onClick());await act(async()=>view.root.findByProps({'aria-label':'回复正文'}).props.onChange({target:{value:'Unsent reply'}}));await act(async()=>facebookButton(view,'立即更新').props.onClick());assert.match(facebookText(view),/Unsent reply/);assert.match(facebookText(view),/部分账号同步未完成/);},url=>url.pathname.endsWith('/refresh')?Response.json({partial:true,nextCursor:null,results:[]}):undefined);
+});

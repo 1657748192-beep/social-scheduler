@@ -5404,3 +5404,13 @@ textarea {
  .unified-inbox .inbox-contact textarea, .unified-inbox .inbox-detail textarea { min-height:110px; }
  .unified-inbox .inbox-list-tools { padding-top:13px; }
 }
+
+.unified-inbox .inbox-connection-panel { border:1px solid #dce8e4; border-radius:12px; background:#fff; padding:14px 18px; margin:0 0 16px; min-width:0; }
+.unified-inbox .inbox-connection-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+.unified-inbox .inbox-connection-heading > div { min-width:0; overflow-wrap:anywhere; font-size:13px; }
+.unified-inbox .inbox-connection-heading small { display:block; color:#71847e; margin-top:5px; font-size:12px; }
+.unified-inbox .inbox-connection-status { display:flex; flex-wrap:wrap; gap:7px 18px; color:#667d75; font-size:12px; margin:11px 0; }
+.unified-inbox .inbox-connection-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.unified-inbox .inbox-connection-actions .button { font-size:12px; padding:7px 11px; min-height:32px; }
+.unified-inbox .inbox-connection-panel [role="alert"] { margin:10px 0 0; font-size:12px; color:#a34133; }
+@media(max-width:640px) { .unified-inbox .inbox-connection-panel { padding:12px; } .unified-inbox .inbox-connection-heading { flex-wrap:wrap; gap:7px; } }
