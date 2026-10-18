@@ -11,12 +11,12 @@ import type {InstagramManagementConfig,InstagramGrantInspection,InstagramManagem
 import {createInstagramManagementReceptionStore} from './receptionStore';
 import {createInstagramManagementWebhook} from './webhook';
 
-export function createInstagramManagementRuntime(input:{db:PrismaClient;config:InstagramManagementConfig;policy:LiveInboxPolicy;encrypt:(value:string)=>string;decrypt:(value:string)=>string;deletionHmacKey?:string;fetchImpl?:typeof fetch;exchange?:(code:string,callbackUrl:string)=>Promise<InstagramManagementGrant>;inspect?:(accountId:string,token:string)=>Promise<InstagramGrantInspection>;onDisconnect?:(tx:Prisma.TransactionClient,connection:InstagramManagementConnection)=>Promise<void>;reception?:{enabled:boolean;verifyToken:string};isDeleted?:(tx:Prisma.TransactionClient,subject:InstagramSourceSubject)=>Promise<boolean>}){
+export function createInstagramManagementRuntime(input:{db:PrismaClient;config:InstagramManagementConfig;policy:LiveInboxPolicy;encrypt:(value:string)=>string;decrypt:(value:string)=>string;deletionHmacKey?:string;fetchImpl?:typeof fetch;exchange?:(code:string,callbackUrl:string)=>Promise<InstagramManagementGrant>;inspect?:(accountId:string,token:string)=>Promise<InstagramGrantInspection>;onDisconnect?:(tx:Prisma.TransactionClient,connection:InstagramManagementConnection)=>Promise<void>;onDeleted?:(tx:Prisma.TransactionClient,subject:InstagramSourceSubject)=>Promise<unknown>;reception?:{enabled:boolean;verifyToken:string};isDeleted?:(tx:Prisma.TransactionClient,subject:InstagramSourceSubject)=>Promise<boolean>}){
  const {db,config,policy}=input,store=createInstagramManagementStore({db,encrypt:input.encrypt,policy,hmacKey:input.deletionHmacKey});
  const gateway=createInstagramManagementGateway({config,fetchImpl:input.fetchImpl});
  const oauth=createInstagramManagementOAuth({db,config,policy,store,exchange:input.exchange??gateway.exchange});
  const receptionEnabled=!!input.reception?.enabled&&config.enabled&&!!input.isDeleted;
- const receptionStore=createInstagramManagementReceptionStore({db,appId:config.appId,enabled:receptionEnabled,policy,isDeleted:input.isDeleted??(async()=>{throw new HttpError(409,'Deletion verification unavailable');})});
+ const receptionStore=createInstagramManagementReceptionStore({db,appId:config.appId,enabled:receptionEnabled,policy,isDeleted:input.isDeleted??(async()=>{throw new HttpError(409,'Deletion verification unavailable');}),onDeleted:input.onDeleted});
  return{
   receptionEnabled,receptionStore,webhook:createInstagramManagementWebhook({appSecret:config.appSecret,verifyToken:input.reception?.verifyToken??'',store:receptionStore}),
   enabled:config.enabled,oauth,access:createInstagramManagementAccess({db,appId:config.appId,policy,decrypt:input.decrypt,inspect:input.inspect}),

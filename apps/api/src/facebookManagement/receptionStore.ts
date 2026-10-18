@@ -18,7 +18,7 @@ export function createFacebookManagementReceptionStore({db,appId}:{db:PrismaClie
       await db.$transaction(async tx=>{
         for(const event of events){
           const pages=await tx.facebookManagedPage.findMany({where:{pageId:event.pageId,active:true,notificationsEnabled:true,connection:{appId,status:'active'}},select:{id:true},orderBy:{id:'asc'}});
-          for(const page of pages)if(await available(tx,page.id,event.pageId,new Date()))await tx.facebookInteractionEvent.createMany({skipDuplicates:true,data:[{managedPageId:page.id,eventKey:event.eventKey,payload:JSON.parse(JSON.stringify(event)) as Prisma.InputJsonValue}]});
+          for(const page of pages){const current=await available(tx,page.id,event.pageId,new Date());if(current)await tx.facebookInteractionEvent.createMany({skipDuplicates:true,data:[{managedPageId:page.id,connectionVersion:current.connection.version,eventKey:event.eventKey,payload:JSON.parse(JSON.stringify(event)) as Prisma.InputJsonValue}]});}
         }
       },{timeout:20000});
     },
@@ -40,19 +40,22 @@ export function createFacebookManagementReceptionStore({db,appId}:{db:PrismaClie
         if(!before)return false;
         const event=before.payload as unknown as FacebookReceivedEventInput;
         const page=await available(tx,before.managedPageId,event.pageId,now);if(!page)return true;
+        // Delayed raw delivery belongs to its original grant, never the latest token.
+        if(before.connectionVersion===null||before.connectionVersion!==page.connection.version)return true;
         await tx.$queryRaw`SELECT id FROM facebook_interaction_events WHERE id=${claim.id}::uuid FOR UPDATE`;
         if(!await tx.facebookInteractionEvent.findFirst({where:{id:claim.id,claimToken:claim.claimToken,status:'processing',leaseUntil:{gt:now}}}))return false;
         const occurredAt=new Date(event.occurredAt);if(!Number.isFinite(occurredAt.getTime())||occurredAt.getTime()<now.getTime()-90*86400000||occurredAt.getTime()>now.getTime()+60000)return true;
         if(event.kind==='comment'){
           if(!event.postId)throw Error('Invalid management comment event');
-          const data={postId:event.postId,text:event.deleted?null:event.text??null,senderId:event.senderId,senderName:event.senderName,deleted:event.deleted===true,occurredAt};
+          const data={connectionVersion:page.connection.version,postId:event.postId,text:event.deleted?null:event.text??null,senderId:event.senderId,senderName:event.senderName,deleted:event.deleted===true,occurredAt};
           const inserted=await tx.facebookInteractionComment.createMany({skipDuplicates:true,data:[{managedPageId:page.id,providerId:event.providerId,...data}]});
           if(!inserted.count)await tx.facebookInteractionComment.updateMany({where:{managedPageId:page.id,providerId:event.providerId,...(!event.deleted?{deleted:false}:{}),OR:[{occurredAt:{lt:occurredAt}},...(event.deleted?[{occurredAt,deleted:false}]:[])]},data});
         }else if(event.kind==='message'){
           if(!event.senderId||!event.recipientId||event.senderId===event.recipientId||(event.senderId!==page.pageId&&event.recipientId!==page.pageId))throw Error('Invalid management message event');
           const participantId=event.senderId===page.pageId?event.recipientId:event.senderId;
-          await tx.facebookInteractionThread.createMany({skipDuplicates:true,data:[{managedPageId:page.id,participantId,updatedAt:occurredAt}]});
-          const inserted=await tx.facebookInteractionMessage.createMany({skipDuplicates:true,data:[{managedPageId:page.id,providerId:event.providerId,participantId,senderId:event.senderId,recipientId:event.recipientId,text:event.text,isEcho:event.isEcho===true,occurredAt}]});
+          await tx.facebookInteractionThread.updateMany({where:{managedPageId:page.id,participantId,OR:[{connectionVersion:null},{connectionVersion:{not:page.connection.version}}]},data:{connectionVersion:page.connection.version,lastInboundAt:null,participantName:null,providerId:null,updatedAt:occurredAt,receivedAt:now}});
+          await tx.facebookInteractionThread.createMany({skipDuplicates:true,data:[{managedPageId:page.id,connectionVersion:page.connection.version,participantId,updatedAt:occurredAt}]});
+          const inserted=await tx.facebookInteractionMessage.createMany({skipDuplicates:true,data:[{managedPageId:page.id,connectionVersion:page.connection.version,providerId:event.providerId,participantId,senderId:event.senderId,recipientId:event.recipientId,text:event.text,isEcho:event.isEcho===true,occurredAt}]});
           if(inserted.count){
             await tx.facebookInteractionThread.updateMany({where:{managedPageId:page.id,participantId,updatedAt:{lt:occurredAt}},data:{updatedAt:occurredAt}});
             if(!event.isEcho&&event.recipientId===page.pageId&&event.senderId!==page.pageId&&occurredAt<=now)await tx.facebookInteractionThread.updateMany({where:{managedPageId:page.id,participantId,OR:[{lastInboundAt:null},{lastInboundAt:{lt:occurredAt}}]},data:{lastInboundAt:occurredAt}});

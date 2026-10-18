@@ -2,7 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';import Redi
 import {inboxTestPolicy} from './helpers/interactionInboxServices';
 
 test('deleted young source and unattended expiry invalidate and prune customer indexes',async()=>withInboxFixture(async f=>{
- const c=await f.seedVerifiedCase(),source=await f.db.facebookInteractionMessage.create({data:{managedPageId:f.pages[0].id,providerId:'source-prune',participantId:'300',senderId:'300',recipientId:'100',text:'original',occurredAt:new Date()}});
+ const c=await f.seedVerifiedCase(),source=await f.db.facebookInteractionMessage.create({data:{managedPageId:f.pages[0].id,connectionVersion:1,providerId:'source-prune',participantId:'300',senderId:'300',recipientId:'100',text:'original',occurredAt:new Date()}});
  await f.db.interactionCase.update({where:{id:c.id},data:{sourceRef:{...(c.sourceRef as object),sourceRecordId:source.id}}});
  await f.db.facebookInteractionMessage.delete({where:{id:source.id}});const access=inboxTestAccess(f);await assert.rejects(access.resolveCase(f.adminCtx,c.id),(e:any)=>e.statusCode===404);
  const {createInboxRetention}=await import('../src/interactionInbox/retention');await createInboxRetention({db:f.db}).pruneInbox(new Date(),50);

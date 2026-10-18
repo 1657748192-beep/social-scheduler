@@ -8,7 +8,7 @@ import type {VerifiedInstagramEvent,InstagramEventClaim,InstagramSourceSubject} 
 const id=z.string().min(1).max(256);
 const schema=z.object({accountId:id,field:z.enum(['comments','messages']),eventId:id,senderId:id.optional(),recipientId:id.optional(),mediaId:id.optional(),text:z.string().max(10000).optional(),username:z.string().max(256).optional(),timestamp:z.number().int().nonnegative().safe(),isEcho:z.boolean(),deleted:z.boolean()}).strict();
 export const instagramSourceTime=(timestamp:number,now:Date)=>new Date(timestamp>0&&timestamp<=now.getTime()&&timestamp<=8640000000000000?timestamp:0);
-export function createInstagramManagementReceptionStore({db,appId,enabled=false,policy,isDeleted}:{db:PrismaClient;appId:string;enabled?:boolean;policy:LiveInboxPolicy;isDeleted:(tx:Prisma.TransactionClient,subject:InstagramSourceSubject)=>Promise<boolean>}){
+export function createInstagramManagementReceptionStore({db,appId,enabled=false,policy,isDeleted,onDeleted}:{db:PrismaClient;appId:string;enabled?:boolean;policy:LiveInboxPolicy;isDeleted:(tx:Prisma.TransactionClient,subject:InstagramSourceSubject)=>Promise<boolean>;onDeleted?:(tx:Prisma.TransactionClient,subject:InstagramSourceSubject)=>Promise<unknown>}){
  async function fenceConnection(tx:Prisma.TransactionClient,connectionId:string){
   const c=await tx.instagramManagementConnection.findUnique({where:{id:connectionId},select:{userId:true,workspaceId:true}});
   if(c)await tx.$queryRaw`SELECT id FROM workspace_members WHERE workspace_id=${c.workspaceId}::uuid AND user_id=${c.userId}::uuid FOR SHARE`;
@@ -73,6 +73,7 @@ export function createInstagramManagementReceptionStore({db,appId,enabled=false,
      if(existing&&actorId&&existing.actorId&&existing.actorId!==actorId)throw new HttpError(409,'Received sender identity changed');
      await tx.instagramInteractionComment.upsert({where:{connectionId_connectionVersion_providerId:key},create:{workspaceId:c.workspaceId,...key,mediaId:event.mediaId!,actorId:actorId??null,actorName:event.username,inbound:!actorId||![c.providerAccountId,c.providerUserId].includes(actorId),text:event.deleted?null:event.text,occurredAt,receivedAt:row.receivedAt,deleted:event.deleted},update:event.deleted?{deleted:true,text:null}:event.text===undefined?{}:{text:event.text,actorName:event.username}});
     }
+    if(event.deleted&&onDeleted)await onDeleted(tx,{workspaceId:c.workspaceId,platform:'instagram',appId,providerAssetId:c.providerAccountId,connectionId:c.id,connectionVersion:c.version,actorId,providerEventId:event.eventId,eventKind:event.field,occurredAt});
    },{timeout:15000});
   },
   async finishClaim(id:string,claimToken:string){if(!enabled)return;await db.instagramInteractionEvent.updateMany({where:{id,claimToken,status:'processing',connection:{appId}},data:{status:'processed',processedAt:new Date(),claimToken:null,leaseExpiresAt:null,payload:{processed:true}}});},

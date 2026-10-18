@@ -707,6 +707,7 @@ model FacebookManagementSubscription {
 model FacebookInteractionEvent {
   id String @id @default(uuid()) @db.Uuid
   managedPageId String @db.Uuid
+  connectionVersion Int?
   eventKey String
   payload Json
   status String @default("pending")
@@ -726,6 +727,7 @@ model FacebookInteractionEvent {
 model FacebookInteractionComment {
   id String @id @default(uuid()) @db.Uuid
   managedPageId String @db.Uuid
+  connectionVersion Int?
   providerId String
   postId String
   parentId String?
@@ -745,6 +747,7 @@ model FacebookInteractionComment {
 model FacebookInteractionThread {
   id String @id @default(uuid()) @db.Uuid
   managedPageId String @db.Uuid
+  connectionVersion Int?
   participantId String
   providerId String?
   participantName String?
@@ -760,6 +763,7 @@ model FacebookInteractionThread {
 model FacebookInteractionMessage {
   id String @id @default(uuid()) @db.Uuid
   managedPageId String @db.Uuid
+  connectionVersion Int?
   providerId String
   participantId String
   senderId String
@@ -778,6 +782,7 @@ model FacebookInteractionMessage {
 model FacebookInteractionSendAttempt {
   id String @id @default(uuid()) @db.Uuid
   managedPageId String @db.Uuid
+  connectionVersion Int?
   requestKey String @db.Uuid
   payloadHash String
   status String @default("pending")
