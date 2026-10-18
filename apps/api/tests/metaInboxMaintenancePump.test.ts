@@ -20,3 +20,18 @@ test('failedMaintenanceReleasesForBoundedRetryWithoutLeakingContent',async()=>{
  const store={claimMaintenance:async()=>({id:'job',confirmationCode:'receipt',claimToken:'claim'}),purgeSources:async()=>{throw Error('private customer text');},purgeDerived:async()=>{throw Error('must not run');},releaseMaintenance:async(_claim:unknown,_now:Date,error:boolean)=>{failed=error;return true;}};
  const pump=startMetaDeletionMaintenance({enabled:true,namespaces:[{platform:'instagram',appId:'456'}],store,schedule:((fn:()=>void)=>{tick=fn;return{unref(){}};}) as any,unschedule:()=>{}});tick();await pump.stop();assert.equal(failed,true);
 });
+
+test('idlePumpAdvancesTheAppReceiptCursorWithoutSpendingSourcePurgeBudget',async()=>{
+ let tick:()=>void=()=>{};const cursors:Array<string|undefined>=[],cursor='11111111-1111-4111-8111-111111111111';
+ const store={claimMaintenance:async()=>null,purgeSources:async()=>{throw Error('Idle pump must not purge');},purgeDerived:async()=>{throw Error('Idle pump must not purge');},releaseMaintenance:async()=>true,settleNextAppDeletion:async(_ns:unknown,after?:string)=>{cursors.push(after);return{cursor,completed:false};}};
+ const pump=startMetaDeletionMaintenance({enabled:true,namespaces:[{platform:'instagram',appId:'456'}],store,schedule:((fn:()=>void)=>{tick=fn;return{unref(){}};}) as any,unschedule:()=>{}});
+ tick();await new Promise(resolve=>setImmediate(resolve));tick();await pump.stop();assert.deepEqual(cursors,[undefined,cursor]);
+});
+
+test('expiryGetsReservedTicksWithoutStarvingEitherPlatformOrAddingAnotherBudget',async()=>{
+ let tick:()=>void=()=>{},expiry=0,purges=0;const claims:string[]=[];
+ const store={claimMaintenance:async(n:any)=>{claims.push(n.platform);return{id:'job',confirmationCode:'receipt',claimToken:'claim'};},purgeSources:async()=>{purges++;return{purged:50,sourcesComplete:false};},purgeDerived:async()=>{throw Error('No budget left');},releaseMaintenance:async()=>true,maintenance:async()=>{expiry++;return 50;}};
+ const pump=startMetaDeletionMaintenance({enabled:true,namespaces:[{platform:'facebook',appId:'123'},{platform:'instagram',appId:'456'}],store,schedule:((fn:()=>void)=>{tick=fn;return{unref(){}};}) as any,unschedule:()=>{}});
+ for(let i=0;i<8;i++){tick();await new Promise(resolve=>setImmediate(resolve));}await pump.stop();
+ assert.equal(expiry,2);assert.equal(purges,6);assert.deepEqual(claims,['facebook','instagram','facebook','instagram','facebook','instagram']);
+});

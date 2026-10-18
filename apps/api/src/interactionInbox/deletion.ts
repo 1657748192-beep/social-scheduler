@@ -287,6 +287,18 @@ export function createMetaInboxDeletion({db,hmacKey=deriveMetaDeletionKey(),encr
     return{purged:0,complete:true,blocked:null};
    },{timeout:15000});
   },
+  async settleNextAppDeletion(n:MetaDeletionNamespace,after?:string):Promise<{cursor:string|null;completed:boolean}>{
+   if(!['facebook','instagram'].includes(n.platform)||!/^\d{1,256}$/.test(n.appId)||after!==undefined&&!z.string().uuid().safeParse(after).success)throw new HttpError(400,'Invalid Meta settlement scope');
+   const where={platform:n.platform,appId:n.appId,status:'pending'};
+   let row=await db.metaInboxAppDeletionRequest.findFirst({where:{...where,...(after?{id:{gt:after}}:{})},orderBy:{id:'asc'},select:{id:true,confirmationCode:true}});
+   if(!row&&after)row=await db.metaInboxAppDeletionRequest.findFirst({where,orderBy:{id:'asc'},select:{id:true,confirmationCode:true}});
+   if(!row)return{cursor:null,completed:false};return{cursor:row.id,completed:await this.settleAppDeletion(row.confirmationCode)};
+  },
+  async statusForNamespace(n:MetaDeletionNamespace,code:string):Promise<'pending'|'completed'|null>{
+   if(!['facebook','instagram'].includes(n.platform)||!/^\d{1,256}$/.test(n.appId)||!/^[a-zA-Z0-9_-]{32,128}$/.test(code))return null;
+   const where={platform:n.platform,appId:n.appId,confirmationCode:code};
+   const row=await db.metaInboxDeletionRequest.findFirst({where,select:{status:true}})??await db.metaInboxAppDeletionRequest.findFirst({where,select:{status:true}});return row?row.status==='completed'?'completed':'pending':null;
+  },
   async status(code:string):Promise<'pending'|'completed'|null>{
    if(!/^[a-zA-Z0-9_-]{32,128}$/.test(code))return null;
    const row=await db.metaInboxDeletionRequest.findUnique({where:{confirmationCode:code},select:{status:true}})??await db.metaInboxAppDeletionRequest.findUnique({where:{confirmationCode:code},select:{status:true}});return row?row.status==='completed'?'completed':'pending':null;

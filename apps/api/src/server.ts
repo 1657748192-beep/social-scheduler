@@ -11,13 +11,19 @@ import {createInboxRetention} from './interactionInbox/retention';
 import {startInboxRetention} from './interactionInbox/sourceLifetime';
 import {getInstagramManagementRuntime} from './instagramManagement/defaultRuntime';
 import {startInstagramManagementPump} from './instagramManagement/receptionPump';
+import {getMetaInboxLifecycleRuntime} from './interactionInbox/lifecycleRuntime';
+import {startMetaDeletionMaintenance} from './interactionInbox/deletionMaintenance';
 
 const instagramRuntime=getInstagramManagementRuntime();
-const app = createApp({instagramManagement:instagramRuntime});
+const metaLifecycle=getMetaInboxLifecycleRuntime();
+const app = createApp({instagramManagement:instagramRuntime,metaLifecycle});
+const metaDeletionMaintenance=startMetaDeletionMaintenance({enabled:metaLifecycle.enabled,namespaces:metaLifecycle.namespaces,store:metaLifecycle.maintenanceStore});
 const instagramPump=startInstagramManagementPump({enabled:instagramRuntime.receptionEnabled,store:instagramRuntime.receptionStore});
 const uploadCleanup=startLocalUploadCleanup(localUploadRuntime);
 const facebookPump=startFacebookManagementPump({enabled:facebookManagementRuntime.enabled,store:facebookManagementRuntime.receptionStore});
-const inboxRetention=startInboxRetention(createInboxRetention({db:prisma}));
+// When the explicit lifecycle is enabled, expiry shares its fifty-entity ticks
+// and cannot race a second generic timer through an active deletion continuation.
+const inboxRetention=metaLifecycle.enabled?{stop:async()=>undefined}:startInboxRetention(createInboxRetention({db:prisma}));
 
 const server = createApiServer(app).listen(config.API_PORT, () => {
   console.log(`API listening on http://localhost:${config.API_PORT}`);
@@ -25,7 +31,7 @@ const server = createApiServer(app).listen(config.API_PORT, () => {
 
 async function shutdown() {
   console.log("Shutting down API");
-  await closeApiServer(server,async()=>{await Promise.all([uploadCleanup.stop(),facebookPump.stop(),instagramPump.stop(),inboxRetention.stop()]);},async () => {
+  await closeApiServer(server,async()=>{await Promise.all([uploadCleanup.stop(),facebookPump.stop(),instagramPump.stop(),inboxRetention.stop(),metaDeletionMaintenance.stop()]);},async () => {
     await prisma.$disconnect();
     localUploadRedis.disconnect();
     redis.disconnect();

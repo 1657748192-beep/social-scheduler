@@ -1,19 +1,27 @@
 import type {createMetaInboxDeletion} from './deletion';
 import type {MetaDeletionNamespace} from './metaDeletionRoutes';
-type Store=Pick<ReturnType<typeof createMetaInboxDeletion>,'claimMaintenance'|'releaseMaintenance'|'purgeSources'|'purgeDerived'>;
+type Store=Pick<ReturnType<typeof createMetaInboxDeletion>,'claimMaintenance'|'releaseMaintenance'|'purgeSources'|'purgeDerived'>&Partial<Pick<ReturnType<typeof createMetaInboxDeletion>,'settleNextAppDeletion'>>&{maintenance?:()=>Promise<number>};
 
 /** API-owned only: one leased request and at most fifty removals per tick. */
 export function startMetaDeletionMaintenance({enabled,namespaces,store,schedule=setInterval,unschedule=clearInterval,now=()=>new Date()}:{enabled:boolean;namespaces:MetaDeletionNamespace[];store:Store;schedule?:typeof setInterval;unschedule?:(timer:ReturnType<typeof setInterval>)=>void;now?:()=>Date}){
  if(!enabled)return{stop:async()=>undefined};
  if(!namespaces.length||namespaces.length>2||namespaces.some(n=>!['facebook','instagram'].includes(n.platform)||!/^\d{1,256}$/.test(n.appId)))throw Error('Meta maintenance configuration unavailable');
  const scopes=namespaces.map(n=>({...n}));
- let running:Promise<void>|null=null,stopped=false,nextScope=0;
+ const receiptCursors=new Map<string,string>();
+ let running:Promise<void>|null=null,stopped=false,nextScope=0,ticks=0;
  const tick=()=>{
   if(stopped||running)return;
-  const scope=scopes[nextScope];nextScope=(nextScope+1)%scopes.length;
   running=(async()=>{
    try{
-    const claim=await store.claimMaintenance(scope,now());if(!claim)return;
+    ticks=(ticks+1)%4;
+    if(store.maintenance&&ticks===0){const changed=await store.maintenance();if(!Number.isInteger(changed)||changed<0||changed>50)throw Error('Invalid maintenance budget');return;}
+    const scope=scopes[nextScope];nextScope=(nextScope+1)%scopes.length;
+    const claim=await store.claimMaintenance(scope,now());if(!claim){
+     // Settle one opaque parent only on an idle source tick, not in a public GET
+     // or in addition to the fifty-entity purge allowance. Rotate past unmapped jobs.
+     if(store.settleNextAppDeletion){const key=JSON.stringify(scope),result=await store.settleNextAppDeletion(scope,receiptCursors.get(key));if(result.cursor)receiptCursors.set(key,result.cursor);else receiptCursors.delete(key);}
+     return;
+    }
     let failed=false;
     try{
      const source=await store.purgeSources(claim.confirmationCode,50);

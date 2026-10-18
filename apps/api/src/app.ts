@@ -31,11 +31,13 @@ import {redis} from './redis';
 import type {InstagramManagementRuntime} from './instagramManagement/runtime';
 import {getInstagramManagementRuntime} from './instagramManagement/defaultRuntime';
 import {createInstagramManagementRouter} from './instagramManagement/routes';
+import {getMetaInboxLifecycleRuntime,type MetaInboxLifecycleRuntime} from './interactionInbox/lifecycleRuntime';
 
-export function createApp(options:{facebookManagement?:FacebookManagementRuntime;instagramManagement?:InstagramManagementRuntime}={}) {
+export function createApp(options:{facebookManagement?:FacebookManagementRuntime;instagramManagement?:InstagramManagementRuntime;metaLifecycle?:MetaInboxLifecycleRuntime}={}) {
   const app = express();
   const management=options.facebookManagement??facebookManagementRuntime;
   const instagram=options.instagramManagement??getInstagramManagementRuntime();
+  const lifecycle=options.metaLifecycle??getMetaInboxLifecycleRuntime();
 
   app.use(helmet());
   app.use(
@@ -44,6 +46,9 @@ export function createApp(options:{facebookManagement?:FacebookManagementRuntime
       credentials: true
     })
   );
+  // Parse only the explicit signed callback form before JSON/morgan. Callback
+  // bodies and opaque receipt URLs never enter the ordinary request logger.
+  for(const route of lifecycle.routes)app.use(route.prefix,route.router);
   if(management.enabled)app.use('/api/v1/webhooks/facebook',management.webhook);
   if(instagram.receptionEnabled)app.use('/api/v1/webhooks/instagram',instagram.webhook);
   app.use(removedMetaEngagement);
