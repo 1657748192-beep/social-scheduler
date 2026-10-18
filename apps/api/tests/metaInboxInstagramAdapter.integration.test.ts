@@ -4,11 +4,13 @@ import {createLiveInboxPolicy} from '../src/interactionInbox/livePolicy';
 import {createInstagramManagementAccess} from '../src/instagramManagement/access';
 import {createInstagramManagementEngagement} from '../src/instagramManagement/engagement';
 import {createInstagramInboxAdapter} from '../src/interactionInbox/adapters/instagram';
-async function setup(f:MetaInboxFixture,graph:any={},options:{now?:()=>Date;window?:number}={}){
+import {createMetaInboxDeletion} from '../src/interactionInbox/deletion';
+import {encryptToken,decryptToken} from '../src/utils/tokenCrypto';
+async function setup(f:MetaInboxFixture,graph:any={},options:{now?:()=>Date;window?:number;isDeleted?:any}={}){
  const scopes=['instagram_business_basic','instagram_business_manage_comments','instagram_business_manage_messages'];
  const policy=createLiveInboxPolicy([{workspaceId:f.adminCtx.workspaceId,platform:'instagram',appId:'456',providerAssetId:'100',readEnabled:true,sendEnabled:true,policy:{product:'synthetic-test-only',graphVersion:'v25.0',checkedAt:'2020-01-01T00:00:00Z',sources:['https://developers.facebook.com/docs/'],rawRetentionDays:7,contentRetentionDays:90,replyWindowMs:options.window??86400000,reviewed:true}}]);
  const access=createInstagramManagementAccess({db:f.db,appId:'456',policy,decrypt:v=>v,inspect:async()=>({appId:'456',providerAccountId:'100',scopes,expiresAt:new Date(Date.now()+86400000)})});
- const engagement=createInstagramManagementEngagement({db:f.db,access,policy,graph:(_asset:any,token:string)=>{assert.equal(token,'sealed:independent');return graph;},isDeleted:async()=>false,verifiedCommentLimit:1000,now:options.now});
+ const engagement=createInstagramManagementEngagement({db:f.db,access,policy,graph:(_asset:any,token:string)=>{assert.equal(token,'sealed:independent');return graph;},isDeleted:options.isDeleted??(async()=>false),verifiedCommentLimit:1000,now:options.now});
  const adapter=createInstagramInboxAdapter({db:f.db,access,engagement,policy});
  const asset=await access.resolve(f.adminCtx,f.instagramAccountIds[0],'messages.read');
  const message=await f.db.instagramInteractionMessage.create({data:{workspaceId:f.adminCtx.workspaceId,connectionId:f.instagramConnectionIds[0],connectionVersion:1,providerId:'mid-1',conversationId:'local:test-thread',actorId:'300',inbound:true,text:'Synthetic incoming',occurredAt:new Date()}});
@@ -84,4 +86,12 @@ test('verifiedBusinessUserAliasIsNotTreatedAsTheCustomer',async()=>withMetaInbox
  const thread={id:'alias-thread',participants:{data:[{id:'200'},{id:'300'}]}};
  const {adapter,asset}=await setup(f,{conversations:async()=>({items:[thread],nextCursor:null}),conversation:async()=>thread,messages:async()=>({items:[{id:'alias-mid',message:'Alias recipient',created_time:new Date().toISOString(),from:{id:'300'},to:{data:[{id:'200'}]}}],nextCursor:null})});
  const page=await adapter.list(asset,'messages',null,25);assert.equal(page.items.length,1);assert.equal(page.items[0].actorId,'300');assert.equal(page.items[0].inbound,true);
+}));
+test('graphReadAlreadyInFlightCannotRecreateDeletedSource',async()=>withMetaInboxFixture(async f=>{
+ const deletion=createMetaInboxDeletion({db:f.db,hmacKey:'synthetic-deletion-hmac-key-only',encrypt:encryptToken,decrypt:decryptToken});
+ let release!:()=>void,started!:()=>void;const gate=new Promise<void>(r=>release=r),waiting=new Promise<void>(r=>started=r),thread={id:'racing-thread',participants:{data:[{id:'100'},{id:'300'}]}};
+ const {adapter,asset}=await setup(f,{conversations:async()=>({items:[thread],nextCursor:null}),conversation:async()=>thread,messages:async()=>{started();await gate;return{items:[{id:'deleted-in-flight',message:'Must never be reinserted',created_time:new Date().toISOString(),from:{id:'300'},to:{data:[{id:'100'}]}}],nextCursor:null};}},{isDeleted:(tx:any,s:any)=>deletion.isDeleted(tx,s)});
+ const before=await f.publishingSnapshot(),read=adapter.list(asset,'messages',null,25);await waiting;
+ try{await deletion.markItem({workspaceId:f.adminCtx.workspaceId,platform:'instagram',appId:'456',providerAssetId:'100',connectionId:f.instagramConnectionIds[0],connectionVersion:1},'messages','deleted-in-flight');}finally{release();}
+ assert.equal((await read).items.length,0);assert.equal(await f.db.instagramInteractionMessage.count({where:{connectionId:f.instagramConnectionIds[0],providerId:'deleted-in-flight'}}),0);assert.deepEqual(await f.publishingSnapshot(),before);
 }));

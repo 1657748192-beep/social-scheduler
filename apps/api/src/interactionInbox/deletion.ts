@@ -1,10 +1,10 @@
-import {createHmac,randomBytes} from 'node:crypto';
+import {createHash,createHmac,randomBytes} from 'node:crypto';
 import type {PrismaClient,Prisma} from '@prisma/client';
 import {HttpError} from '../utils/errors';
 import {z} from 'zod';
 export type MetaDeletionAsset={workspaceId:string;platform:'facebook'|'instagram';appId:string;providerAssetId:string;connectionId:string;connectionVersion:number};
 export type MetaDeletionSubject=Omit<MetaDeletionAsset,'connectionId'>&{actorId?:string;providerEventId:string;eventKind?:'comments'|'messages';occurredAt:Date};
-export type MetaDeletionTarget={asset:MetaDeletionAsset;kind:'item'|'actor'|'asset';eventKind?:'comments'|'messages';subjectId?:string;phase:'pending'|'messages'|'comments'|'sources_done';rawAfter?:string};
+export type MetaDeletionTarget={asset:MetaDeletionAsset;kind:'item'|'actor'|'asset';eventKind?:'comments'|'messages';subjectId?:string;phase:'pending'|'messages'|'comments'|'sources_done';rawAfter?:string;sourceIds?:string[];activeCaseId?:string;cleanupCustomerId?:string;unmappedRaw?:boolean};
 type Deps={db:PrismaClient;hmacKey:string;encrypt:(value:string)=>string;decrypt:(value:string)=>string;now?:()=>Date};
 const validId=(v:unknown)=>typeof v==='string'&&v.length>0&&v.length<=256;
 /** Internal transactional admission only. Not a frontend-selected deletion API. */
@@ -33,10 +33,20 @@ export function createMetaInboxDeletion({db,hmacKey,encrypt,decrypt,now=()=>new 
   const row=await tx.metaInboxDeletionRequest.upsert({where:{requestKey},create:{...namespace(a),subjectKind:target.kind,subjectHash,reason,requestKey,confirmationCode:randomBytes(32).toString('base64url'),createdAt:at,nextAttemptAt:at,targetEncrypted:encrypt(JSON.stringify(target))},update:{}});
   return{confirmationCode:row.confirmationCode};
  }
+ function decode(request:{workspaceId:string;platform:string;appId:string;subjectKind:string;requestKey:string|null;targetEncrypted:string|null}){
+  let t:MetaDeletionTarget;
+  try{t=z.object({asset:z.object({workspaceId:z.string().uuid(),platform:z.enum(['facebook','instagram']),appId:z.string().regex(/^\d{1,256}$/),providerAssetId:z.string().regex(/^\d{1,256}$/),connectionId:z.string().uuid(),connectionVersion:z.number().int().positive()}),kind:z.enum(['item','actor','asset']),eventKind:z.enum(['comments','messages']).optional(),subjectId:z.string().min(1).max(256).optional(),phase:z.enum(['pending','messages','comments','sources_done']),rawAfter:z.string().uuid().optional(),sourceIds:z.array(z.string().uuid()).max(50).optional(),activeCaseId:z.string().uuid().optional(),cleanupCustomerId:z.string().uuid().optional(),unmappedRaw:z.boolean().optional()}).strict().parse(JSON.parse(decrypt(request.targetEncrypted!)));}catch{throw new HttpError(409,'Meta purge locator unavailable');}
+  const a=t.asset,parts=[t.eventKind??null,t.subjectId??null,a.connectionVersion];
+  if(a.platform!=='instagram'||request.workspaceId!==a.workspaceId||request.appId!==a.appId||request.platform!==a.platform||request.subjectKind!==t.kind||request.requestKey!==digest(a,'request',[t.kind,...parts])||t.kind==='item'&&(!t.eventKind||!t.subjectId)||t.kind==='actor'&&!t.subjectId)throw new HttpError(409,'Meta purge scope unavailable');return t;
+ }
  return{
   async markItem(a:MetaDeletionAsset,eventKind:'comments'|'messages',eventId:string){
    if(!['comments','messages'].includes(eventKind)||!validId(eventId))throw new HttpError(400,'Invalid Meta deletion target');
-   return db.$transaction(async tx=>{await connection(tx,a);const at=now();await marker(tx,a,'item',[eventKind,eventId],at);return queue(tx,{asset:a,kind:'item',eventKind,subjectId:eventId,phase:'pending'},'verified_content_deletion',at);});
+   return db.$transaction(async tx=>{
+    await connection(tx,a);const at=now(),where={workspaceId:a.workspaceId,connectionId:a.connectionId,connectionVersion:{lte:a.connectionVersion},providerId:eventId};
+    const sources=eventKind==='messages'?await tx.instagramInteractionMessage.findMany({where,take:51,select:{id:true}}):await tx.instagramInteractionComment.findMany({where,take:51,select:{id:true}});if(sources.length>50)throw new HttpError(409,'Meta deletion admission exceeds bounded source mapping');
+    await marker(tx,a,'item',[eventKind,eventId],at);return queue(tx,{asset:a,kind:'item',eventKind,subjectId:eventId,sourceIds:sources.map(v=>v.id),phase:'pending'},'verified_content_deletion',at);
+   });
   },
   async markActor(a:MetaDeletionAsset,actorId:string){
    if(!validId(actorId)||actorId===a.providerAssetId)throw new HttpError(400,'Invalid Meta actor deletion');
@@ -63,10 +73,7 @@ export function createMetaInboxDeletion({db,hmacKey,encrypt,decrypt,now=()=>new 
    return db.$transaction(async tx=>{
     await tx.$queryRaw`SELECT id FROM "MetaInboxDeletionRequest" WHERE "confirmationCode"=${code} FOR UPDATE`;
     const request=await tx.metaInboxDeletionRequest.findUnique({where:{confirmationCode:code}});if(!request?.targetEncrypted||request.status!=='pending')throw new HttpError(409,'Meta source purge unavailable');
-    let t:MetaDeletionTarget;
-    try{t=z.object({asset:z.object({workspaceId:z.string().uuid(),platform:z.enum(['facebook','instagram']),appId:z.string().regex(/^\d{1,256}$/),providerAssetId:z.string().regex(/^\d{1,256}$/),connectionId:z.string().uuid(),connectionVersion:z.number().int().positive()}),kind:z.enum(['item','actor','asset']),eventKind:z.enum(['comments','messages']).optional(),subjectId:z.string().min(1).max(256).optional(),phase:z.enum(['pending','messages','comments','sources_done']),rawAfter:z.string().uuid().optional()}).strict().parse(JSON.parse(decrypt(request.targetEncrypted)));}catch{throw new HttpError(409,'Meta purge locator unavailable');}
-    const a=t.asset,parts=[t.eventKind??null,t.subjectId??null,a.connectionVersion];
-    if(a.platform!=='instagram'||request.workspaceId!==a.workspaceId||request.appId!==a.appId||request.platform!==a.platform||request.subjectKind!==t.kind||request.requestKey!==digest(a,'request',[t.kind,...parts])||t.kind==='item'&&(!t.eventKind||!t.subjectId)||t.kind==='actor'&&!t.subjectId)throw new HttpError(409,'Meta purge scope unavailable');
+    const t=decode(request),a=t.asset;
     const where={workspaceId:a.workspaceId,connectionId:a.connectionId,connectionVersion:{lte:a.connectionVersion}};let purged=0;
     if(t.phase==='pending'){
      // Scan at most limit raw envelopes before removing their source mapping.
@@ -76,9 +83,12 @@ export function createMetaInboxDeletion({db,hmacKey,encrypt,decrypt,now=()=>new 
       const payload=row.payload as any;let field=payload?.field,eventId=payload?.eventId;
       try{const key=JSON.parse(row.eventKey);field??=key[0];eventId??=key[1];}catch{/* Legacy metadata is not treated as a verified actor mapping. */}
       let matches=t.kind==='asset'||t.kind==='item'&&field===t.eventKind&&eventId===t.subjectId||t.kind==='actor'&&(payload?.senderId===t.subjectId||payload?.recipientId===t.subjectId);
-      if(!matches&&t.kind==='actor'&&typeof eventId==='string'){
-       const sourceWhere={workspaceId:a.workspaceId,connectionId:a.connectionId,connectionVersion:row.connectionVersion,providerId:eventId,actorId:t.subjectId};
-       matches=!!(field==='messages'?await tx.instagramInteractionMessage.findFirst({where:sourceWhere,select:{id:true}}):field==='comments'?await tx.instagramInteractionComment.findFirst({where:sourceWhere,select:{id:true}}):null);
+      if(!matches&&t.kind==='actor'){
+       const sourceWhere={workspaceId:a.workspaceId,connectionId:a.connectionId,connectionVersion:row.connectionVersion,providerId:typeof eventId==='string'?eventId:'__unmapped__'};
+       const source=field==='messages'?await tx.instagramInteractionMessage.findFirst({where:sourceWhere,select:{actorId:true}}):field==='comments'?await tx.instagramInteractionComment.findFirst({where:sourceWhere,select:{actorId:true}}):null;
+       matches=source?.actorId===t.subjectId;
+       const actorKnown=validId(source?.actorId)||(field==='comments'?validId(payload?.senderId):field==='messages'&&validId(payload?.senderId)&&validId(payload?.recipientId));
+       if(!actorKnown)t.unmappedRaw=true;
       }
       if(matches)ids.push(row.id);
      }
@@ -89,7 +99,13 @@ export function createMetaInboxDeletion({db,hmacKey,encrypt,decrypt,now=()=>new 
      if(t.kind==='item'&&t.eventKind!==kind)t.phase=kind==='messages'?'comments':'sources_done';
      else{
       const scoped={...where,...(t.kind==='item'?{providerId:t.subjectId}:t.kind==='actor'?{actorId:t.subjectId}:{})};
-      const rows=kind==='messages'?await tx.instagramInteractionMessage.findMany({where:scoped,orderBy:{id:'asc'},take:limit,select:{id:true}}):await tx.instagramInteractionComment.findMany({where:scoped,orderBy:{id:'asc'},take:limit,select:{id:true}});
+      const rows=kind==='messages'?await tx.instagramInteractionMessage.findMany({where:scoped,orderBy:{id:'asc'},take:limit,select:{id:true,providerId:true}}):await tx.instagramInteractionComment.findMany({where:scoped,orderBy:{id:'asc'},take:limit,select:{id:true,providerId:true}});
+      // Forget customer/response digests, not the fact a request key was consumed.
+      // Comment source IDs must remain available until their attempt metadata is scrubbed.
+      const targetHash=(type:string,id:string)=>createHash('sha256').update(JSON.stringify([type,id])).digest('hex');
+      const hashes=kind==='messages'&&t.kind==='actor'?[targetHash('message',t.subjectId!)]:kind==='comments'?(t.kind==='item'?[targetHash('comment',t.subjectId!)]:rows.map(v=>targetHash('comment',v.providerId))):[];
+      const attempts=await tx.instagramInteractionSendAttempt.findMany({where:{...where,targetHash:t.kind==='asset'?{not:'deleted'}:{in:hashes}},take:limit,select:{id:true}});
+      if(attempts.length){purged=(await tx.instagramInteractionSendAttempt.updateMany({where:{...where,id:{in:attempts.map(v=>v.id)}},data:{targetHash:'deleted',payloadHash:'deleted',providerId:null,status:'unknown'}})).count;await tx.metaInboxDeletionRequest.update({where:{id:request.id},data:{targetEncrypted:encrypt(JSON.stringify(t))}});return{purged,sourcesComplete:false};}
       const ids=rows.map(v=>v.id);purged=kind==='messages'?(await tx.instagramInteractionMessage.deleteMany({where:{...scoped,id:{in:ids}}})).count:(await tx.instagramInteractionComment.deleteMany({where:{...scoped,id:{in:ids}}})).count;
       if(rows.length<limit)t.phase=kind==='messages'?'comments':'sources_done';
      }
@@ -98,6 +114,66 @@ export function createMetaInboxDeletion({db,hmacKey,encrypt,decrypt,now=()=>new 
     // Derived identities, notes, cases and receipts are a separate required stage.
     // Never publish a completed receipt merely because source bodies were removed.
     return{purged,sourcesComplete:t.phase==='sources_done'};
+   },{timeout:15000});
+  },
+  async purgeDerived(code:string,limit:number):Promise<{purged:number;complete:boolean;blocked:string|null}>{
+   if(!Number.isInteger(limit)||limit<1||limit>50||!/^[a-zA-Z0-9_-]{32,128}$/.test(code))throw new HttpError(400,'Invalid Meta derived purge');
+   const peek=await db.metaInboxDeletionRequest.findUnique({where:{confirmationCode:code}});if(!peek)throw new HttpError(404,'Meta deletion unavailable');if(peek.status==='completed')return{purged:0,complete:true,blocked:null};const initial=decode(peek);
+   return db.$transaction(async tx=>{
+    // Same connection -> request lock order as admission; no provider calls here.
+    await tx.$queryRaw`SELECT id FROM "InstagramManagementConnection" WHERE id=${initial.asset.connectionId}::uuid FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM "MetaInboxDeletionRequest" WHERE "confirmationCode"=${code} FOR UPDATE`;
+    const request=await tx.metaInboxDeletionRequest.findUniqueOrThrow({where:{confirmationCode:code}});if(request.status==='completed')return{purged:0,complete:true,blocked:null};if(request.status!=='pending')throw new HttpError(409,'Meta deletion changed');const t=decode(request),a=t.asset;
+    if(t.phase!=='sources_done')throw new HttpError(409,'Meta source purge not complete');
+    const ia=await tx.interactionAsset.findFirst({where:{workspaceId:a.workspaceId,canonicalKey:JSON.stringify([a.platform,a.appId,a.providerAssetId]),platform:a.platform,appNamespace:a.appId,providerAssetId:a.providerAssetId,instagramConnectionId:a.connectionId}});
+    if(!ia)return{purged:0,complete:false,blocked:'asset_scope_unavailable'};
+    await tx.$queryRaw`SELECT id FROM "InteractionAsset" WHERE id=${ia.id}::uuid FOR UPDATE`;
+    const result=async(purged=0,blocked:string|null=null)=>{await tx.metaInboxDeletionRequest.update({where:{id:request.id},data:{targetEncrypted:encrypt(JSON.stringify(t))}});return{purged,complete:false,blocked};};
+    const oldSource:Prisma.InteractionItemWhereInput={workspaceId:a.workspaceId,assetId:ia.id,platform:'instagram',AND:[{sourceRef:{path:['platform'],equals:'instagram'}},{sourceRef:{path:['connectionId'],equals:a.connectionId}},{sourceRef:{path:['connectionVersion'],lte:a.connectionVersion}}]};
+    const rootSource:Prisma.InteractionCaseWhereInput={AND:[{sourceRef:{path:['connectionId'],equals:a.connectionId}},{sourceRef:{path:['connectionVersion'],lte:a.connectionVersion}}]};
+    let scope:Prisma.InteractionCaseWhereInput={};
+    if(t.kind==='item')scope={kind:t.eventKind,OR:[{items:{some:{...oldSource,providerEventId:t.subjectId}}},...(t.eventKind==='comments'?[{sourceRef:{path:['commentId'],equals:t.subjectId!}}]:[]),...(t.sourceIds??[]).map(id=>({sourceRef:{path:['sourceRecordId'],equals:id}}))]};
+    if(t.kind==='actor')scope={customer:{is:{identities:{some:{workspaceId:a.workspaceId,assetId:ia.id,providerActorId:t.subjectId}}}},OR:[{kind:'comments'},{sourceRef:{path:['participantId'],equals:t.subjectId!}}]};
+    const eligible:Prisma.InteractionCaseWhereInput={workspaceId:a.workspaceId,assetId:ia.id,AND:[scope,{OR:[rootSource,{items:{some:oldSource}}]}]};
+    const c=t.activeCaseId?await tx.interactionCase.findFirst({where:{id:t.activeCaseId,workspaceId:a.workspaceId,assetId:ia.id}}):await tx.interactionCase.findFirst({where:eligible,orderBy:{id:'asc'}});
+    if(c){
+     t.activeCaseId=c.id;await tx.$queryRaw`SELECT id FROM "InteractionCase" WHERE id=${c.id}::uuid FOR UPDATE`;
+     if(t.kind==='actor'&&(!c.customerId||await tx.interactionIdentity.count({where:{workspaceId:a.workspaceId,customerId:c.customerId,assetId:ia.id,providerActorId:{not:t.subjectId}}})))return result(0,'ambiguous_case_scope');
+     const items=await tx.interactionItem.findMany({where:{...oldSource,caseId:c.id,...(t.kind==='item'?{providerEventId:t.subjectId}:{})},take:limit,select:{id:true}});
+     if(items.length)return result((await tx.interactionItem.deleteMany({where:{workspaceId:a.workspaceId,assetId:ia.id,caseId:c.id,id:{in:items.map(v=>v.id)}}})).count);
+     const receipts=await tx.readReceipt.findMany({where:{workspaceId:a.workspaceId,caseId:c.id},take:limit,select:{id:true}});if(receipts.length)return result((await tx.readReceipt.deleteMany({where:{workspaceId:a.workspaceId,caseId:c.id,id:{in:receipts.map(v=>v.id)}}})).count);
+     const remaining=await tx.interactionItem.findFirst({where:{workspaceId:a.workspaceId,assetId:ia.id,caseId:c.id,deleted:false},orderBy:[{occurredAt:'desc'},{id:'desc'}]});
+     if(!remaining||t.kind!=='item'){
+      const tags=await tx.interactionCaseTag.findMany({where:{workspaceId:a.workspaceId,caseId:c.id,...(remaining?{createdAt:{lte:request.createdAt}}:{})},take:limit,select:{id:true}});if(tags.length)return result((await tx.interactionCaseTag.deleteMany({where:{workspaceId:a.workspaceId,caseId:c.id,id:{in:tags.map(v=>v.id)}}})).count);
+     }
+     delete t.activeCaseId;
+     if(remaining){const inbound=await tx.interactionItem.findFirst({where:{workspaceId:a.workspaceId,assetId:ia.id,caseId:c.id,direction:'inbound',deleted:false},orderBy:[{occurredAt:'desc'},{id:'desc'}]});await tx.interactionCase.update({where:{id:c.id},data:{sourceRef:remaining.sourceRef as Prisma.InputJsonValue,lastInboundAt:inbound?.occurredAt??null,lastInboundKey:inbound?.providerEventId??null,version:{increment:1}}});return result();}
+     const removed=await tx.interactionCase.deleteMany({where:{workspaceId:a.workspaceId,assetId:ia.id,id:c.id,items:{none:{}},receipts:{none:{}},tags:{none:{}}}});if(!removed.count)return result(0,'case_scope_changed');return result(removed.count);
+    }
+    delete t.activeCaseId;
+    if(t.cleanupCustomerId){
+     const id=t.cleanupCustomerId;delete t.cleanupCustomerId;
+     const removed=await tx.interactionCustomer.deleteMany({where:{id,workspaceId:a.workspaceId,identities:{none:{}},cases:{none:{}},notes:{none:{}},tags:{none:{}}}});return result(removed.count);
+    }
+    if(t.kind!=='item'){
+     const identity=await tx.interactionIdentity.findFirst({where:{workspaceId:a.workspaceId,assetId:ia.id,platform:a.platform,appNamespace:a.appId,createdAt:{lte:request.createdAt},...(t.kind==='actor'?{providerActorId:t.subjectId}:{})},orderBy:{id:'asc'}});
+     if(identity){
+      await tx.$queryRaw`SELECT id FROM "InteractionCustomer" WHERE id=${identity.customerId}::uuid FOR UPDATE`;
+      if(await tx.interactionIdentity.count({where:{workspaceId:a.workspaceId,customerId:identity.customerId,assetId:{not:ia.id}}})||await tx.interactionCase.count({where:{workspaceId:a.workspaceId,customerId:identity.customerId,assetId:{not:ia.id}}}))return result(0,'shared_customer_scope');
+      if(await tx.interactionCase.count({where:{workspaceId:a.workspaceId,customerId:identity.customerId}})||await tx.customerNote.count({where:{workspaceId:a.workspaceId,customerId:identity.customerId,createdAt:{gt:request.createdAt}}})||await tx.interactionCustomerTag.count({where:{workspaceId:a.workspaceId,customerId:identity.customerId,createdAt:{gt:request.createdAt}}}))return result(0,'newer_scope_present');
+      const notes=await tx.customerNote.findMany({where:{workspaceId:a.workspaceId,customerId:identity.customerId},take:limit,select:{id:true}});if(notes.length)return result((await tx.customerNote.deleteMany({where:{workspaceId:a.workspaceId,customerId:identity.customerId,id:{in:notes.map(v=>v.id)}}})).count);
+      const tags=await tx.interactionCustomerTag.findMany({where:{workspaceId:a.workspaceId,customerId:identity.customerId},take:limit,select:{id:true}});if(tags.length)return result((await tx.interactionCustomerTag.deleteMany({where:{workspaceId:a.workspaceId,customerId:identity.customerId,id:{in:tags.map(v=>v.id)}}})).count);
+      const removed=await tx.interactionIdentity.deleteMany({where:{id:identity.id,workspaceId:a.workspaceId,assetId:ia.id}});t.cleanupCustomerId=identity.customerId;return result(removed.count);
+     }
+    }
+    if(ia.connectionVersion<=a.connectionVersion){const syncs=await tx.interactionSyncState.findMany({where:{workspaceId:a.workspaceId,assetId:ia.id},take:limit,select:{id:true}});if(syncs.length)return result((await tx.interactionSyncState.deleteMany({where:{workspaceId:a.workspaceId,assetId:ia.id,id:{in:syncs.map(v=>v.id)}}})).count);}
+    const sendScope={workspaceId:a.workspaceId,assetId:ia.id,createdAt:{lte:request.createdAt},targetHash:{not:'deleted'}};
+    const genericSends=await tx.interactionSendAttempt.findMany({where:sendScope,take:limit,select:{id:true}});
+    if(genericSends.length){if(t.kind!=='asset')return result(0,'unmapped_send_scope');return result((await tx.interactionSendAttempt.updateMany({where:{...sendScope,id:{in:genericSends.map(v=>v.id)}},data:{targetHash:'deleted',payloadHash:'deleted',providerId:null,status:'unknown'}})).count);}
+    if(t.unmappedRaw)return result(0,'raw_scope_unavailable');
+    if(t.kind==='asset')await tx.interactionAsset.updateMany({where:{workspaceId:a.workspaceId,id:ia.id,connectionVersion:{lte:a.connectionVersion}},data:{active:false}});
+    await tx.metaInboxDeletionRequest.update({where:{id:request.id},data:{status:'completed',completedAt:now(),targetEncrypted:null,claimToken:null,leaseExpiresAt:null}});
+    return{purged:0,complete:true,blocked:null};
    },{timeout:15000});
   },
   async status(code:string):Promise<'pending'|'completed'|null>{
