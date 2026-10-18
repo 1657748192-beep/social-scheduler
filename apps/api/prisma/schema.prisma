@@ -1257,6 +1257,10 @@ model MetaInboxDeletionRequest {
   appId String
   subjectKind String
   subjectHash String
+  targetEncrypted String?
+  requestKey String? @unique
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now())
   reason String
   status String @default("pending")
   confirmationCode String @unique

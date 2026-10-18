@@ -4,4 +4,4 @@ export type InstagramGrantInspection={appId:string;providerAccountId:string;scop
 declare const verifiedInstagramEvent:unique symbol;
 export type VerifiedInstagramEvent={accountId:string;field:'comments'|'messages';eventId:string;senderId?:string;recipientId?:string;mediaId?:string;text?:string;username?:string;timestamp:number;isEcho:boolean;deleted:boolean;readonly [verifiedInstagramEvent]:true};
 export type InstagramEventClaim={id:string;workspaceId:string;connectionId:string;connectionVersion:number;claimToken:string;payload:unknown};
-export type InstagramSourceSubject={workspaceId:string;platform:'instagram';appId:string;providerAssetId:string;actorId?:string;providerEventId:string;occurredAt:Date;connectionVersion:number};
+export type InstagramSourceSubject={workspaceId:string;platform:'instagram';appId:string;providerAssetId:string;actorId?:string;providerEventId:string;eventKind:'comments'|'messages';occurredAt:Date;connectionVersion:number};

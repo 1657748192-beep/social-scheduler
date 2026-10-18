@@ -45,7 +45,7 @@ export function createInstagramManagementEngagement({db,access,policy,graph,isDe
   const where={workspaceId:a.ctx.workspaceId,connectionId:s.connectionId,connectionVersion:a.connectionVersion,deleted:false,...(s.sourceRecordId?{id:s.sourceRecordId}:{})};
   const row=s.conversationId?await tx.instagramInteractionMessage.findFirst({where:{...where,conversationId:s.conversationId,actorId:s.participantId??'__missing__'}}):s.commentId&&s.mediaId?await tx.instagramInteractionComment.findFirst({where:{...where,providerId:s.commentId,mediaId:s.mediaId}}):null;
   if(!row||row.receivedAt<new Date(now().getTime()-evidence(a,'read').contentRetentionDays*86400000))throw new HttpError(404,'Instagram content unavailable');
-  if(await isDeleted(tx,{workspaceId:a.ctx.workspaceId,platform:'instagram',appId:a.appNamespace,providerAssetId:a.providerAssetId,actorId:row.actorId??undefined,providerEventId:row.providerId,occurredAt:row.occurredAt,connectionVersion:a.connectionVersion}))throw new HttpError(404,'Instagram content deleted');return row;
+  if(await isDeleted(tx,{workspaceId:a.ctx.workspaceId,platform:'instagram',appId:a.appNamespace,providerAssetId:a.providerAssetId,actorId:row.actorId??undefined,providerEventId:row.providerId,eventKind:s.conversationId?'messages':'comments',occurredAt:row.occurredAt,connectionVersion:a.connectionVersion}))throw new HttpError(404,'Instagram content deleted');return row;
  }
  async function remoteTarget(a:ResolvedAsset,s:InstagramInboxSource,g:InstagramManagementGraph){
   if(s.conversationId&&!s.conversationId.startsWith('local:')){
@@ -101,13 +101,13 @@ export function createInstagramManagementEngagement({db,access,policy,graph,isDe
        const inbound=!own.includes(sender)&&to.some((v:string)=>own.includes(v)),actorId=inbound?sender:own.includes(sender)?to.find((v:string)=>!own.includes(v)):undefined;
        const participants=(parent as any).participants?.data?.map((v:any)=>v.id)??[];
        if(!actorId||!participants.includes(actorId)||!participants.some((v:string)=>own.includes(v))||own.includes(actorId))throw new HttpError(403,'Instagram message ownership unavailable');
-       if(await isDeleted(tx,{workspaceId:conn.workspaceId,platform:'instagram',appId:conn.appId,providerAssetId:conn.providerAccountId,actorId,providerEventId:raw.id,occurredAt,connectionVersion:conn.version}))continue;
+       if(await isDeleted(tx,{workspaceId:conn.workspaceId,platform:'instagram',appId:conn.appId,providerAssetId:conn.providerAccountId,actorId,providerEventId:raw.id,eventKind:'messages',occurredAt,connectionVersion:conn.version}))continue;
        const old=await tx.instagramInteractionMessage.findUnique({where:{connectionId_connectionVersion_providerId:key}});
        if(old?.deleted)continue;if(old&&(old.actorId!==actorId||old.conversationId!==parent.id&&!old.conversationId.startsWith('local:')))throw new HttpError(409,'Instagram message identity changed');
        const row=await tx.instagramInteractionMessage.upsert({where:{connectionId_connectionVersion_providerId:key},create:{workspaceId:conn.workspaceId,...key,conversationId:parent.id,actorId,inbound,text:raw.message,occurredAt,receivedAt:occurredAt},update:raw.message===undefined?{}:{text:raw.message}});items.push(map(a,row,'messages'));
       }else{
        const actorId=raw.from?.id;if(typeof actorId!=='string'||!actorId)throw new HttpError(502,'Instagram comment actor unavailable');
-       if(await isDeleted(tx,{workspaceId:conn.workspaceId,platform:'instagram',appId:conn.appId,providerAssetId:conn.providerAccountId,actorId,providerEventId:raw.id,occurredAt,connectionVersion:conn.version}))continue;
+       if(await isDeleted(tx,{workspaceId:conn.workspaceId,platform:'instagram',appId:conn.appId,providerAssetId:conn.providerAccountId,actorId,providerEventId:raw.id,eventKind:'comments',occurredAt,connectionVersion:conn.version}))continue;
        const old=await tx.instagramInteractionComment.findUnique({where:{connectionId_connectionVersion_providerId:key}});if(old?.deleted)continue;if(old&&(old.mediaId!==parent.id||old.actorId!==actorId))throw new HttpError(409,'Instagram comment identity changed');
        const row=await tx.instagramInteractionComment.upsert({where:{connectionId_connectionVersion_providerId:key},create:{workspaceId:conn.workspaceId,...key,mediaId:parent.id,actorId,actorName:raw.username,inbound:!own.includes(actorId),text:raw.text,occurredAt,receivedAt:occurredAt,parentId:raw.parent_id},update:raw.text===undefined?{}:{text:raw.text,actorName:raw.username}});items.push(map(a,row,'comments'));
       }

@@ -45,3 +45,8 @@ test('sameProviderEventDifferentAppIsDistinct',async()=>withMetaInboxFixture(asy
  assert.equal(await db.instagramInteractionMessage.count({where:{workspaceId,providerId:'same-id'}}),2);
  assert.deepEqual(await f.publishingSnapshot(),before);
 }));
+test('deletionLocatorIsDurableWithoutPlaintextSubjectInAudit',async()=>withMetaInboxFixture(async f=>{
+ const before=await f.publishingSnapshot();
+ const row=await (f.db.metaInboxDeletionRequest as any).create({data:{workspaceId:f.adminCtx.workspaceId,platform:'instagram',appId:'456',subjectKind:'item',subjectHash:'synthetic-hash',reason:'verified_content_deletion',confirmationCode:randomUUID(),targetEncrypted:'sealed:synthetic-locator',requestKey:randomUUID()}});
+ const saved=await (f.db.metaInboxDeletionRequest as any).findUniqueOrThrow({where:{id:row.id}});assert.equal(saved.targetEncrypted,'sealed:synthetic-locator');assert.equal(saved.attempts,0);assert.ok(saved.nextAttemptAt instanceof Date);assert.deepEqual(await f.publishingSnapshot(),before);
+}));
