@@ -1,6 +1,7 @@
 import type {Prisma,PrismaClient,FacebookManagementOAuthState} from '@prisma/client';
 import type {ManagementContext} from './types';
 import {LOGIN_SESSION_MAX_AGE_MS} from '../utils/sessionLifetime';
+import {createMetaGrantFence} from '../interactionInbox/grantFence';
 
 export type ManagementGrant={appId:string;providerUserId:string;userToken:string;scopes:string[];expiresAt:Date|null;pages:Array<{
   pageId:string;name:string;pageToken:string|null;tasks:string[];scopes:string[];expiresAt:Date|null;profileUrl:string|null;avatarUrl:string|null;
@@ -22,6 +23,7 @@ async function authorized(tx:Prisma.TransactionClient,ctx:ManagementContext,now:
   if(!session||!member)throw new ManagementAuthorizationError();
 }
 export function createFacebookManagementStore(db:PrismaClient,encrypt:(value:string)=>string){
+  const grantFence=createMetaGrantFence();
   return {
     async createState(input:ManagementContext&{appId:string;state:string;callbackUrl:string;connectionId?:string;now?:Date}){
       const now=input.now??new Date();
@@ -45,18 +47,21 @@ export function createFacebookManagementStore(db:PrismaClient,encrypt:(value:str
       if(grant.expiresAt&&grant.expiresAt<=now)throw new ManagementAuthorizationError();
       for(const p of grant.pages){if(!/^\d{1,256}$/.test(p.pageId)||!p.name.trim()||(p.expiresAt&&p.expiresAt<=now))throw new ManagementAuthorizationError();}
       try{return await db.$transaction(async tx=>{
+        // Match callback admission's subject-first lock order, including first grants.
+        const barrier=await grantFence.lockAndRead(tx,{platform:'facebook',appId:grant.appId},grant.providerUserId);
         const state=await tx.facebookManagementOAuthState.findFirst({where:{id:input.id,state:input.state,consumedAt:{not:null},completedAt:null,expiresAt:{gt:now}}});
         if(!state||state.appId!==grant.appId)return null;
+        if(barrier&&(!state.createdAt||state.createdAt<=barrier.cutoff))throw new ManagementAuthorizationError();
         await authorized(tx,state,now);
         const claimed=await tx.facebookManagementOAuthState.updateMany({where:{id:state.id,completedAt:null},data:{completedAt:now}});
         if(claimed.count!==1)return null;
         let connectionId=state.connectionId;
         if(connectionId){
-          const changed=await tx.facebookManagementConnection.updateMany({where:{id:connectionId,appId:state.appId,userId:state.userId,workspaceId:state.workspaceId,status:'active',version:state.connectionVersion!,providerUserId:grant.providerUserId},data:{userTokenEncrypted:encrypt(grant.userToken),scopes:grant.scopes,expiresAt:grant.expiresAt,version:{increment:1},directoryReadAt:null}});
+          const changed=await tx.facebookManagementConnection.updateMany({where:{id:connectionId,appId:state.appId,userId:state.userId,workspaceId:state.workspaceId,status:'active',version:state.connectionVersion!,providerUserId:grant.providerUserId},data:{userTokenEncrypted:encrypt(grant.userToken),scopes:grant.scopes,expiresAt:grant.expiresAt,version:{increment:1},directoryReadAt:null,authorizedAt:now,authorizationStartedAt:state.createdAt}});
           if(changed.count!==1)return null;
           await tx.facebookManagedPage.updateMany({where:{connectionId},data:{active:false,pageTokenEncrypted:null,notificationsEnabled:false}});
         }else{
-          const connection=await tx.facebookManagementConnection.create({data:{appId:state.appId,userId:state.userId,workspaceId:state.workspaceId,providerUserId:grant.providerUserId,userTokenEncrypted:encrypt(grant.userToken),scopes:grant.scopes,expiresAt:grant.expiresAt}});
+          const connection=await tx.facebookManagementConnection.create({data:{appId:state.appId,userId:state.userId,workspaceId:state.workspaceId,providerUserId:grant.providerUserId,userTokenEncrypted:encrypt(grant.userToken),scopes:grant.scopes,expiresAt:grant.expiresAt,authorizedAt:now,authorizationStartedAt:state.createdAt}});
           connectionId=connection.id;
         }
         for(const p of grant.pages){

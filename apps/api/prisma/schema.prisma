@@ -611,12 +611,15 @@ model FacebookManagementConnection {
   status String @default("active")
   version Int @default(1)
   directoryReadAt DateTime?
+  authorizedAt DateTime?
+  authorizationStartedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   workspace Workspace @relation(fields:[workspaceId],references:[id],onDelete:Cascade)
   user User @relation(fields:[userId],references:[id],onDelete:Cascade)
   pages FacebookManagedPage[]
   @@index([workspaceId,status])
+  @@index([appId,providerUserId])
   @@map("facebook_management_connections")
 }
 
@@ -671,6 +674,7 @@ model FacebookManagementOAuthState {
   expiresAt DateTime
   consumedAt DateTime?
   completedAt DateTime?
+  createdAt DateTime? @default(now())
   user User @relation(fields:[userId],references:[id],onDelete:Cascade)
   workspace Workspace @relation(fields:[workspaceId],references:[id],onDelete:Cascade)
   @@index([expiresAt])

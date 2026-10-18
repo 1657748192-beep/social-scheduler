@@ -85,7 +85,7 @@ export function createMetaInboxDeletion({db,hmacKey=deriveMetaDeletionKey(),encr
   },
   async requestUserDeletion(n:MetaDeletionNamespace,proof:VerifiedMetaDeletionProof,reason:'data_deletion'|'deauthorization'){
    const verified=requireVerifiedMetaDeletionProof(proof),at=now();
-   if(n.platform!=='instagram'||!/^\d{1,256}$/.test(n.appId)||!['data_deletion','deauthorization'].includes(reason))throw new HttpError(409,'Meta app deletion mapping unavailable');
+   if(!['facebook','instagram'].includes(n.platform)||!/^\d{1,256}$/.test(n.appId)||!['data_deletion','deauthorization'].includes(reason))throw new HttpError(409,'Meta app deletion mapping unavailable');
    const subjectHash=grantFence.subjectHash(n,verified.userId);
    const requestKey=createHmac('sha256',hmacKey).update(JSON.stringify(['app-request',subjectHash,verified.issuedAt,reason])).digest('hex');
    return db.$transaction(async tx=>{
@@ -94,10 +94,29 @@ export function createMetaInboxDeletion({db,hmacKey=deriveMetaDeletionKey(),encr
     await grantFence.advance(tx,n,verified.userId,new Date((verified.issuedAt+1)*1000-1));
     const existing=await tx.metaInboxAppDeletionRequest.findUnique({where:{requestKey}});if(existing)return{confirmationCode:existing.confirmationCode};
     const where={platform:'instagram' as const,appId:n.appId,providerUserId:verified.userId};
-    const candidates=await tx.instagramManagementConnection.findMany({where,orderBy:{id:'asc'},take:51,select:{id:true}});
+    const candidates=n.platform==='instagram'?await tx.instagramManagementConnection.findMany({where,orderBy:{id:'asc'},take:51,select:{id:true}}):await tx.facebookManagementConnection.findMany({where:{appId:n.appId,providerUserId:verified.userId},orderBy:{id:'asc'},take:51,select:{id:true}});
     if(candidates.length>50)throw new HttpError(409,'Meta app deletion mapping exceeds bounded admission');
     const targets:Array<{id:string;workspaceId:string}>=[];let unresolved=candidates.length===0;
     for(const candidate of candidates){
+     if(n.platform==='facebook'){
+      await tx.$queryRaw`SELECT id FROM facebook_management_connections WHERE id=${candidate.id}::uuid FOR UPDATE`;
+      const c=await tx.facebookManagementConnection.findFirst({where:{id:candidate.id,appId:n.appId,providerUserId:verified.userId}});
+      if(!c?.authorizationStartedAt||c.authorizationStartedAt.getTime()>=verified.issuedAt*1000){unresolved=true;continue;}
+      // Each Page is a separate asset. Do not infer membership from publishing bindings.
+      const pages=await tx.facebookManagedPage.findMany({where:{connectionId:c.id},orderBy:{id:'asc'},take:51,select:{id:true,pageId:true}});
+      if(pages.length+targets.length>50)throw new HttpError(409,'Meta app deletion mapping exceeds bounded admission');
+      if(!pages.length)unresolved=true;
+      await tx.facebookManagementConnection.update({where:{id:c.id},data:{status:'disconnected',userTokenEncrypted:null,version:{increment:1}}});
+      for(const page of pages){
+       await tx.$queryRaw`SELECT id FROM facebook_managed_pages WHERE id=${page.id}::uuid FOR UPDATE`;
+       const a:MetaDeletionAsset={workspaceId:c.workspaceId,platform:'facebook',appId:c.appId,providerAssetId:page.pageId,connectionId:c.id,connectionVersion:c.version};
+       await tx.facebookManagedPage.update({where:{id:page.id},data:{active:false,pageTokenEncrypted:null,notificationsEnabled:false}});
+       await marker(tx,a,'asset',['connection',a.connectionId,'version',a.connectionVersion],at);await marker(tx,a,'asset',['cutoff'],at,true);
+       const queued=await queue(tx,{asset:a,kind:'asset',phase:'pending'},reason,at);
+       targets.push(await tx.metaInboxDeletionRequest.findUniqueOrThrow({where:{confirmationCode:queued.confirmationCode},select:{id:true,workspaceId:true}}));
+      }
+      continue;
+     }
      await tx.$queryRaw`SELECT id FROM "InstagramManagementConnection" WHERE id=${candidate.id}::uuid FOR UPDATE`;
      const c=await tx.instagramManagementConnection.findFirst({where:{...where,id:candidate.id}});
      // updatedAt is not consent time; unknown legacy provenance is not authority
