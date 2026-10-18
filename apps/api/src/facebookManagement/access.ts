@@ -32,6 +32,12 @@ export function createFacebookPageAccess(deps:{db:PrismaClient;decrypt:(v:string
     if(inspection.pageId!==page.pageId||inspection.expiresAt&&new Date(inspection.expiresAt)<=new Date())throw new FacebookPageAccessError();
     const scopes=inspection.scopes.filter(scope=>!inspection.granularScopes.some(g=>g.scope===scope&&g.targetIds!==null&&!g.targetIds.includes(page.pageId)));
     if(!scopes.length)throw new FacebookPageAccessError();
-    return {managedPageId:page.id,pageId:page.pageId,connectionId:page.connectionId,connectionVersion:page.connection.version,appId:page.connection.appId,pageToken,tasks:page.tasks,scopes,role:member.role,publishingAccountId:account?.id??null};
+    // Inspection is an awaited provider read. Never return its pre-await local grant.
+    const currentMember=await requireManagementMember(deps.db,ctx,options.write);
+    const current=await deps.db.facebookManagedPage.findFirst({where:{id:page.id,active:true,pageTokenEncrypted:page.pageTokenEncrypted,connectionId:page.connectionId,connection:{workspaceId:ctx.workspaceId,status:'active',version:page.connection.version,userTokenEncrypted:page.connection.userTokenEncrypted,user:activeManagementOwner(ctx.workspaceId)}},include:{connection:true}});
+    const currentSelection=await deps.db.facebookManagementPageSelection.findUnique({where:{workspaceId_pageId:{workspaceId:ctx.workspaceId,pageId:page.pageId}}});
+    const currentAccount=await deps.db.socialAccount.findFirst({where:{id:account?.id,workspaceId:ctx.workspaceId,platform:'facebook',providerAccountId:page.pageId,accountType:'page',status:'active'},select:{id:true}});
+    if(!current||currentSelection?.managedPageId!==page.id||current.expiresAt&&current.expiresAt<=new Date()||current.connection.expiresAt&&current.connection.expiresAt<=new Date()||options.requirePublishingBinding!==false&&!currentAccount||JSON.stringify(current.tasks)!==JSON.stringify(page.tasks))throw new FacebookPageAccessError();
+    return {managedPageId:page.id,pageId:page.pageId,connectionId:page.connectionId,connectionVersion:page.connection.version,appId:page.connection.appId,pageToken,tasks:current.tasks,scopes,role:currentMember.role,publishingAccountId:currentAccount?.id??null};
   }};
 }

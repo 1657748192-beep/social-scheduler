@@ -5,6 +5,13 @@ import {createInboxProjection} from '../src/interactionInbox/projection';
 import {createFacebookInboxAdapter} from '../src/interactionInbox/adapters/facebook';
 import {createInboxAccess} from '../src/interactionInbox/access';
 const page={items:[],nextCursor:null,coverage:'synthetic',warnings:[]};
+
+test('facebookDetailFiltersEverySiblingByTheSelectedShorterPolicy',async()=>withInboxFixture(async f=>{
+ const asset=await inboxTestAccess(f).resolveInboxAsset(f.adminCtx,f.accountIds[0]);
+ const clock=Date.now(),items=[{id:'fresh',timestamp:new Date(clock-1000).toISOString()},{id:'expired',timestamp:new Date(clock-2*86400000).toISOString()},{id:'future',timestamp:new Date(clock+86400000).toISOString()},{id:'unknown',timestamp:'invalid'}].map(v=>({...v,text:'body '+v.id,inbound:true}));
+ const adapter=createFacebookInboxAdapter({db:f.db,engagement:{messages:async()=>({items,nextCursor:null}),capabilities:async()=>({})} as any,policy:{...inboxTestPolicy(f),retentionForAsset:()=>({rawRetentionDays:1,contentRetentionDays:1})}} as any);
+ const detail=await adapter.detail(asset,{...asset.sourceRef!,conversationId:'thread',participantId:'300'});assert.deepEqual(detail.items.map(v=>v.id),['fresh']);
+}));
 test('factoryRuleDoesNotEnableOtherPages',async()=>withInboxFixture(async f=>{
  const c=f.connections[0],p=await f.db.facebookManagedPage.create({data:{connectionId:c.id,pageId:'101',name:'Factory Wholesale',active:true,pageTokenEncrypted:'sealed',scopes:['pages_messaging'],tasks:['MESSAGING']}});
  await f.db.facebookManagementPageSelection.create({data:{workspaceId:f.adminCtx.workspaceId,pageId:'101',managedPageId:p.id}});

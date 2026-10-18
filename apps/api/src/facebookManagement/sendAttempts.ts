@@ -42,6 +42,10 @@ export function createFacebookSendExecutor({db}:{db:PrismaClient}){
     let result:SendOutcome;
     try{
       result=await send();
+      await requireManagementMember(db,ctx,true);
+      const currentPage=await db.facebookManagedPage.findFirst({where:{id:page.id,connectionId:page.connectionId,active:true,pageTokenEncrypted:page.pageTokenEncrypted,connection:{workspaceId:ctx.workspaceId,status:'active',version:page.connection.version,userTokenEncrypted:page.connection.userTokenEncrypted,user:activeManagementOwner(ctx.workspaceId)}}});
+      const currentSelection=await db.facebookManagementPageSelection.findUnique({where:{workspaceId_pageId:{workspaceId:ctx.workspaceId,pageId:page.pageId}}});
+      if(!currentPage||currentSelection?.managedPageId!==page.id)result={status:'unknown',diagnosticId:attempt.diagnosticId!};
       if(result.status==='sent'&&(typeof result.providerId!=='string'||!result.providerId||result.providerId.length>512))result={status:'unknown',diagnosticId:attempt.diagnosticId!};
       if(result.status==='failed'&&!/^[a-z_]{1,80}$/.test(result.code))result={status:'unknown',diagnosticId:attempt.diagnosticId!};
     }catch{result={status:'unknown',diagnosticId:attempt.diagnosticId!};}

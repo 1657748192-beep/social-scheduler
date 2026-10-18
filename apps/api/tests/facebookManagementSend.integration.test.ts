@@ -30,6 +30,17 @@ test('concurrentSameKeySendsOnce',async()=>fixture(async({db,ctx,execute,input}:
   assert.equal(JSON.stringify(await db.facebookInteractionSendAttempt.findMany({where:{managedPageId:ctx.managedPageId}})).includes(input.text),false);
 }));
 
+test('revocationAfterFacebookDispatchKeepsConsumedAttemptUnknown',async()=>fixture(async({db,ctx,execute,input}:any)=>{
+  const result=await execute(ctx,input,async()=>{
+    const page=await db.facebookManagedPage.findUniqueOrThrow({where:{id:ctx.managedPageId}});
+    await db.facebookManagementConnection.update({where:{id:page.connectionId},data:{status:'disconnected',version:{increment:1},userTokenEncrypted:null}});
+    return{status:'sent',providerId:'sent-before-revocation'};
+  });
+  assert.equal(result.status,'unknown');
+  const stored=await db.facebookInteractionSendAttempt.findFirstOrThrow({where:{managedPageId:ctx.managedPageId,requestKey:input.requestKey}});
+  assert.equal(stored.status,'unknown');assert.equal(stored.providerId,null);
+}));
+
 test('sameKeyDifferentTextOrTargetRejected',async()=>fixture(async({ctx,execute,input}:any)=>{
   let calls=0;const send=async()=>{calls++;return{status:'sent',providerId:'m2'};};
   await execute(ctx,input,send);

@@ -3,6 +3,7 @@ import type {InboxAccess} from './access';import {parseInboxSource} from './sour
 import type {AdapterPage,ResolvedAsset,Scope,Capability} from './types';
 import {inboxSourceAlive} from './sourceLifetime';
 import {createLiveInboxPolicy,type LiveInboxPolicy} from './livePolicy';
+import {reconcileInstagramCases} from './instagramConversationReconciliation';
 export function createInboxProjection({db,access,policy=createLiveInboxPolicy([])}:{db:PrismaClient;access:InboxAccess;policy?:LiveInboxPolicy}){
  return{async projectVerifiedPage(ctx:Scope,a:ResolvedAsset,page:AdapterPage){
   if(a.platform!=='facebook'&&a.platform!=='instagram')throw new HttpError(409,'Platform not integrated');
@@ -28,6 +29,7 @@ export function createInboxProjection({db,access,policy=createLiveInboxPolicy([]
     let identity=v.actorId?await tx.interactionIdentity.findUnique({where:{workspaceId_platform_appNamespace_assetId_providerActorId:{workspaceId:ctx.workspaceId,platform:a.platform,appNamespace:a.appNamespace,assetId:asset.id,providerActorId:v.actorId}}}):null;
     if(v.actorId&&!identity){const customer=await tx.interactionCustomer.create({data:{workspaceId:ctx.workspaceId}});identity=await tx.interactionIdentity.create({data:{workspaceId:ctx.workspaceId,assetId:asset.id,customerId:customer.id,platform:a.platform,appNamespace:a.appNamespace,providerActorId:v.actorId,displayName:v.actorName,firstSeenAt:time,lastSeenAt:time}});}
     const key={workspaceId:ctx.workspaceId,assetId:asset.id,kind:v.kind,providerThreadOrEventId:v.threadId};
+    if(ref.platform==='instagram'&&v.kind==='messages')await reconcileInstagramCases(tx,ctx.workspaceId,asset.id,v.threadId,ref);
     const c=await tx.interactionCase.upsert({where:{workspaceId_assetId_kind_providerThreadOrEventId:key},create:{...key,customerId:identity?.customerId,sourceRef:ref},update:{sourceRef:ref}});
     const existing=await tx.interactionItem.findUnique({where:{workspaceId_assetId_providerEventId:{workspaceId:ctx.workspaceId,assetId:asset.id,providerEventId:v.providerEventId}}});
     if(existing){if(v.deleted)await tx.interactionItem.update({where:{id:existing.id},data:{deleted:true}});continue;}

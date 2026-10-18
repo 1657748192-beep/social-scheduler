@@ -4,15 +4,34 @@ import {createLiveInboxPolicy} from '../src/interactionInbox/livePolicy';import 
 import {createInstagramManagementAccess} from '../src/instagramManagement/access';import {createInstagramManagementEngagement} from '../src/instagramManagement/engagement';import {createInstagramInboxAdapter} from '../src/interactionInbox/adapters/instagram';import {createFacebookInboxAdapter} from '../src/interactionInbox/adapters/facebook';import {createInboxRegistry} from '../src/interactionInbox/adapters/registry';
 import {createInteractionInboxRuntime} from '../src/interactionInbox/runtime';import {createInboxReception} from '../src/interactionInbox/reception';import {createFacebookSendExecutor} from '../src/facebookManagement/sendAttempts';import {pendingInboxSend} from '../src/interactionInbox/sends';import {createInboxDirectory} from '../src/interactionInbox/directory';
 import {createInstagramManagementRuntime} from '../src/instagramManagement/runtime';
-async function setup(f:any){
+async function setup(f:any,graph:any={}){
  const rules=f.workspaceIds.flatMap((workspaceId:string)=>['facebook','instagram'].map(platform=>({workspaceId,platform,appId:platform==='facebook'?'123':'456',providerAssetId:'100',readEnabled:true,sendEnabled:true,policy:{product:'synthetic-test-only',graphVersion:'v25.0',checkedAt:'2020-01-01T00:00:00Z',sources:['https://developers.facebook.com/docs/'],rawRetentionDays:7,contentRetentionDays:90,replyWindowMs:86400000,reviewed:true}})));
  const policy=createLiveInboxPolicy(rules as any),scopes=['instagram_business_basic','instagram_business_manage_comments','instagram_business_manage_messages'];
  const instagramAccess=createInstagramManagementAccess({db:f.db,appId:'456',policy,decrypt:v=>v,inspect:async()=>({appId:'456',providerAccountId:'100',scopes,expiresAt:new Date(Date.now()+86400000)})});
- let sends=0;const engagement=createInstagramManagementEngagement({db:f.db,access:instagramAccess,policy,graph:()=>({sendMessage:async()=>{sends++;return{status:'unknown',diagnosticId:randomUUID()};}} as any),isDeleted:async()=>false,verifiedCommentLimit:1000});
+ let sends=0;const engagement=createInstagramManagementEngagement({db:f.db,access:instagramAccess,policy,graph:()=>({...graph,sendMessage:async()=>{sends++;return{status:'unknown',diagnosticId:randomUUID()};}} as any),isDeleted:async()=>false,verifiedCommentLimit:1000});
  const access=createInboxAccess({db:f.db,facebookEnabled:true,policy,instagram:{enabled:true,access:instagramAccess},verifyFacebook:async()=>({readComments:{status:'available'},readMessages:{status:'available'},replyComments:{status:'available'},replyMessages:{status:'available'}})} as any);
  const fb=createFacebookInboxAdapter({db:f.db,engagement:{} as any}),ig=createInstagramInboxAdapter({db:f.db,access:instagramAccess,policy,engagement}),registry=createInboxRegistry(fb,ig);
  return{access,policy,registry,instagram:{enabled:true,access:instagramAccess,engagement},projection:createInboxProjection({db:f.db,access,policy}),reads:createInboxReads({db:f.db,access,registry,policy,redis:{eval:async()=>1} as any}),sends:createInboxSends({db:f.db,access,registry}),providerSends:()=>sends};
 }
+
+test('mixedInstagramWebhookAndGraphHistoryKeepsOneCaseAndUnknownSendBarrier',async()=>withMetaInboxFixture(async f=>{
+ const thread={id:'graph-thread',participants:{data:[{id:'100'},{id:'300'}]}},at=new Date(),s=await setup(f,{conversations:async()=>({items:[thread],nextCursor:null}),conversation:async()=>thread,messages:async()=>({items:['webhook-first','graph-only'].map(id=>({id,message:id,created_time:at.toISOString(),from:{id:'300'},to:{data:[{id:'100'}]}})),nextCursor:null})});
+ const asset=await s.access.resolveInboxAsset(f.adminCtx,f.instagramAccountIds[0],'messages.read'),adapter=s.registry.getInboxAdapter('instagram');
+ const raw=await f.db.instagramInteractionMessage.create({data:{workspaceId:f.adminCtx.workspaceId,connectionId:f.instagramConnectionIds[0],connectionVersion:1,providerId:'webhook-first',conversationId:'local:test',actorId:'300',inbound:true,text:'Incoming',occurredAt:at}});
+ await s.projection.projectVerifiedPage(f.adminCtx,asset,{items:await adapter.normalizeVerifiedEvent([raw.id],asset),nextCursor:null,coverage:'synthetic',warnings:[]});
+ const original=await f.db.interactionCase.findFirstOrThrow({where:{workspaceId:f.adminCtx.workspaceId,asset:{instagramConnectionId:f.instagramConnectionIds[0]}}});
+ const key=randomUUID();assert.equal((await s.sends.replyToCase(f.adminCtx,original.id,{targetId:'local:test',text:'One test send',requestKey:key})).status,'unknown');
+ // Simulate a pre-fix Graph case with a newer, settled reference. Reconciliation
+ // must preserve the original case and must not hide its earlier unknown key.
+ const duplicate=await f.db.interactionCase.create({data:{workspaceId:f.adminCtx.workspaceId,assetId:original.assetId,customerId:original.customerId,kind:'messages',providerThreadOrEventId:'graph-thread',sourceRef:{...(original.sourceRef as any),conversationId:'graph-thread'}}});
+ const settledKey=randomUUID();await f.db.instagramInteractionSendAttempt.create({data:{workspaceId:f.adminCtx.workspaceId,connectionId:f.instagramConnectionIds[0],connectionVersion:1,requestKey:settledKey,targetHash:'synthetic',payloadHash:'synthetic',status:'failed'}});
+ await f.db.interactionAudit.create({data:{workspaceId:f.adminCtx.workspaceId,actorId:f.userId,targetId:duplicate.id,action:'reply.reference',result:settledKey}});
+ const page=await adapter.list(asset,'messages',null,25);await s.projection.projectVerifiedPage(f.adminCtx,asset,page);
+ const cases=await f.db.interactionCase.findMany({where:{workspaceId:f.adminCtx.workspaceId,asset:{instagramConnectionId:f.instagramConnectionIds[0]}}});assert.equal(cases.length,1);assert.equal(cases[0].id,original.id);
+ assert.equal((await pendingInboxSend(f.db,f.adminCtx,original.id,cases[0].sourceRef as any,asset,s.registry))?.requestKey,key);
+ const detail=await adapter.detail(asset,cases[0].sourceRef as any);assert.deepEqual(new Set(detail.items.map(v=>v.id)),new Set(['webhook-first','graph-only']));
+ await assert.rejects(s.sends.replyToCase(f.adminCtx,original.id,{targetId:(cases[0].sourceRef as any).conversationId,text:'Do not resend',requestKey:randomUUID()}));assert.equal(s.providerSends(),1);
+}));
 
 test('facebookAndInstagramSameCustomerNameRemainDistinct',async()=>withMetaInboxFixture(async f=>{
  const s=await setup(f),before=await f.publishingSnapshot(),fb=await f.seedVerifiedCase(),own=await seedDeletionCustomer(f);
@@ -95,5 +114,5 @@ test('renewalAfterInstagramReadCannotProjectOldBodyOrCustomer',async()=>withMeta
 
 test('freshInstagramProjectionCreatesOnlyScopedReferencesAndNoSecondBody',async()=>withMetaInboxFixture(async f=>{
  const s=await setup(f),asset=await s.access.resolveInboxAsset(f.adminCtx,f.instagramAccountIds[0],'messages.read'),row=await f.db.instagramInteractionMessage.create({data:{workspaceId:f.adminCtx.workspaceId,connectionId:f.instagramConnectionIds[0],connectionVersion:1,providerId:'new-message',conversationId:'local:new',actorId:'301',inbound:true,text:'Private body only in source',occurredAt:new Date()}}),items=await s.registry.getInboxAdapter('instagram').normalizeVerifiedEvent([row.id],asset),before=await f.publishingSnapshot();
- assert.equal((await s.projection.projectVerifiedPage(f.adminCtx,asset,{items,nextCursor:null,coverage:'synthetic',warnings:[]})).count,1);const c=await f.db.interactionCase.findFirstOrThrow({where:{workspaceId:f.adminCtx.workspaceId,providerThreadOrEventId:'local:new'},include:{items:true,asset:true}});assert.equal(c.asset.instagramConnectionId,f.instagramConnectionIds[0]);assert.equal(c.asset.facebookManagedPageId,null);assert.equal(c.items.length,1);assert.equal(c.items[0].text,null);assert.doesNotMatch(JSON.stringify(c),/Private body/);assert.deepEqual(await f.publishingSnapshot(),before);
+ assert.equal((await s.projection.projectVerifiedPage(f.adminCtx,asset,{items,nextCursor:null,coverage:'synthetic',warnings:[]})).count,1);const c=await f.db.interactionCase.findFirstOrThrow({where:{workspaceId:f.adminCtx.workspaceId,providerThreadOrEventId:items[0].threadId},include:{items:true,asset:true}});assert.equal(c.asset.instagramConnectionId,f.instagramConnectionIds[0]);assert.equal(c.asset.facebookManagedPageId,null);assert.equal(c.items.length,1);assert.equal(c.items[0].text,null);assert.doesNotMatch(JSON.stringify(c),/Private body/);assert.deepEqual(await f.publishingSnapshot(),before);
 }));

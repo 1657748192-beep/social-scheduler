@@ -17,13 +17,13 @@ import {startMetaDeletionMaintenance} from './interactionInbox/deletionMaintenan
 const instagramRuntime=getInstagramManagementRuntime();
 const metaLifecycle=getMetaInboxLifecycleRuntime();
 const app = createApp({instagramManagement:instagramRuntime,metaLifecycle});
-const metaDeletionMaintenance=startMetaDeletionMaintenance({enabled:metaLifecycle.enabled,namespaces:metaLifecycle.namespaces,store:metaLifecycle.maintenanceStore});
+const metaDeletionMaintenance=startMetaDeletionMaintenance({enabled:metaLifecycle.maintenanceEnabled,namespaces:metaLifecycle.namespaces,store:metaLifecycle.maintenanceStore});
 const instagramPump=startInstagramManagementPump({enabled:instagramRuntime.receptionEnabled,store:instagramRuntime.receptionStore});
 const uploadCleanup=startLocalUploadCleanup(localUploadRuntime);
 const facebookPump=startFacebookManagementPump({enabled:facebookManagementRuntime.enabled,store:facebookManagementRuntime.receptionStore});
 // When the explicit lifecycle is enabled, expiry shares its fifty-entity ticks
 // and cannot race a second generic timer through an active deletion continuation.
-const inboxRetention=metaLifecycle.enabled?{stop:async()=>undefined}:startInboxRetention(createInboxRetention({db:prisma}));
+const inboxRetention=metaLifecycle.maintenanceEnabled?{stop:async()=>undefined}:startInboxRetention(createInboxRetention({db:prisma}));
 
 const server = createApiServer(app).listen(config.API_PORT, () => {
   console.log(`API listening on http://localhost:${config.API_PORT}`);

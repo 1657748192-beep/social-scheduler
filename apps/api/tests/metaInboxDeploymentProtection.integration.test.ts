@@ -3,10 +3,15 @@ const environment=()=>{const env=require('../../../scripts/run-tests.cjs').envir
 function containerProgram(file:string){const source=fs.readFileSync(path.resolve('scripts/deploy/meta-inbox',file),'utf8'),match=source.match(/<<'NODE'\r?\n([\s\S]*?)\r?\nNODE/);assert.ok(match,'actual container Node program required');return match[1];}
 // Exercise the container program against real source guards on a clean checkout.
 // Production images use compiled dist; the separate API build verifies that output.
-function run(code:string){return spawnSync(process.execPath,['--import','tsx','-'],{input:code.replaceAll("require('./dist/","require('./src/"),cwd:path.resolve('apps/api'),env:environment(),encoding:'utf8',timeout:15000});}
+function run(code:string,extra:NodeJS.ProcessEnv={}){return spawnSync(process.execPath,['--import','tsx','-'],{input:code.replaceAll("require('./dist/","require('./src/"),cwd:path.resolve('apps/api'),env:{...environment(),...extra},encoding:'utf8',timeout:15000});}
 test('actualDeploymentSnapshotHashesPublisherDataWithoutPrintingItOrChangingIt',async()=>withMetaInboxFixture(async f=>{
  const before=await f.publishingSnapshot(),code=containerProgram('common.sh'),first=run(code),second=run(code);assert.equal(first.status,0,first.stderr);assert.equal(second.status,0,second.stderr);assert.equal(first.stdout,second.stdout);const data=JSON.parse(first.stdout);for(const name of ['socialAccount','oauthCredential','tikTokSandboxCredential','post','postVariant','schedule','publishJob']){assert.equal(typeof data[name].count,'number');assert.match(data[name].hmac,/^[a-f0-9]{64}$/);}assert.doesNotMatch(first.stdout,/publishing-original|sealed:|access_token/);assert.deepEqual(await f.publishingSnapshot(),before);
 }));
 test('actualRuntimeVerificationChecksOrdinaryCustomerDenialWithoutMintingCredentials',async()=>withMetaInboxFixture(async f=>{
  const before=await f.publishingSnapshot(),result=run(containerProgram('verify.sh'));assert.equal(result.status,0,result.stderr);assert.match(result.stdout,/GATES_CLOSED_AND_MIGRATIONS_PRESENT/);assert.match(result.stdout,/ORDINARY_CUSTOMER_DENIAL_CONFIRMED/);assert.doesNotMatch(result.stdout,/Bearer|eyJ|@/);assert.deepEqual(await f.publishingSnapshot(),before);
+}));
+
+test('actualDeploymentChecksNewProvenanceConstraintAndInternalOnlyMaintenance',async()=>withMetaInboxFixture(async f=>{
+ const source=fs.readFileSync(path.resolve('scripts/deploy/meta-inbox/verify.sh'),'utf8'),program=[...source.matchAll(/<<'NODE'\r?\n([\s\S]*?)\r?\nNODE/g)][1]?.[1];assert.ok(program);
+ const before=await f.publishingSnapshot(),result=run(program,{FACEBOOK_CLIENT_ID:'123',INSTAGRAM_CLIENT_ID:'456'});assert.equal(result.status,0,result.stderr);assert.match(result.stdout,/INTERNAL_CLEANUP_ACTIVE_PUBLIC_CALLBACKS_CLOSED/);assert.deepEqual(await f.publishingSnapshot(),before);
 }));

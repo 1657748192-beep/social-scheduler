@@ -129,6 +129,7 @@ export function createFacebookManagementEngagement(deps:Dependencies){
       if(!isFacebookMessagingWindowOpen(latest,current))throw new HttpError(409,'Verified 24-hour reply window is closed or unknown; use the official inbox');
       return deps.executeFacebookSend(ctx,{requestKey:input.requestKey,targetId:item.counterpartyId,kind:'message',text:input.text},async()=>{
         const fresh=await authorized(ctx,'replyMessages',true);
+        if(fresh.access.connectionId!==access.connectionId||fresh.access.connectionVersion!==access.connectionVersion||fresh.access.pageToken!==access.pageToken)return{status:'failed',code:'authorization_changed',diagnosticId:randomUUID()};
         if(permissions(fresh.access).readMessages.status!=='available')return{status:'failed',code:'permission_missing',diagnosticId:randomUUID()};
         if(!isFacebookMessagingWindowOpen(latest,now()))return{status:'failed',code:'reply_window_closed',diagnosticId:randomUUID()};
         return send(fresh.access,()=>fresh.api.sendMessage(item.counterpartyId,input.text));
@@ -148,6 +149,7 @@ export function createFacebookManagementEngagement(deps:Dependencies){
       if(!found)throw new HttpError(404,'Comment could not be verified on this published post');
       return deps.executeFacebookSend(ctx,{requestKey:input.requestKey,targetId:input.commentId,kind:'comment',text:input.text},async()=>{
         const fresh=await authorized(ctx,'replyComments',true);await published(ctx,fresh.access,input.scheduleId);
+        if(fresh.access.connectionId!==access.connectionId||fresh.access.connectionVersion!==access.connectionVersion||fresh.access.pageToken!==access.pageToken)return{status:'failed',code:'authorization_changed',diagnosticId:randomUUID()};
         return send(fresh.access,()=>fresh.api.replyComment(input.commentId,input.text));
       });
     }

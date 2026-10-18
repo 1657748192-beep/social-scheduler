@@ -25,6 +25,7 @@ import { removeOAuthStateIfPresent } from "./oauthStateCleanup";
 import { requireWorkspaceManager, requireWorkspaceMembership } from "./workspaceService";
 import { lockFacebookPage,facebookSubscriptionCoordinator } from './facebookSubscription';
 import { socialAccountProfileUrl } from './socialAccountProfileUrl';
+import {releaseDrainedInstagramConnections} from '../instagramManagement/accountRemoval';
 
 export const startOAuthSchema = z.object({
   workspaceId: z.string().uuid()
@@ -909,6 +910,7 @@ export async function disconnectSocialAccount(
   }
 
   return prisma.$transaction(async (tx) => {
+    await releaseDrainedInstagramConnections(tx,account);
     await tx.oauthCredential.deleteMany({
       where: {
         socialAccountId: account.id

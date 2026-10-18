@@ -37,12 +37,21 @@ async function fixture(run:(f:any)=>Promise<void>){
       listComments:async(postId:string)=>({items:[{id:'100_10',postId,text:'Comment',timestamp:now.toISOString()}],nextCursor:null}),
       sendMessage:async()=>{calls++;return{status:'sent' as const,providerId:'message-sent'};},replyComment:async()=>{calls++;return{status:'sent' as const,providerId:'comment-sent'};}
     };
+    let inspectionHook:(()=>Promise<void>)|undefined;
     const access=createFacebookPageAccess({db,decrypt:v=>{assert.notEqual(v,'original-do-not-use');return v.replace('sealed:','');},inspect:async(id,token)=>{
+      await inspectionHook?.();
       assert.ok(['new-page','fresh-page'].includes(token));if(!tokenValid)throw Error('inspection unavailable');return{pageId:id,scopes,granularScopes:[],expiresAt:null};}});
     const service=createFacebookManagementEngagement({db,resolvePageAccess:access.resolvePageAccess,executeFacebookSend:createFacebookSendExecutor({db}).executeFacebookSend,createClient:({accessToken}:any)=>{assert.equal(accessToken,'new-page');return api;},now:()=>now});
-    await run({db,ctx,viewer,page,connection,account,schedule,job,snapshot,service,api,access,now,calls:()=>calls,setFail:(v:boolean)=>{fail=v;},setTokenValid:(v:boolean)=>{tokenValid=v;},setMessages:(v:any)=>{messages=v;}});
+    await run({db,ctx,viewer,page,connection,account,schedule,job,snapshot,service,api,access,now,calls:()=>calls,setInspectionHook:(hook:()=>Promise<void>)=>{inspectionHook=hook;},setFail:(v:boolean)=>{fail=v;},setTokenValid:(v:boolean)=>{tokenValid=v;},setMessages:(v:any)=>{messages=v;}});
   }finally{await db.workspace.deleteMany({where:{id:workspaceId,ownerId:userId}});await db.user.deleteMany({where:{id:{in:[userId,viewerId]}}});await db.$disconnect();}
 }
+
+for(const kind of ['message','comment'])test(`revocationDuringFinalInspectionPreventsFacebook${kind}Dispatch`,async()=>fixture(async({db,ctx,connection,service,schedule,setInspectionHook,calls}:any)=>{
+  let inspections=0;
+  setInspectionHook(async()=>{if(++inspections===2)await db.facebookManagementConnection.update({where:{id:connection.id},data:{status:'disconnected',version:{increment:1},userTokenEncrypted:null}});});
+  const result=kind==='message'?await service.replyMessage(ctx,{conversationId:'c1',text:'Test only',requestKey:randomUUID()}):await service.replyComment(ctx,{scheduleId:schedule.id,commentId:'100_10',text:'Test only',requestKey:randomUUID()});
+  assert.notEqual(result.status,'sent');assert.equal(inspections,2);assert.equal(calls(),0);
+}));
 
 test('historicalPostCheckIsReadOnlyAndRequiresExactPageAndPostIdentity',async()=>fixture(async({db,ctx,connection,service,schedule,job,snapshot,api,calls}:any)=>{
   await db.publishJob.update({where:{id:job.id},data:{providerPostId:'200',rawResponse:{id:'200'}}});
@@ -115,7 +124,7 @@ test('staleTokenFailureCannotInvalidateNewerGrantOrPublishing',async()=>fixture(
   assert.deepEqual(await snapshot(),before);
 }));
 
-test('sendUsesTheRevalidatedGrantNotTheEarlierReadToken',async()=>fixture(async({db,ctx,page,connection,api,access,now}:any)=>{
+test('sendDoesNotCrossTheOriginalConnectionEpochEvenWithAValidNewGrant',async()=>fixture(async({db,ctx,page,connection,api,access,now}:any)=>{
   const sentTokens:string[]=[],originalRead=api.listMessages;
   api.listMessages=async()=>{
     const result=await originalRead();
@@ -124,8 +133,8 @@ test('sendUsesTheRevalidatedGrantNotTheEarlierReadToken',async()=>fixture(async(
   };
   const service=createFacebookManagementEngagement({db,resolvePageAccess:access.resolvePageAccess,executeFacebookSend:createFacebookSendExecutor({db}).executeFacebookSend,now:()=>now,
     createClient:({accessToken})=>({...api,sendMessage:async()=>{sentTokens.push(accessToken);return{status:'sent',providerId:'fresh-send'};}})});
-  assert.equal((await service.replyMessage(ctx,{conversationId:'c1',text:'Reply',requestKey:randomUUID()})).status,'sent');
-  assert.deepEqual(sentTokens,['fresh-page']);
+  assert.notEqual((await service.replyMessage(ctx,{conversationId:'c1',text:'Reply',requestKey:randomUUID()})).status,'sent');
+  assert.deepEqual(sentTokens,[]);
 }));
 
 test('newReceivedBodiesMergeButNeverMaskFailedGraphReads',async()=>fixture(async({db,ctx,api,access,now,schedule}:any)=>{

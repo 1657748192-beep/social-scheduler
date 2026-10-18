@@ -2,7 +2,8 @@ import type {PrismaClient} from '@prisma/client';import {z} from 'zod';
 import type {FacebookManagementRuntime} from '../../facebookManagement/runtime';
 import {HttpError} from '../../utils/errors';import {capabilities,type InboxAdapter,type ResolvedAsset,type VerifiedItem,type SourceRef} from '../types';
 import {sourceSchema} from '../access';import {encodeInboxCursor,decodeInboxCursor} from '../cursor';
-export function createFacebookInboxAdapter({db,engagement}:{db:PrismaClient;engagement:FacebookManagementRuntime['engagement']}):InboxAdapter{
+import {createLiveInboxPolicy,type LiveInboxPolicy} from '../livePolicy';
+export function createFacebookInboxAdapter({db,engagement,policy=createLiveInboxPolicy([])}:{db:PrismaClient;engagement:FacebookManagementRuntime['engagement'];policy?:LiveInboxPolicy}):InboxAdapter{
  const context=(a:ResolvedAsset)=>{if(a.platform!=='facebook')throw new HttpError(409,'Platform not integrated');return{...a.ctx,managedPageId:sourceSchema.parse(a.sourceRef).managedPageId};};
  async function caps(a:ResolvedAsset){const raw=await engagement.capabilities(context(a));return capabilities.map(capability=>{const key=({'comments.read':'readComments','comments.reply':'replyComments','messages.read':'readMessages','messages.reply':'replyMessages'} as const)[capability as Exclude<typeof capability,'mentions.read'>];const available=!!key&&raw[key]?.status==='available';return{capability,available,reason:capability==='mentions.read'?'not_integrated':available?'available':'authorization_required',verifiedAt:new Date().toISOString()};});}
  function source(a:ResolvedAsset,s:SourceRef){const parsed=sourceSchema.parse(s),current=sourceSchema.parse(a.sourceRef);if(a.platform!=='facebook'||parsed.managedPageId!==current.managedPageId||parsed.connectionId!==current.connectionId||parsed.connectionVersion!==a.connectionVersion)throw new HttpError(404,'Source unavailable');return parsed;}
@@ -37,7 +38,8 @@ export function createFacebookInboxAdapter({db,engagement}:{db:PrismaClient;enga
    else if(s.scheduleId)page=await engagement.comments(ctx,s.scheduleId,cursor);
    else throw new HttpError(404,'Source unavailable');
    const selected=s.conversationId?page.items:page.items.filter((v:any)=>v.id===s.commentId);
-   const items=selected.map((v:any)=>({id:v.id,text:typeof v.text==='string'?v.text:null,occurredAt:v.timestamp,inbound:s.conversationId?!!v.inbound:true,senderName:v.senderName??null,deleted:!!v.deleted}));
+   const current=Date.now(),cutoff=current-policy.retentionForAsset({workspaceId:a.ctx.workspaceId,platform:'facebook',appId:a.appNamespace,providerAssetId:a.providerAssetId}).contentRetentionDays*86400000;
+   const items=selected.filter((v:any)=>{const at=Date.parse(v.timestamp);return Number.isFinite(at)&&at>0&&at>=cutoff&&at<=current;}).map((v:any)=>({id:v.id,text:typeof v.text==='string'?v.text:null,occurredAt:v.timestamp,inbound:s.conversationId?!!v.inbound:true,senderName:v.senderName??null,deleted:!!v.deleted}));
    return{items,nextCursor:page.nextCursor,officialUrl:s.postId?'https://www.facebook.com/'+encodeURIComponent(s.postId):'https://www.facebook.com/'+encodeURIComponent(a.providerAssetId),replyTarget:s.conversationId??(items.some((i:any)=>i.id===s.commentId&&!i.deleted)?s.commentId!:null),capabilities:await caps(a)};
   },
   async reply(a,ref,text,requestKey){const s=source(a,ref);return s.conversationId?engagement.replyMessage(context(a),{conversationId:s.conversationId,text,requestKey}):s.scheduleId&&s.commentId?engagement.replyComment(context(a),{scheduleId:s.scheduleId,commentId:s.commentId,text,requestKey}):Promise.reject(new HttpError(404,'Reply target unavailable'));},

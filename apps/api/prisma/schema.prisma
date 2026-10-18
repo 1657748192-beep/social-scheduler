@@ -1152,7 +1152,7 @@ model InstagramManagementConnection {
   updatedAt DateTime @updatedAt
   workspace Workspace @relation(fields:[workspaceId],references:[id],onDelete:Cascade)
   user User @relation(fields:[userId],references:[id],onDelete:Cascade)
-  account SocialAccount @relation(fields:[workspaceId,platform,providerAccountId],references:[workspaceId,platform,providerAccountId],onDelete:Cascade)
+  account SocialAccount @relation(fields:[workspaceId,platform,providerAccountId],references:[workspaceId,platform,providerAccountId],onDelete:NoAction)
   assets InteractionAsset[]
   events InstagramInteractionEvent[]
   messages InstagramInteractionMessage[]
