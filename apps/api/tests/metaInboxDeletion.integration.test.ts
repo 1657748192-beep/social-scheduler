@@ -9,6 +9,17 @@ import {createInstagramSendExecutor} from '../src/instagramManagement/sendAttemp
 const service=(f:MetaInboxFixture)=>createMetaInboxDeletion({db:f.db,hmacKey:'synthetic-deletion-hmac-key-only',encrypt:encryptToken,decrypt:decryptToken});
 const asset=(f:MetaInboxFixture,patch:Record<string,unknown>={})=>({workspaceId:f.adminCtx.workspaceId,platform:'instagram' as const,appId:'456',providerAssetId:'100',connectionId:f.instagramConnectionIds[0],connectionVersion:1,...patch});
 const subject=(f:MetaInboxFixture,patch:Record<string,unknown>={})=>({...asset(f),actorId:'300',providerEventId:'same-event',eventKind:'comments' as const,occurredAt:new Date(),...patch});
+
+test('backwardsClockCannotLowerAssetDeletionCutoff',async()=>withMetaInboxFixture(async f=>{
+ let clock=new Date('2026-10-18T12:00:00.000Z');
+ const d=createMetaInboxDeletion({db:f.db,hmacKey:'synthetic-deletion-hmac-key-only',encrypt:encryptToken,decrypt:decryptToken,now:()=>clock});
+ const before=await f.publishingSnapshot();await d.disconnect(asset(f));
+ await f.db.instagramManagementConnection.update({where:{id:f.instagramConnectionIds[0]},data:{status:'active',version:3}});
+ clock=new Date('2026-10-18T11:00:00.000Z');await d.disconnect(asset(f,{connectionVersion:3}));
+ assert.equal(await f.db.$transaction(tx=>d.isDeleted(tx,subject(f,{connectionVersion:5,occurredAt:new Date('2026-10-18T11:30:00.000Z')}))),true);
+ assert.equal(await f.db.$transaction(tx=>d.isDeleted(tx,subject(f,{connectionVersion:5,occurredAt:new Date('2026-10-18T12:00:00.001Z')}))),false);
+ assert.deepEqual(await f.publishingSnapshot(),before);
+}));
 test('deleteSameIdOnlyMatchingApp',async()=>withMetaInboxFixture(async f=>{
  const d=service(f),before=await f.publishingSnapshot();await d.markItem(asset(f),'comments','same-event');
  assert.equal(await f.db.$transaction(tx=>d.isDeleted(tx,subject(f))),true);

@@ -1,4 +1,4 @@
-import {createHash,createHmac,randomBytes} from 'node:crypto';
+import {createHash,createHmac,randomBytes,randomUUID} from 'node:crypto';
 import type {PrismaClient,Prisma} from '@prisma/client';
 import {HttpError} from '../utils/errors';
 import {z} from 'zod';
@@ -7,6 +7,7 @@ import {createMetaGrantFence} from './grantFence';
 import {deriveMetaDeletionKey} from '../utils/tokenCrypto';
 export type MetaDeletionAsset={workspaceId:string;platform:'facebook'|'instagram';appId:string;providerAssetId:string;connectionId:string;connectionVersion:number};
 export type MetaDeletionSubject=MetaDeletionAsset&{actorId?:string;providerEventId:string;eventKind?:'comments'|'messages';occurredAt:Date};
+export type MetaMaintenanceClaim={id:string;confirmationCode:string;claimToken:string};
 export type MetaDeletionTarget={format?:2;asset:MetaDeletionAsset;kind:'item'|'actor'|'asset';eventKind?:'comments'|'messages';subjectId?:string;phase:'pending'|'messages'|'comments'|'sources_done';rawAfter?:string;sourceIds?:string[];activeCaseId?:string;cleanupCustomerId?:string;unmappedRaw?:boolean;unmappedItem?:boolean};
 type Deps={db:PrismaClient;hmacKey?:string;encrypt:(value:string)=>string;decrypt:(value:string)=>string;now?:()=>Date};
 const validId=(v:unknown)=>typeof v==='string'&&v.length>0&&v.length<=256;
@@ -30,7 +31,9 @@ export function createMetaInboxDeletion({db,hmacKey=deriveMetaDeletionKey(),encr
  }
  async function marker(tx:Prisma.TransactionClient,a:MetaDeletionAsset,kind:'actor'|'asset'|'item',parts:unknown[],at:Date,updateCutoff=false){
   const key={...namespace(a),subjectKind:kind,subjectHash:digest(a,kind,parts)};
-  await tx.metaInboxDeletionMarker.upsert({where:{workspaceId_platform_appId_subjectKind_subjectHash:key},create:{...key,createdAt:at},update:updateCutoff?{createdAt:at}:{}});
+  await tx.metaInboxDeletionMarker.upsert({where:{workspaceId_platform_appId_subjectKind_subjectHash:key},create:{...key,createdAt:at},update:{}});
+  // Callback retries and clock rollback must never resurrect an older source.
+  if(updateCutoff)await tx.metaInboxDeletionMarker.updateMany({where:{...key,createdAt:{lt:at}},data:{createdAt:at}});
  }
  async function queue(tx:Prisma.TransactionClient,target:MetaDeletionTarget,reason:string,at:Date){
   const a=target.asset,parts=[target.eventKind??null,target.subjectId??null,a.connectionId,a.connectionVersion],subjectHash=digest(a,target.kind,parts),requestKey=digest(a,'request-v2',[target.kind,...parts]);
@@ -44,6 +47,21 @@ export function createMetaInboxDeletion({db,hmacKey=deriveMetaDeletionKey(),encr
   if(a.platform!=='instagram'||request.workspaceId!==a.workspaceId||request.appId!==a.appId||request.platform!==a.platform||request.subjectKind!==t.kind||request.requestKey!==digest(a,t.format===2?'request-v2':'request',[t.kind,...parts])||t.kind==='item'&&(!t.eventKind||!t.subjectId)||t.kind==='actor'&&!t.subjectId)throw new HttpError(409,'Meta purge scope unavailable');return t;
  }
  return{
+  async claimMaintenance(n:MetaDeletionNamespace,at:Date):Promise<MetaMaintenanceClaim|null>{
+   if(!['facebook','instagram'].includes(n.platform)||!/^\d{1,256}$/.test(n.appId)||!Number.isFinite(at.getTime()))throw new HttpError(400,'Invalid Meta maintenance scope');
+   return db.$transaction(async tx=>{
+    const rows=await tx.$queryRaw<Array<{id:string}>>`SELECT id FROM "MetaInboxDeletionRequest" WHERE platform=${n.platform} AND "appId"=${n.appId} AND status='pending' AND attempts<8 AND "nextAttemptAt"<=${at} AND ("claimToken" IS NULL OR "leaseExpiresAt"<=${at}) ORDER BY "nextAttemptAt","createdAt",id LIMIT 1 FOR UPDATE SKIP LOCKED`;
+    if(!rows.length)return null;
+    const claimToken=randomUUID(),row=await tx.metaInboxDeletionRequest.update({where:{id:rows[0].id},data:{claimToken,leaseExpiresAt:new Date(at.getTime()+30000),attempts:{increment:1}},select:{id:true,confirmationCode:true}});
+    return{...row,claimToken};
+   });
+  },
+  async releaseMaintenance(claim:MetaMaintenanceClaim,at:Date,failed:boolean):Promise<boolean>{
+   if(!z.string().uuid().safeParse(claim.id).success||!z.string().uuid().safeParse(claim.claimToken).success||!Number.isFinite(at.getTime()))throw new HttpError(400,'Invalid Meta maintenance claim');
+   // Token comparison prevents a timed-out API process from releasing a newer lease.
+   const result=await db.metaInboxDeletionRequest.updateMany({where:{id:claim.id,confirmationCode:claim.confirmationCode,status:'pending',claimToken:claim.claimToken,leaseExpiresAt:{gt:at}},data:{claimToken:null,leaseExpiresAt:null,nextAttemptAt:new Date(at.getTime()+(failed?60000:2000)),...(!failed?{attempts:0}:{})}});
+   return result.count===1;
+  },
   async markItem(a:MetaDeletionAsset,eventKind:'comments'|'messages',eventId:string){
    if(!['comments','messages'].includes(eventKind)||!validId(eventId))throw new HttpError(400,'Invalid Meta deletion target');
    return db.$transaction(async tx=>{
