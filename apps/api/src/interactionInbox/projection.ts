@@ -6,7 +6,7 @@ import {createLiveInboxPolicy,type LiveInboxPolicy} from './livePolicy';
 export function createInboxProjection({db,access,policy=createLiveInboxPolicy([])}:{db:PrismaClient;access:InboxAccess;policy?:LiveInboxPolicy}){
  return{async projectVerifiedPage(ctx:Scope,a:ResolvedAsset,page:AdapterPage){
   if(a.platform!=='facebook')throw new HttpError(409,'Platform not integrated');
-  policy.requireAsset({workspaceId:ctx.workspaceId,platform:'facebook',appId:a.appNamespace,providerAssetId:a.providerAssetId},'read');
+  const evidence=policy.requireAsset({workspaceId:ctx.workspaceId,platform:'facebook',appId:a.appNamespace,providerAssetId:a.providerAssetId},'read');
   const originalSource=sourceSchema.parse(a.sourceRef);
   if(page.items.length>1250)throw new HttpError(502,'Provider result too large');
   const fresh=await access.resolveInboxAsset(ctx,a.accountId);if(fresh.canonicalKey!==a.canonicalKey||fresh.connectionVersion!==a.connectionVersion)throw new HttpError(409,'Connection changed');
@@ -20,8 +20,9 @@ export function createInboxProjection({db,access,policy=createLiveInboxPolicy([]
    for(const v of page.items){
     const ref=sourceSchema.parse(v.sourceRef),time=new Date(v.occurredAt);
     if(!v.providerEventId||v.providerEventId.length>512||!Number.isFinite(time.getTime())||time.getTime()>Date.now()+300000||ref.managedPageId!==originalSource.managedPageId||ref.connectionId!==originalSource.connectionId||ref.connectionVersion!==a.connectionVersion)throw new HttpError(502,'Inconsistent provider identity');
+    if(time.getTime()<Date.now()-evidence.contentRetentionDays*86400000)continue;
     if(!ref.sourceRecordId){const where={managedPageId_providerId:{managedPageId:ref.managedPageId,providerId:v.providerEventId}},original=v.kind==='messages'?await tx.facebookInteractionMessage.findUnique({where,select:{id:true}}):await tx.facebookInteractionComment.findUnique({where,select:{id:true}});if(original)ref.sourceRecordId=original.id;}
-    if(!await inboxSourceAlive(tx,ref,new Date()))continue;
+    if(!await inboxSourceAlive(tx,ref,time,new Date(),policy))continue;
     let identity=v.actorId?await tx.interactionIdentity.findUnique({where:{workspaceId_platform_appNamespace_assetId_providerActorId:{workspaceId:ctx.workspaceId,platform:a.platform,appNamespace:a.appNamespace,assetId:asset.id,providerActorId:v.actorId}}}):null;
     if(v.actorId&&!identity){const customer=await tx.interactionCustomer.create({data:{workspaceId:ctx.workspaceId}});identity=await tx.interactionIdentity.create({data:{workspaceId:ctx.workspaceId,assetId:asset.id,customerId:customer.id,platform:a.platform,appNamespace:a.appNamespace,providerActorId:v.actorId,displayName:v.actorName,firstSeenAt:time,lastSeenAt:time}});}
     const key={workspaceId:ctx.workspaceId,assetId:asset.id,kind:v.kind,providerThreadOrEventId:v.threadId};

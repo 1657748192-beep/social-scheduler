@@ -4,8 +4,9 @@ import type {Scope,PageResult,CaseDto,AccountStatus,ResolvedAsset,Query,DetailDt
 import {pendingInboxSend} from './sends';
 import {liveInboxCaseSql} from './sourceLifetime';
 import {sourceSchema} from './access';
+import {createLiveInboxPolicy,type LiveInboxPolicy} from './livePolicy';
 const rateScript="local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],60) end; return n";
-export function createInboxReads({db,access,registry,redis}:{db:PrismaClient;access:InboxAccess;registry:InboxRegistry;redis:Pick<Redis,'eval'>}){
+export function createInboxReads({db,access,registry,redis,policy=createLiveInboxPolicy([])}:{db:PrismaClient;access:InboxAccess;registry:InboxRegistry;redis:Pick<Redis,'eval'>;policy?:LiveInboxPolicy}){
  async function listCases(ctx:Scope,input:unknown):Promise<PageResult<CaseDto>>{
   const q=parseQuery(input);await access.require(ctx);
   if(q.q){let n:number;try{n=Number(await redis.eval(rateScript,1,`interaction-inbox:search:${ctx.userId}:${ctx.workspaceId}`));}catch{throw new HttpError(503,'Search temporarily unavailable');}if(n>30)throw new HttpError(429,'Search rate limited');}
@@ -20,7 +21,8 @@ export function createInboxReads({db,access,registry,redis}:{db:PrismaClient;acc
    }catch{statuses.push({accountId,status:'unavailable',count:null});}
   }
   await access.require(ctx);if(!allowed.length)return{items:[],nextCursor:null,accountsStatus:statuses,partial:statuses.some(s=>s.status!=='ok'),observedAt:new Date().toISOString(),lastSuccessfulSyncAt:lastSuccess};
-  const assetClause=Prisma.join(allowed.map(({a,id})=>Prisma.sql`(c."assetId"=${id}::uuid AND c."sourceRef"->>'managedPageId'=${sourceSchema.parse(a.sourceRef).managedPageId} AND c."sourceRef"->>'connectionId'=${a.sourceRef!.connectionId} AND c."sourceRef"->>'connectionVersion'=${String(a.connectionVersion)})`),' OR ');
+  const queryTime=new Date();
+  const assetClause=Prisma.join(allowed.map(({a,id})=>{if(a.platform!=='facebook'&&a.platform!=='instagram')throw new HttpError(409,'Interaction platform unavailable');const days=policy.retentionForAsset({workspaceId:ctx.workspaceId,platform:a.platform,appId:a.appNamespace,providerAssetId:a.providerAssetId}).contentRetentionDays;return Prisma.sql`(c."assetId"=${id}::uuid AND c."sourceRef"->>'managedPageId'=${sourceSchema.parse(a.sourceRef).managedPageId} AND c."sourceRef"->>'connectionId'=${a.sourceRef!.connectionId} AND c."sourceRef"->>'connectionVersion'=${String(a.connectionVersion)} AND ${liveInboxCaseSql(queryTime,days)})`;}),' OR ');
   const clauses=[Prisma.sql`c."workspaceId"=${ctx.workspaceId}::uuid`,Prisma.sql`(${assetClause})`,Prisma.sql`c.kind=${q.kind}`,liveInboxCaseSql()];
   if(q.status)clauses.push(Prisma.sql`c.status=${q.status}`);
   if(q.from)clauses.push(Prisma.sql`COALESCE(c."lastInboundAt",c."createdAt")>=${new Date(q.from)}`);

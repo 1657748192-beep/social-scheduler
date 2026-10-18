@@ -1,4 +1,4 @@
-import type {Prisma,PrismaClient,FacebookManagementOAuthState} from '@prisma/client';
+import type {Prisma,PrismaClient,FacebookManagementOAuthState,FacebookManagementConnection} from '@prisma/client';
 import type {ManagementContext} from './types';
 import {LOGIN_SESSION_MAX_AGE_MS} from '../utils/sessionLifetime';
 import {createMetaGrantFence} from '../interactionInbox/grantFence';
@@ -22,7 +22,7 @@ async function authorized(tx:Prisma.TransactionClient,ctx:ManagementContext,now:
   const member=await tx.workspaceMember.findFirst({where:{userId:ctx.userId,workspaceId:ctx.workspaceId,status:'active',role:{in:['owner','admin']}}});
   if(!session||!member)throw new ManagementAuthorizationError();
 }
-export function createFacebookManagementStore(db:PrismaClient,encrypt:(value:string)=>string){
+export function createFacebookManagementStore(db:PrismaClient,encrypt:(value:string)=>string,options:{onDisconnect?:(tx:Prisma.TransactionClient,connection:FacebookManagementConnection,pages:Array<{id:string;pageId:string}>)=>Promise<void>}={}){
   const grantFence=createMetaGrantFence();
   return {
     async createState(input:ManagementContext&{appId:string;state:string;callbackUrl:string;connectionId?:string;now?:Date}){
@@ -77,10 +77,15 @@ export function createFacebookManagementStore(db:PrismaClient,encrypt:(value:str
     async disconnect(ctx:ManagementContext,id:string){
       return db.$transaction(async tx=>{
         await authorized(tx,ctx,new Date());
+        await tx.$queryRaw`SELECT id FROM facebook_management_connections WHERE id=${id}::uuid AND "workspaceId"=${ctx.workspaceId}::uuid FOR UPDATE`;
+        const connection=await tx.facebookManagementConnection.findFirst({where:{id,workspaceId:ctx.workspaceId}});if(!connection)throw new ManagementAuthorizationError();
+        const pages=options.onDisconnect?await tx.facebookManagedPage.findMany({where:{connectionId:id},orderBy:{id:'asc'},take:51,select:{id:true,pageId:true}}):[];
+        if(pages.length>50)throw new ManagementAuthorizationError();
         const changed=await tx.facebookManagementConnection.updateMany({where:{id,workspaceId:ctx.workspaceId},data:{status:'disconnected',userTokenEncrypted:null,version:{increment:1}}});
         if(changed.count!==1)throw new ManagementAuthorizationError();
         await tx.facebookManagedPage.updateMany({where:{connectionId:id},data:{active:false,pageTokenEncrypted:null,notificationsEnabled:false}});
         await tx.facebookManagementPageSelection.deleteMany({where:{workspaceId:ctx.workspaceId,page:{connectionId:id}}});
+        if(options.onDisconnect)await options.onDisconnect(tx,connection,pages);
       });
     }
   };

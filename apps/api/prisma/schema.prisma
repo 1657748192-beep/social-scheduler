@@ -785,6 +785,7 @@ model FacebookInteractionSendAttempt {
   connectionVersion Int?
   requestKey String @db.Uuid
   payloadHash String
+  targetHash String?
   status String @default("pending")
   providerId String?
   diagnosticId String?
@@ -794,6 +795,7 @@ model FacebookInteractionSendAttempt {
   page FacebookManagedPage @relation(fields:[managedPageId],references:[id],onDelete:Cascade)
   @@unique([managedPageId,requestKey])
   @@index([createdAt])
+  @@index([managedPageId,connectionVersion,targetHash],map:"fb_send_target_scope")
   @@map("facebook_interaction_send_attempts")
 }
 

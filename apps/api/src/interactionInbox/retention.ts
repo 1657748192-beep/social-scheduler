@@ -55,7 +55,7 @@ export function createMetaSourceRetention({db,policy}:{db:PrismaClient;policy:Li
     return phase==='messages'?(await tx.facebookInteractionMessage.deleteMany({where:{...where,id:{in:ids}}})).count:(await tx.facebookInteractionComment.deleteMany({where:{...where,id:{in:ids}}})).count;
    }
    if(phase==='sends'){
-    const where={...scope,createdAt:{lt:bodyCutoff},payloadHash:{not:'deleted'}},rows=await tx.facebookInteractionSendAttempt.findMany({where,take:limit,select:{id:true}});return(await tx.facebookInteractionSendAttempt.updateMany({where:{...where,id:{in:rows.map(v=>v.id)}},data:{payloadHash:'deleted',providerId:null,diagnosticId:null,errorCode:null,status:'unknown'}})).count;
+    const where={...scope,createdAt:{lt:bodyCutoff},payloadHash:{not:'deleted'}},rows=await tx.facebookInteractionSendAttempt.findMany({where,take:limit,select:{id:true}});return(await tx.facebookInteractionSendAttempt.updateMany({where:{...where,id:{in:rows.map(v=>v.id)}},data:{targetHash:'deleted',payloadHash:'deleted',providerId:null,diagnosticId:null,errorCode:null,status:'unknown'}})).count;
    }
    const rows=await tx.$queryRaw<Array<{id:string}>>`SELECT t.id FROM facebook_interaction_threads t WHERE t."managedPageId"=${page.id}::uuid AND (t."connectionVersion" IS NULL OR t."connectionVersion"<=${a.connectionVersion}) AND t."receivedAt"<${bodyCutoff} AND t."updatedAt"<${bodyCutoff} AND NOT EXISTS(SELECT 1 FROM facebook_interaction_messages m WHERE m."managedPageId"=t."managedPageId" AND m."participantId"=t."participantId") ORDER BY t.id LIMIT ${limit}`;
    return(await tx.facebookInteractionThread.deleteMany({where:{...scope,id:{in:rows.map(v=>v.id)},receivedAt:{lt:bodyCutoff},updatedAt:{lt:bodyCutoff}}})).count;
@@ -69,7 +69,7 @@ export function createInboxRetention({db,policy=createLiveInboxPolicy([])}:{db:P
    const cutoff=new Date(now.getTime()-90*86400000),expired={OR:[{receivedAt:{lt:cutoff}},{occurredAt:{lt:cutoff}}]};let changed=0;
    const rows=await tx.interactionItem.findMany({where:expired,take:limit,select:{id:true}});
    changed+=(await tx.interactionItem.deleteMany({where:{...expired,id:{in:rows.map(r=>r.id)}}})).count;if(changed>=limit)return changed;
-   const [candidate]=await tx.$queryRaw<Array<{id:string}>>(Prisma.sql`SELECT c.id FROM "InteractionCase" c WHERE NOT (${liveInboxCaseSql(now)}) OR (c."lastInboundAt"<${cutoff} AND NOT EXISTS(SELECT 1 FROM "InteractionItem" i WHERE i."caseId"=c.id)) ORDER BY c.id LIMIT 1 FOR UPDATE OF c SKIP LOCKED`);
+   const [candidate]=await tx.$queryRaw<Array<{id:string}>>(Prisma.sql`SELECT c.id FROM "InteractionCase" c WHERE NOT (${liveInboxCaseSql(now)}) ORDER BY c.id LIMIT 1 FOR UPDATE OF c SKIP LOCKED`);
    if(candidate){
     const c=await tx.interactionCase.findUniqueOrThrow({where:{id:candidate.id}}),items=await tx.interactionItem.findMany({where:{workspaceId:c.workspaceId,caseId:c.id},take:limit-changed,orderBy:[{occurredAt:'desc'},{id:'desc'}]});
     const dead:string[]=[];let live:typeof items[number]|undefined;

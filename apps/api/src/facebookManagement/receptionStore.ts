@@ -1,8 +1,9 @@
 import {randomUUID} from 'node:crypto';
 import {Prisma,type PrismaClient} from '@prisma/client';
 import type {FacebookReceivedEventInput} from '../services/facebookWebhookService';
+import type {MetaDeletionSubject} from '../interactionInbox/deletion';
 export type ManagementEventClaim={id:string;managedPageId:string;claimToken:string;payload:FacebookReceivedEventInput};
-export function createFacebookManagementReceptionStore({db,appId}:{db:PrismaClient;appId:string}){
+export function createFacebookManagementReceptionStore({db,appId,isDeleted,onDeleted}:{db:PrismaClient;appId:string;isDeleted?:(tx:Prisma.TransactionClient,subject:MetaDeletionSubject)=>Promise<boolean>;onDeleted?:(tx:Prisma.TransactionClient,subject:MetaDeletionSubject)=>Promise<unknown>}){
   async function available(tx:Prisma.TransactionClient,id:string,pageId:string,now:Date){
     const page=await tx.facebookManagedPage.findFirst({where:{id,pageId,active:true,notificationsEnabled:true,connection:{appId,status:'active'}},include:{connection:true}});
     if(!page)return null;
@@ -11,14 +12,16 @@ export function createFacebookManagementReceptionStore({db,appId}:{db:PrismaClie
     if(!current||current.expiresAt&&current.expiresAt<=now)return null;
     const member=await tx.workspaceMember.findFirst({where:{userId:current.connection.userId,workspaceId:current.connection.workspaceId,status:'active',role:{in:['owner','admin']}}});
     const binding=await tx.socialAccount.findFirst({where:{workspaceId:current.connection.workspaceId,platform:'facebook',accountType:'page',providerAccountId:pageId,status:'active'},select:{id:true}});
-    return member&&binding?current:null;
+    const selected=await tx.facebookManagementPageSelection.findUnique({where:{workspaceId_pageId:{workspaceId:current.connection.workspaceId,pageId}}});
+    return member&&binding&&selected?.managedPageId===current.id?current:null;
   }
+  function subject(page:NonNullable<Awaited<ReturnType<typeof available>>>,event:FacebookReceivedEventInput):MetaDeletionSubject{return{workspaceId:page.connection.workspaceId,platform:'facebook',appId,providerAssetId:page.pageId,connectionId:page.connectionId,connectionVersion:page.connection.version,actorId:event.kind==='comment'?event.senderId:event.senderId===page.pageId?event.recipientId:event.senderId,providerEventId:event.providerId,eventKind:event.kind==='comment'?'comments':'messages',occurredAt:new Date(event.occurredAt)};}
   return {
     async enqueue(events:FacebookReceivedEventInput[]){
       await db.$transaction(async tx=>{
         for(const event of events){
           const pages=await tx.facebookManagedPage.findMany({where:{pageId:event.pageId,active:true,notificationsEnabled:true,connection:{appId,status:'active'}},select:{id:true},orderBy:{id:'asc'}});
-          for(const page of pages){const current=await available(tx,page.id,event.pageId,new Date());if(current)await tx.facebookInteractionEvent.createMany({skipDuplicates:true,data:[{managedPageId:page.id,connectionVersion:current.connection.version,eventKey:event.eventKey,payload:JSON.parse(JSON.stringify(event)) as Prisma.InputJsonValue}]});}
+          for(const page of pages){const current=await available(tx,page.id,event.pageId,new Date());if(current&&(!isDeleted||!await isDeleted(tx,subject(current,event))))await tx.facebookInteractionEvent.createMany({skipDuplicates:true,data:[{managedPageId:page.id,connectionVersion:current.connection.version,eventKey:event.eventKey,payload:JSON.parse(JSON.stringify(event)) as Prisma.InputJsonValue}]});}
         }
       },{timeout:20000});
     },
@@ -42,6 +45,7 @@ export function createFacebookManagementReceptionStore({db,appId}:{db:PrismaClie
         const page=await available(tx,before.managedPageId,event.pageId,now);if(!page)return true;
         // Delayed raw delivery belongs to its original grant, never the latest token.
         if(before.connectionVersion===null||before.connectionVersion!==page.connection.version)return true;
+        if(isDeleted&&await isDeleted(tx,subject(page,event)))return true;
         await tx.$queryRaw`SELECT id FROM facebook_interaction_events WHERE id=${claim.id}::uuid FOR UPDATE`;
         if(!await tx.facebookInteractionEvent.findFirst({where:{id:claim.id,claimToken:claim.claimToken,status:'processing',leaseUntil:{gt:now}}}))return false;
         const occurredAt=new Date(event.occurredAt);if(!Number.isFinite(occurredAt.getTime())||occurredAt.getTime()<now.getTime()-90*86400000||occurredAt.getTime()>now.getTime()+60000)return true;
@@ -50,6 +54,7 @@ export function createFacebookManagementReceptionStore({db,appId}:{db:PrismaClie
           const data={connectionVersion:page.connection.version,postId:event.postId,text:event.deleted?null:event.text??null,senderId:event.senderId,senderName:event.senderName,deleted:event.deleted===true,occurredAt};
           const inserted=await tx.facebookInteractionComment.createMany({skipDuplicates:true,data:[{managedPageId:page.id,providerId:event.providerId,...data}]});
           if(!inserted.count)await tx.facebookInteractionComment.updateMany({where:{managedPageId:page.id,providerId:event.providerId,...(!event.deleted?{deleted:false}:{}),OR:[{occurredAt:{lt:occurredAt}},...(event.deleted?[{occurredAt,deleted:false}]:[])]},data});
+          if(event.deleted&&onDeleted)await onDeleted(tx,subject(page,event));
         }else if(event.kind==='message'){
           if(!event.senderId||!event.recipientId||event.senderId===event.recipientId||(event.senderId!==page.pageId&&event.recipientId!==page.pageId))throw Error('Invalid management message event');
           const participantId=event.senderId===page.pageId?event.recipientId:event.senderId;

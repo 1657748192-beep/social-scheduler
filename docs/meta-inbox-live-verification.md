@@ -5,11 +5,19 @@ Spec: `docs/superpowers/specs/2026-10-17-meta-inbox-live-integration-design.md`.
 
 ## Boundaries
 
+### Official-source access checkpoint, 2026-10-19 (not live-policy activation)
+
+Direct document fetch still returned429, but a separate read-only Playwright browser successfully rendered the official Meta documentation. Reviewed the Instagram Login [overview](https://developers.facebook.com/documentation/instagram-platform/overview) (page revision2026-09-28), [business login](https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login/business-login) (revision2026-03-13), and [get started](https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login/get-started). These confirm the distinct Instagram Login host/permission family, professional-account requirement, standard versus advanced access, OAuth exchange, and the distinction between app-scoped and professional-account identifiers. Overview describes the ordinary24-hour message window and conditional exceptions; this implementation does not enable those exceptions or HUMAN_AGENT. Actual app ownership, grant-inspection mechanism, callbacks/subscriptions and deletion obligations still require verification before any live rule is enabled. Local synthetic7/90day caps are product maximums, not a claim that Meta universally permits retaining every item for those durations. Browser evidence remains ignored under .playwright-cli; no login or provider settings changed.
+
+2026-10-19 continuation (local only): default Facebook signed-comment deletion and scoped reply-audit cleanup verified18/18; atomic independent disconnect verified16/16; configured Instagram lifecycle prerequisite verified12/12. Additive migration010 modifies only the independent Facebook reply-attempt target digest (protected migration5/5). Shorter body retention is enforced in projection, direct access, list counts and pagination; fresh content in long-lived conversations remains readable (10/10 related tests). API TypeScript build exited0. Full regression is in progress; these checks are not live provider acceptance or recording readiness.
+
 Facebook Factory Wholesale and Instagram mooyamcosmetic are user-selected test names, not yet verified production asset IDs. No production/provider changes, OAuth consent, subscriptions, actual sends, deployment or review submission performed by this implementation stage.
 
 Publishing credentials, original OAuth flows, permissions, schedules and Worker remain out of scope. New independent interaction policies default closed. Synthetic rules in test helpers are explicitly labeled `synthetic-test-only` and cannot be treated as policy review evidence.
 
 ## Baseline
+
+Task7 final continuation regression:863/863 passed,0failed/skipped,314106.512ms (`meta-task7-final-full.log`); API build exit0. This includes the actual API-owned bounded background lifecycle and expiry, both platforms' independent source handling, exact Facebook comment deletion, atomic disconnect rollback, and per-asset shorter-policy query filtering. No production deployment or provider writes occurred.
 
 Before changes: 658 passed, 0 failed/skipped, 167701.5956 ms (`meta-inbox-baseline.log` in local task tools directory). Existing unrelated dirty verification docs and ignored QA outputs were preserved.
 

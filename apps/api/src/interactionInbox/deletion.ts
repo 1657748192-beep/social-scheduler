@@ -52,14 +52,21 @@ export function createMetaInboxDeletion({db,hmacKey=deriveMetaDeletionKey(),encr
  }
  async function markItemInTransaction(tx:Prisma.TransactionClient,a:MetaDeletionAsset,eventKind:'comments'|'messages',eventId:string){
   if(!['comments','messages'].includes(eventKind)||!validId(eventId))throw new HttpError(400,'Invalid Meta deletion target');
+  if(a.platform==='facebook'){
+   namespace(a);if(eventKind!=='comments')throw new HttpError(409,'Facebook content deletion kind unavailable');
+   await tx.$queryRaw`SELECT id FROM facebook_management_connections WHERE id=${a.connectionId}::uuid FOR UPDATE`;
+   const page=await tx.facebookManagedPage.findFirst({where:{connectionId:a.connectionId,pageId:a.providerAssetId,connection:{workspaceId:a.workspaceId,appId:a.appId,version:a.connectionVersion}},select:{id:true}});if(!page)throw new HttpError(404,'Facebook deletion source unavailable');
+   const rows=await tx.facebookInteractionComment.findMany({where:{managedPageId:page.id,providerId:eventId,connectionVersion:{lte:a.connectionVersion}},take:51,select:{id:true}});if(rows.length>50)throw new HttpError(409,'Meta deletion admission exceeds bounded source mapping');
+   const at=await timestamp(tx);await marker(tx,a,'item',[eventKind,eventId],at);return queue(tx,{asset:a,kind:'item',eventKind,subjectId:eventId,sourceIds:rows.map(v=>v.id),phase:'pending'},'verified_content_deletion',at);
+  }
   await connection(tx,a);const at=await timestamp(tx),where={workspaceId:a.workspaceId,connectionId:a.connectionId,connectionVersion:{lte:a.connectionVersion},providerId:eventId};
   const sources=eventKind==='messages'?await tx.instagramInteractionMessage.findMany({where,take:51,select:{id:true}}):await tx.instagramInteractionComment.findMany({where,take:51,select:{id:true}});if(sources.length>50)throw new HttpError(409,'Meta deletion admission exceeds bounded source mapping');
   const indexed=eventKind==='messages'&&!sources.length?await tx.interactionItem.findFirst({where:{workspaceId:a.workspaceId,platform:'instagram',providerEventId:eventId,case:{asset:{canonicalKey:JSON.stringify([a.platform,a.appId,a.providerAssetId]),instagramConnectionId:a.connectionId}},AND:[{sourceRef:{path:['connectionId'],equals:a.connectionId}},{sourceRef:{path:['connectionVersion'],lte:a.connectionVersion}}]},select:{id:true}}):null;
   await marker(tx,a,'item',[eventKind,eventId],at);return queue(tx,{asset:a,kind:'item',eventKind,subjectId:eventId,sourceIds:sources.map(v=>v.id),unmappedItem:eventKind==='messages'&&!sources.length&&!indexed,phase:'pending'},'verified_content_deletion',at);
  }
  async function recordDisconnectInTransaction(tx:Prisma.TransactionClient,a:MetaDeletionAsset){
-  namespace(a);if(a.platform!=='instagram')throw new HttpError(409,'Independent disconnect mapping unavailable');
-  const c=await tx.instagramManagementConnection.findFirst({where:{id:a.connectionId,workspaceId:a.workspaceId,appId:a.appId,providerAccountId:a.providerAssetId,version:a.connectionVersion+1,status:'disconnected',tokenEncrypted:null}});
+  namespace(a);
+  const c=a.platform==='instagram'?await tx.instagramManagementConnection.findFirst({where:{id:a.connectionId,workspaceId:a.workspaceId,appId:a.appId,providerAccountId:a.providerAssetId,version:a.connectionVersion+1,status:'disconnected',tokenEncrypted:null}}):await tx.facebookManagementConnection.findFirst({where:{id:a.connectionId,workspaceId:a.workspaceId,appId:a.appId,version:a.connectionVersion+1,status:'disconnected',userTokenEncrypted:null,pages:{some:{pageId:a.providerAssetId,active:false,pageTokenEncrypted:null,notificationsEnabled:false}}}});
   if(!c)throw new HttpError(409,'Independent disconnect not committed in this transaction');
   const at=await timestamp(tx);await marker(tx,a,'asset',['connection',a.connectionId,'version',a.connectionVersion],at);await marker(tx,a,'asset',['cutoff'],at,true);
   return queue(tx,{asset:a,kind:'asset',phase:'pending'},'connection_disconnected',at);

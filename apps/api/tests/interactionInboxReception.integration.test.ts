@@ -7,7 +7,7 @@ test('deleted young source and unattended expiry invalidate and prune customer i
  await f.db.facebookInteractionMessage.delete({where:{id:source.id}});const access=inboxTestAccess(f);await assert.rejects(access.resolveCase(f.adminCtx,c.id),(e:any)=>e.statusCode===404);
  const {createInboxRetention}=await import('../src/interactionInbox/retention');await createInboxRetention({db:f.db}).pruneInbox(new Date(),50);
  assert.equal(await f.db.interactionCase.count({where:{id:c.id}}),0);assert.equal(await f.db.interactionIdentity.count({where:{customerId:c.customerId!}}),0);
- const expired=await f.seedVerifiedCase(0,'expired');await f.db.interactionCase.update({where:{id:expired.id},data:{createdAt:new Date('2020-01-01')}});
+ const expired=await f.seedVerifiedCase(0,'expired');await f.db.interactionCase.update({where:{id:expired.id},data:{createdAt:new Date('2020-01-01'),lastInboundAt:new Date('2020-01-01')}});
  await assert.rejects(access.resolveCase(f.adminCtx,expired.id));await createInboxRetention({db:f.db}).pruneInbox(new Date(),50);assert.equal(await f.db.interactionCase.count({where:{id:expired.id}}),0);
 }));
 test('verifiedEventsOnlyAndReplayDoesNotReopenResolvedCase',async()=>withInboxFixture(async f=>{

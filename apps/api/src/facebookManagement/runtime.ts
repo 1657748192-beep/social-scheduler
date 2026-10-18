@@ -18,11 +18,13 @@ import type {ManagementContext} from './types';
 import {createFacebookManagementReceptionStore} from './receptionStore';
 import {createFacebookSubscriptionService} from './subscriptions';
 import {createFacebookWebhookRouter} from '../routes/facebookWebhookRoutes';
+import {createMetaInboxDeletion} from '../interactionInbox/deletion';
 
 export function createFacebookManagementRuntime(input:{db:PrismaClient;settings:FacebookManagementConfig;appSecret:string;verifyToken?:string;encrypt:(v:string)=>string;decrypt:(v:string)=>string;fetchImpl?:typeof fetch}){
   const {db,settings,appSecret}=input;
-  const store=createFacebookManagementStore(db,input.encrypt);
-  const receptionStore=createFacebookManagementReceptionStore({db,appId:settings.appId});
+  const deletion=createMetaInboxDeletion({db,encrypt:input.encrypt,decrypt:input.decrypt});
+  const store=createFacebookManagementStore(db,input.encrypt,{onDisconnect:async(tx,c,pages)=>{for(const page of pages)await deletion.recordDisconnectInTransaction(tx,{workspaceId:c.workspaceId,platform:'facebook',appId:c.appId,providerAssetId:page.pageId,connectionId:c.id,connectionVersion:c.version});}});
+  const receptionStore=createFacebookManagementReceptionStore({db,appId:settings.appId,isDeleted:deletion.isDeleted,onDeleted:async(tx,s)=>{if(s.eventKind==='comments')await deletion.markItemInTransaction(tx,s,s.eventKind,s.providerEventId);}});
   const gateway=createFacebookManagementGateway({config:settings,appSecret,fetchImpl:input.fetchImpl});
   const oauth=createFacebookManagementOAuth({store,config:settings,exchange:gateway.exchange,authorizeUser:async ctx=>{
     const user=await db.user.findUnique({where:{id:ctx.userId},select:{email:true}});

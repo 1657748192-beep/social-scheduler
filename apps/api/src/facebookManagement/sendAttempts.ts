@@ -24,7 +24,7 @@ export function createFacebookSendExecutor({db}:{db:PrismaClient}){
     const hash=createHash('sha256').update(JSON.stringify([input.kind,input.targetId,input.text])).digest('hex');
     const key={managedPageId:ctx.managedPageId,requestKey:input.requestKey};
     let attempt:FacebookInteractionSendAttempt;
-    try{attempt=await db.facebookInteractionSendAttempt.create({data:{...key,connectionVersion:page.connection.version,payloadHash:hash,diagnosticId:randomUUID()}});}
+    try{attempt=await db.facebookInteractionSendAttempt.create({data:{...key,connectionVersion:page.connection.version,targetHash:createHash('sha256').update(JSON.stringify([input.kind,input.targetId])).digest('hex'),payloadHash:hash,diagnosticId:randomUUID()}});}
     catch(error){
       if(!(error instanceof Prisma.PrismaClientKnownRequestError)||error.code!=='P2002')throw error;
       const existing=await db.facebookInteractionSendAttempt.findUnique({where:{managedPageId_requestKey:key}});

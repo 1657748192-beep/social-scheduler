@@ -26,7 +26,7 @@ export function createInboxAccess(deps:{db:PrismaClient;facebookEnabled:boolean;
   const account=await tx.socialAccount.findFirst({where:{workspaceId:ctx.workspaceId,platform:row.asset.platform as any,providerAccountId:row.asset.providerAssetId,status:'active'}});
   if(!account)throw new HttpError(404,'Interaction unavailable');
   const resolved=await resolveInboxAsset(ctx,account.id,`${row.kind}.read` as Capability),source=sourceSchema.parse(row.sourceRef);
-  if(!await inboxSourceAlive(tx,source,row.createdAt))throw new HttpError(404,'Interaction source expired or deleted');
+  if(!await inboxSourceAlive(tx,source,row.lastInboundAt??row.createdAt,new Date(),policy))throw new HttpError(404,'Interaction source expired or deleted');
   const current=sourceSchema.parse(resolved.sourceRef);
   if(resolved.canonicalKey!==row.asset.canonicalKey||resolved.connectionVersion!==row.asset.connectionVersion||source.connectionVersion!==resolved.connectionVersion||source.connectionId!==current.connectionId||source.managedPageId!==current.managedPageId)throw new HttpError(404,'Interaction connection changed');
   return{row,asset:resolved,source};
