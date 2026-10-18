@@ -5,8 +5,10 @@ import type {InboxDb} from './access';
 import type {Scope,ResolvedAsset,Capability} from './types';
 import {parseInboxSource} from './source';
 import type {LiveInboxPolicy} from './livePolicy';
+import type {createInstagramManagementAccess} from '../instagramManagement/access';
+export type InboxInstagramConnection={enabled:boolean;access:ReturnType<typeof createInstagramManagementAccess>};
 
-export function createInboxConnectionAccess(deps:{db:PrismaClient;facebookEnabled:boolean;policy:LiveInboxPolicy;authorize:(db:InboxDb,ctx:Scope,mode?:'read'|'write'|'manage')=>Promise<unknown>;verifyFacebook:(ctx:Scope&{managedPageId:string})=>Promise<Record<string,{status:string}>>}){
+export function createInboxConnectionAccess(deps:{db:PrismaClient;facebookEnabled:boolean;instagram?:InboxInstagramConnection;policy:LiveInboxPolicy;authorize:(db:InboxDb,ctx:Scope,mode?:'read'|'write'|'manage')=>Promise<unknown>;verifyFacebook:(ctx:Scope&{managedPageId:string})=>Promise<Record<string,{status:string}>>}){
  const {db,policy,authorize}=deps;
  function hasTask(tasks:string[],capability?:Capability){
   const required=capability?.startsWith('comments.')?['MODERATE']:capability==='messages.reply'?['MESSAGING']:capability==='messages.read'?['MESSAGING','MODERATE']:null;
@@ -21,6 +23,7 @@ export function createInboxConnectionAccess(deps:{db:PrismaClient;facebookEnable
   const account=await db.socialAccount.findFirst({where:{id:accountId,workspaceId:ctx.workspaceId}});
   if(!account)throw new HttpError(404,'Account unavailable');
   if(account.status!=='active')throw new HttpError(403,'Account unavailable');
+  if(account.platform==='instagram'&&deps.instagram?.enabled)return deps.instagram.access.resolve(ctx,accountId,capability);
   if(account.platform!=='facebook')throw new HttpError(409,'Platform not integrated');
   if(!deps.facebookEnabled)throw new HttpError(409,'Interaction integration is disabled');
   const selected=await db.facebookManagementPageSelection.findUnique({where:{workspaceId_pageId:{workspaceId:ctx.workspaceId,pageId:account.providerAccountId}},include:{page:{include:{connection:true}}}}),p=selected?.page,c=p?.connection;
@@ -38,6 +41,7 @@ export function createInboxConnectionAccess(deps:{db:PrismaClient;facebookEnable
   return{ctx,accountId,platform:'facebook',canonicalKey:JSON.stringify(['facebook',c.appId,p.pageId]),appNamespace:c.appId,providerAssetId:p.pageId,connectionVersion:c.version,sourceRef:{platform:'facebook',managedPageId:p.id,connectionId:c.id,connectionVersion:c.version}};
  }
  async function assertCurrent(tx:InboxDb,a:ResolvedAsset,capability?:Capability){
+  if(a.platform==='instagram'&&deps.instagram?.enabled)return deps.instagram.access.assertCurrent(tx,a,capability);
   await authorize(tx,a.ctx,capability?.endsWith('.reply')?'write':'read');if(!deps.facebookEnabled||a.platform!=='facebook')throw new HttpError(409,'Platform not integrated');
   policy.requireAsset({workspaceId:a.ctx.workspaceId,platform:'facebook',appId:a.appNamespace,providerAssetId:a.providerAssetId},capability?.endsWith('.reply')?'send':'read');
   const s=parseInboxSource(a.sourceRef,'facebook');

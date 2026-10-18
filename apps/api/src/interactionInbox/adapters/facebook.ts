@@ -8,6 +8,7 @@ export function createFacebookInboxAdapter({db,engagement}:{db:PrismaClient;enga
  function source(a:ResolvedAsset,s:SourceRef){const parsed=sourceSchema.parse(s),current=sourceSchema.parse(a.sourceRef);if(a.platform!=='facebook'||parsed.managedPageId!==current.managedPageId||parsed.connectionId!==current.connectionId||parsed.connectionVersion!==a.connectionVersion)throw new HttpError(404,'Source unavailable');return parsed;}
  const mapMessage=(a:ResolvedAsset,ref:SourceRef,m:any,name:string|null):VerifiedItem=>({providerEventId:m.id,threadId:ref.conversationId!,actorId:ref.participantId??null,actorName:name,kind:'messages',occurredAt:m.timestamp,inbound:m.inbound,deleted:false,sourceRef:ref});
  return{capabilities:caps,
+  async pendingSend(a,ref,requestKey,store){const s=source(a,ref),row=await store.facebookInteractionSendAttempt.findFirst({where:{managedPageId:s.managedPageId,connectionVersion:a.connectionVersion,requestKey,page:{connection:{workspaceId:a.ctx.workspaceId,appId:a.appNamespace,id:s.connectionId}}},select:{requestKey:true,status:true,diagnosticId:true,createdAt:true}});return row?{...row,createdAt:row.createdAt.toISOString()}:null;},
   async list(a,kind,cursor,limit){
    const ctx=context(a),scope={ctx,asset:a.canonicalKey,version:a.connectionVersion,kind},c=cursor?decodeInboxCursor(scope,cursor):{};
    if(kind==='mentions')throw new HttpError(409,'Mentions not integrated');

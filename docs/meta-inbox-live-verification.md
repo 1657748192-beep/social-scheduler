@@ -17,6 +17,8 @@ Publishing credentials, original OAuth flows, permissions, schedules and Worker 
 
 ## Baseline
 
+Task8 unified adapters: full877/877 passed,0failed/skipped,341994.8982ms (`meta-task8-full.log`); final strengthened same-name/independent-source focused15/15 passed,0failed/skipped,13703.635ms (`meta-unified-final-focused.log`); API build exit0. Actual runtime wiring now receives the independent Instagram adapter, while missing inspector/policy/connection keeps it closed. Pending state is read from the existing per-platform attempt store using the caller transaction; unknown blocks another key. Search reads only the selected live source/epoch, with shorter reviewed caps. Fresh Instagram projections persist references, not a second private body. No publishing credential, production service or Worker changed.
+
 Task7 final continuation regression:863/863 passed,0failed/skipped,314106.512ms (`meta-task7-final-full.log`); API build exit0. This includes the actual API-owned bounded background lifecycle and expiry, both platforms' independent source handling, exact Facebook comment deletion, atomic disconnect rollback, and per-asset shorter-policy query filtering. No production deployment or provider writes occurred.
 
 Before changes: 658 passed, 0 failed/skipped, 167701.5956 ms (`meta-inbox-baseline.log` in local task tools directory). Existing unrelated dirty verification docs and ignored QA outputs were preserved.

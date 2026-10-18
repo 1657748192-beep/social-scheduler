@@ -63,7 +63,7 @@ export function createApp(options:{facebookManagement?:FacebookManagementRuntime
   app.use("/api/v1", workspaceRoutes);
   app.use('/api/v1',createFacebookManagementRouter(management,{webAppUrl:config.WEB_APP_URL}));
   app.use('/api/v1',createInstagramManagementRouter(instagram,{webAppUrl:config.WEB_APP_URL}));
-  app.use('/api/v1',createInteractionInboxRouter(createInteractionInboxRuntime({db:prisma,redis,facebook:management})));
+  app.use('/api/v1',createInteractionInboxRouter(createInteractionInboxRuntime({db:prisma,redis,facebook:management,instagram})));
   app.use("/api/v1", tiktokSandboxRoutes);
   app.use('/api/v1',createFacebookPageSyncRouter(getFacebookPageSyncRuntime,{webAppUrl:config.WEB_APP_URL}));
   app.use("/api/v1", socialAccountRoutes);

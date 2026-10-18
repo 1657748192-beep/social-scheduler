@@ -5,7 +5,7 @@ import {LOGIN_SESSION_MAX_AGE_MS} from '../utils/sessionLifetime';
 import type {Capability,Scope} from './types';
 import {parseInboxSource} from './source';
 import {createLiveInboxPolicy,type LiveInboxPolicy} from './livePolicy';
-import {createInboxConnectionAccess,type InboxConnectionAccess} from './connectionAccess';
+import {createInboxConnectionAccess,type InboxConnectionAccess,type InboxInstagramConnection} from './connectionAccess';
 import {inboxSourceAlive} from './sourceLifetime';
 export type InboxDb=PrismaClient|Prisma.TransactionClient;
 // Compatibility boundary for existing Facebook-only callers. Never parses Instagram.
@@ -15,7 +15,7 @@ export async function requireInboxAccess(db:InboxDb,ctx:Scope,mode:'read'|'write
  if(!session||!member||!user||!isPlatformAdmin(user.email)||(mode==='write'&&member.role==='viewer')||(mode==='manage'&&!['owner','admin'].includes(member.role)))throw new HttpError(403,'Interaction inbox access denied');
  return member;
 }
-export function createInboxAccess(deps:{db:PrismaClient;facebookEnabled:boolean;policy?:LiveInboxPolicy;connections?:InboxConnectionAccess;verifyFacebook:(ctx:Scope&{managedPageId:string})=>Promise<Record<string,{status:string}>>}){
+export function createInboxAccess(deps:{db:PrismaClient;facebookEnabled:boolean;instagram?:InboxInstagramConnection;policy?:LiveInboxPolicy;connections?:InboxConnectionAccess;verifyFacebook:(ctx:Scope&{managedPageId:string})=>Promise<Record<string,{status:string}>>}){
  const {db}=deps,policy=deps.policy??createLiveInboxPolicy([]);
  const connections=deps.connections??createInboxConnectionAccess({...deps,policy,authorize:requireInboxAccess});
  const resolveInboxAsset=connections.resolve;
@@ -25,10 +25,12 @@ export function createInboxAccess(deps:{db:PrismaClient;facebookEnabled:boolean;
   if(!row||!row.asset.active)throw new HttpError(404,'Interaction unavailable');
   const account=await tx.socialAccount.findFirst({where:{workspaceId:ctx.workspaceId,platform:row.asset.platform as any,providerAccountId:row.asset.providerAssetId,status:'active'}});
   if(!account)throw new HttpError(404,'Interaction unavailable');
-  const resolved=await resolveInboxAsset(ctx,account.id,`${row.kind}.read` as Capability),source=sourceSchema.parse(row.sourceRef);
+  const resolved=await resolveInboxAsset(ctx,account.id,`${row.kind}.read` as Capability);
+  if(resolved.platform!=='facebook'&&resolved.platform!=='instagram')throw new HttpError(409,'Platform not integrated');
+  const source=parseInboxSource(row.sourceRef,resolved.platform);
   if(!await inboxSourceAlive(tx,source,row.lastInboundAt??row.createdAt,new Date(),policy))throw new HttpError(404,'Interaction source expired or deleted');
-  const current=sourceSchema.parse(resolved.sourceRef);
-  if(resolved.canonicalKey!==row.asset.canonicalKey||resolved.connectionVersion!==row.asset.connectionVersion||source.connectionVersion!==resolved.connectionVersion||source.connectionId!==current.connectionId||source.managedPageId!==current.managedPageId)throw new HttpError(404,'Interaction connection changed');
+  const current=parseInboxSource(resolved.sourceRef,resolved.platform);
+  if(resolved.canonicalKey!==row.asset.canonicalKey||resolved.connectionVersion!==row.asset.connectionVersion||source.connectionVersion!==resolved.connectionVersion||source.connectionId!==current.connectionId||source.platform!==current.platform||source.platform==='facebook'&&current.platform==='facebook'&&source.managedPageId!==current.managedPageId||source.platform==='instagram'&&current.platform==='instagram'&&source.instagramAccountId!==current.instagramAccountId)throw new HttpError(404,'Interaction connection changed');
   return{row,asset:resolved,source};
  }
  async function write<T>(ctx:Scope,action:(tx:Prisma.TransactionClient)=>Promise<T>,mode:'write'|'manage'='write'){

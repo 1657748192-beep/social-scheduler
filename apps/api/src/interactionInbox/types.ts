@@ -18,6 +18,7 @@ export type AdapterPage={items:VerifiedItem[];nextCursor:string|null;coverage:st
 export type AdapterDetail={items:BodyItem[];nextCursor:string|null;officialUrl:string|null;replyTarget:string|null;capabilities:CapabilityDto[]};
 export type SendOutcome={status:'sent';providerId:string}|{status:'failed';code:string;diagnosticId:string}|{status:'unknown';diagnosticId:string};
 export interface InboxAdapter {
+ pendingSend?(asset:ResolvedAsset,source:SourceRef,requestKey:string,db:import('./access').InboxDb):Promise<{requestKey:string;status:string;diagnosticId:string|null;createdAt:string}|null>;
  capabilities(asset:ResolvedAsset):Promise<CapabilityDto[]>;
  list(asset:ResolvedAsset,kind:Kind,cursor:string|null,limit:number):Promise<AdapterPage>;
  detail(asset:ResolvedAsset,sourceRef:SourceRef,cursor?:string):Promise<AdapterDetail>;

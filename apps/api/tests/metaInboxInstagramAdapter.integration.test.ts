@@ -80,7 +80,7 @@ test('paginationLimitDoesNotDropMessagesAndIsBoundToAsset',async()=>withMetaInbo
 test('commentOnlyGrantCanReadItsSendOutcome',async()=>withMetaInboxFixture(async f=>{
  const {adapter,asset}=await setup(f);await f.db.instagramManagementConnection.update({where:{id:f.instagramConnectionIds[0]},data:{scopes:['instagram_business_basic','instagram_business_manage_comments']}});
  const key=randomUUID();await f.db.instagramInteractionSendAttempt.create({data:{workspaceId:f.adminCtx.workspaceId,connectionId:f.instagramConnectionIds[0],connectionVersion:1,requestKey:key,targetHash:'synthetic-only',payloadHash:'synthetic-only',status:'unknown',diagnosticId:randomUUID()}});
- assert.equal((await adapter.pendingSend(asset,key))?.status,'unknown');
+ assert.equal((await adapter.pendingSend!(asset,asset.sourceRef!,key,f.db))?.status,'unknown');
 }));
 test('verifiedBusinessUserAliasIsNotTreatedAsTheCustomer',async()=>withMetaInboxFixture(async f=>{
  const thread={id:'alias-thread',participants:{data:[{id:'200'},{id:'300'}]}};
