@@ -25,7 +25,7 @@ export function createInstagramManagementReceptionStore({db,appId,enabled=false,
   if(event.field==='messages'&&(!event.senderId||!event.recipientId||(!own.includes(event.senderId)&&!own.includes(event.recipientId))||own.includes(event.senderId)&&own.includes(event.recipientId)))return null;
   if(event.field==='comments'&&(!event.mediaId||!event.senderId&&!event.deleted))return null;
   const actorId=event.field==='messages'?(own.includes(event.senderId!)?event.recipientId:event.senderId):event.senderId;
-  if(await isDeleted(tx,{workspaceId:c.workspaceId,platform:'instagram',appId,providerAssetId:c.providerAccountId,actorId,providerEventId:event.eventId,eventKind:event.field,occurredAt:instagramSourceTime(event.timestamp,now),connectionVersion:version}))return null;
+  if(await isDeleted(tx,{workspaceId:c.workspaceId,platform:'instagram',appId,providerAssetId:c.providerAccountId,actorId,providerEventId:event.eventId,eventKind:event.field,occurredAt:instagramSourceTime(event.timestamp,now),connectionId:c.id,connectionVersion:version}))return null;
   return{c,actorId};
  }
  return{

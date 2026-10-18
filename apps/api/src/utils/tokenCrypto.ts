@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes } from "crypto";
 import { config } from "../config";
 
 const algorithm = "aes-256-gcm";
@@ -7,6 +7,12 @@ function getKey() {
   return createHash("sha256")
     .update(config.TOKEN_ENCRYPTION_KEY ?? config.JWT_SECRET)
     .digest();
+}
+
+// Domain-separated server-only key, stable across API restarts and shared by
+// OAuth admission/deletion. No new credential or environment variable is needed.
+export function deriveMetaDeletionKey(){
+  return createHmac('sha256',getKey()).update('social-scheduler:meta-inbox-deletion:v1').digest('hex');
 }
 
 export function encryptToken(value: string) {

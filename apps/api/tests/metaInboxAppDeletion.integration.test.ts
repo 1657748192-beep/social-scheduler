@@ -13,7 +13,10 @@ async function fixture(run:(f:MetaInboxFixture,d:any,request:(user?:string,reaso
  return withMetaInboxFixture(async f=>{
   const d=createMetaInboxDeletion({db:f.db,hmacKey:'synthetic-app-key-'+f.userId,encrypt:encryptToken,decrypt:decryptToken}) as any,codes:string[]=[];
   const request=async(user=providerUserId,reason:'data_deletion'|'deauthorization'='data_deletion')=>{assert.equal(typeof d.requestUserDeletion,'function','verified app-user admission required');const value=await d.requestUserDeletion(ns,verifyMetaSignedRequest(sign(user),secret),reason);codes.push(value.confirmationCode);return value;};
-  try{await run(f,d,request);}finally{if((f.db as any).metaInboxAppDeletionRequest)await (f.db as any).metaInboxAppDeletionRequest.deleteMany({where:{confirmationCode:{in:codes}}});}
+  try{await run(f,d,request);}finally{
+   if((f.db as any).metaInboxAppDeletionRequest)await (f.db as any).metaInboxAppDeletionRequest.deleteMany({where:{confirmationCode:{in:codes}}});
+   if((f.db as any).metaInboxGrantFence){const hashes=[providerUserId,'91000000000000999'].map(user=>createHmac('sha256','synthetic-app-key-'+f.userId).update(JSON.stringify(['app-user','instagram','456',user])).digest('hex'));await(f.db as any).metaInboxGrantFence.deleteMany({where:{platform:'instagram',appId:'456',subjectHash:{in:hashes}}});}
+  }
  });
 }
 async function knownGrants(f:MetaInboxFixture){

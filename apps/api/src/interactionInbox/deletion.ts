@@ -3,14 +3,17 @@ import type {PrismaClient,Prisma} from '@prisma/client';
 import {HttpError} from '../utils/errors';
 import {z} from 'zod';
 import {requireVerifiedMetaDeletionProof,type VerifiedMetaDeletionProof,type MetaDeletionNamespace} from './metaDeletionRoutes';
+import {createMetaGrantFence} from './grantFence';
+import {deriveMetaDeletionKey} from '../utils/tokenCrypto';
 export type MetaDeletionAsset={workspaceId:string;platform:'facebook'|'instagram';appId:string;providerAssetId:string;connectionId:string;connectionVersion:number};
-export type MetaDeletionSubject=Omit<MetaDeletionAsset,'connectionId'>&{actorId?:string;providerEventId:string;eventKind?:'comments'|'messages';occurredAt:Date};
-export type MetaDeletionTarget={asset:MetaDeletionAsset;kind:'item'|'actor'|'asset';eventKind?:'comments'|'messages';subjectId?:string;phase:'pending'|'messages'|'comments'|'sources_done';rawAfter?:string;sourceIds?:string[];activeCaseId?:string;cleanupCustomerId?:string;unmappedRaw?:boolean;unmappedItem?:boolean};
-type Deps={db:PrismaClient;hmacKey:string;encrypt:(value:string)=>string;decrypt:(value:string)=>string;now?:()=>Date};
+export type MetaDeletionSubject=MetaDeletionAsset&{actorId?:string;providerEventId:string;eventKind?:'comments'|'messages';occurredAt:Date};
+export type MetaDeletionTarget={format?:2;asset:MetaDeletionAsset;kind:'item'|'actor'|'asset';eventKind?:'comments'|'messages';subjectId?:string;phase:'pending'|'messages'|'comments'|'sources_done';rawAfter?:string;sourceIds?:string[];activeCaseId?:string;cleanupCustomerId?:string;unmappedRaw?:boolean;unmappedItem?:boolean};
+type Deps={db:PrismaClient;hmacKey?:string;encrypt:(value:string)=>string;decrypt:(value:string)=>string;now?:()=>Date};
 const validId=(v:unknown)=>typeof v==='string'&&v.length>0&&v.length<=256;
 /** Internal transactional admission only. Not a frontend-selected deletion API. */
-export function createMetaInboxDeletion({db,hmacKey,encrypt,decrypt,now=()=>new Date()}:Deps){
+export function createMetaInboxDeletion({db,hmacKey=deriveMetaDeletionKey(),encrypt,decrypt,now=()=>new Date()}:Deps){
  if(hmacKey.length<16)throw new Error('Meta deletion configuration unavailable');
+ const grantFence=createMetaGrantFence(hmacKey);
  function digest(a:Omit<MetaDeletionAsset,'connectionId'>,kind:string,parts:unknown[]){return createHmac('sha256',hmacKey).update(JSON.stringify([a.workspaceId,a.platform,a.appId,a.providerAssetId,kind,...parts])).digest('hex');}
  function namespace(a:Omit<MetaDeletionAsset,'connectionId'>){
   if(!/^[a-f0-9-]{36}$/i.test(a.workspaceId)||!['facebook','instagram'].includes(a.platform)||!/^\d{1,256}$/.test(a.appId)||!/^\d{1,256}$/.test(a.providerAssetId)||!Number.isInteger(a.connectionVersion)||a.connectionVersion<1)throw new HttpError(400,'Invalid Meta deletion scope');
@@ -30,15 +33,15 @@ export function createMetaInboxDeletion({db,hmacKey,encrypt,decrypt,now=()=>new 
   await tx.metaInboxDeletionMarker.upsert({where:{workspaceId_platform_appId_subjectKind_subjectHash:key},create:{...key,createdAt:at},update:updateCutoff?{createdAt:at}:{}});
  }
  async function queue(tx:Prisma.TransactionClient,target:MetaDeletionTarget,reason:string,at:Date){
-  const a=target.asset,parts=[target.eventKind??null,target.subjectId??null,a.connectionVersion],subjectHash=digest(a,target.kind,parts),requestKey=digest(a,'request',[target.kind,...parts]);
-  const row=await tx.metaInboxDeletionRequest.upsert({where:{requestKey},create:{...namespace(a),subjectKind:target.kind,subjectHash,reason,requestKey,confirmationCode:randomBytes(32).toString('base64url'),createdAt:at,nextAttemptAt:at,targetEncrypted:encrypt(JSON.stringify(target))},update:{}});
+  const a=target.asset,parts=[target.eventKind??null,target.subjectId??null,a.connectionId,a.connectionVersion],subjectHash=digest(a,target.kind,parts),requestKey=digest(a,'request-v2',[target.kind,...parts]);
+  const row=await tx.metaInboxDeletionRequest.upsert({where:{requestKey},create:{...namespace(a),subjectKind:target.kind,subjectHash,reason,requestKey,confirmationCode:randomBytes(32).toString('base64url'),createdAt:at,nextAttemptAt:at,targetEncrypted:encrypt(JSON.stringify({...target,format:2}))},update:{}});
   return{confirmationCode:row.confirmationCode};
  }
  function decode(request:{workspaceId:string;platform:string;appId:string;subjectKind:string;requestKey:string|null;targetEncrypted:string|null}){
   let t:MetaDeletionTarget;
-  try{t=z.object({asset:z.object({workspaceId:z.string().uuid(),platform:z.enum(['facebook','instagram']),appId:z.string().regex(/^\d{1,256}$/),providerAssetId:z.string().regex(/^\d{1,256}$/),connectionId:z.string().uuid(),connectionVersion:z.number().int().positive()}),kind:z.enum(['item','actor','asset']),eventKind:z.enum(['comments','messages']).optional(),subjectId:z.string().min(1).max(256).optional(),phase:z.enum(['pending','messages','comments','sources_done']),rawAfter:z.string().uuid().optional(),sourceIds:z.array(z.string().uuid()).max(50).optional(),activeCaseId:z.string().uuid().optional(),cleanupCustomerId:z.string().uuid().optional(),unmappedRaw:z.boolean().optional(),unmappedItem:z.boolean().optional()}).strict().parse(JSON.parse(decrypt(request.targetEncrypted!)));}catch{throw new HttpError(409,'Meta purge locator unavailable');}
-  const a=t.asset,parts=[t.eventKind??null,t.subjectId??null,a.connectionVersion];
-  if(a.platform!=='instagram'||request.workspaceId!==a.workspaceId||request.appId!==a.appId||request.platform!==a.platform||request.subjectKind!==t.kind||request.requestKey!==digest(a,'request',[t.kind,...parts])||t.kind==='item'&&(!t.eventKind||!t.subjectId)||t.kind==='actor'&&!t.subjectId)throw new HttpError(409,'Meta purge scope unavailable');return t;
+  try{t=z.object({format:z.literal(2).optional(),asset:z.object({workspaceId:z.string().uuid(),platform:z.enum(['facebook','instagram']),appId:z.string().regex(/^\d{1,256}$/),providerAssetId:z.string().regex(/^\d{1,256}$/),connectionId:z.string().uuid(),connectionVersion:z.number().int().positive()}),kind:z.enum(['item','actor','asset']),eventKind:z.enum(['comments','messages']).optional(),subjectId:z.string().min(1).max(256).optional(),phase:z.enum(['pending','messages','comments','sources_done']),rawAfter:z.string().uuid().optional(),sourceIds:z.array(z.string().uuid()).max(50).optional(),activeCaseId:z.string().uuid().optional(),cleanupCustomerId:z.string().uuid().optional(),unmappedRaw:z.boolean().optional(),unmappedItem:z.boolean().optional()}).strict().parse(JSON.parse(decrypt(request.targetEncrypted!)));}catch{throw new HttpError(409,'Meta purge locator unavailable');}
+  const a=t.asset,parts=[t.eventKind??null,t.subjectId??null,...(t.format===2?[a.connectionId]:[]),a.connectionVersion];
+  if(a.platform!=='instagram'||request.workspaceId!==a.workspaceId||request.appId!==a.appId||request.platform!==a.platform||request.subjectKind!==t.kind||request.requestKey!==digest(a,t.format===2?'request-v2':'request',[t.kind,...parts])||t.kind==='item'&&(!t.eventKind||!t.subjectId)||t.kind==='actor'&&!t.subjectId)throw new HttpError(409,'Meta purge scope unavailable');return t;
  }
  return{
   async markItem(a:MetaDeletionAsset,eventKind:'comments'|'messages',eventId:string){
@@ -58,19 +61,19 @@ export function createMetaInboxDeletion({db,hmacKey,encrypt,decrypt,now=()=>new 
    return db.$transaction(async tx=>{
     await connection(tx,a);const at=now();
     await tx.instagramManagementConnection.update({where:{id:a.connectionId},data:{status:'disconnected',tokenEncrypted:null,version:{increment:1},notificationsEnabled:false}});
-    await marker(tx,a,'asset',['version',a.connectionVersion],at);await marker(tx,a,'asset',['cutoff'],at,true);
+    await marker(tx,a,'asset',['connection',a.connectionId,'version',a.connectionVersion],at);await marker(tx,a,'asset',['cutoff'],at,true);
     return queue(tx,{asset:a,kind:'asset',phase:'pending'},'connection_disconnected',at);
    });
   },
   async requestUserDeletion(n:MetaDeletionNamespace,proof:VerifiedMetaDeletionProof,reason:'data_deletion'|'deauthorization'){
    const verified=requireVerifiedMetaDeletionProof(proof),at=now();
    if(n.platform!=='instagram'||!/^\d{1,256}$/.test(n.appId)||!['data_deletion','deauthorization'].includes(reason))throw new HttpError(409,'Meta app deletion mapping unavailable');
-   const subjectHash=createHmac('sha256',hmacKey).update(JSON.stringify(['app-user',n.platform,n.appId,verified.userId])).digest('hex');
+   const subjectHash=grantFence.subjectHash(n,verified.userId);
    const requestKey=createHmac('sha256',hmacKey).update(JSON.stringify(['app-request',subjectHash,verified.issuedAt,reason])).digest('hex');
    return db.$transaction(async tx=>{
     // Serialize duplicate/multi-reason callbacks for the same app-scoped subject,
     // then lock verified independent connections in stable order. No Graph calls.
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${subjectHash},0))`;
+    await grantFence.advance(tx,n,verified.userId,new Date((verified.issuedAt+1)*1000-1));
     const existing=await tx.metaInboxAppDeletionRequest.findUnique({where:{requestKey}});if(existing)return{confirmationCode:existing.confirmationCode};
     const where={platform:'instagram' as const,appId:n.appId,providerUserId:verified.userId};
     const candidates=await tx.instagramManagementConnection.findMany({where,orderBy:{id:'asc'},take:51,select:{id:true}});
@@ -81,10 +84,11 @@ export function createMetaInboxDeletion({db,hmacKey,encrypt,decrypt,now=()=>new 
      const c=await tx.instagramManagementConnection.findFirst({where:{...where,id:candidate.id}});
      // updatedAt is not consent time; unknown legacy provenance is not authority
      // to disconnect a later grant. Same-second consent is conservatively newer.
-     if(!c||!c.authorizedAt||c.authorizedAt.getTime()>=verified.issuedAt*1000){unresolved=true;continue;}
+     const consentStartedAt=c?.authorizationStartedAt??c?.authorizedAt;
+     if(!c||!consentStartedAt||consentStartedAt.getTime()>=verified.issuedAt*1000){unresolved=true;continue;}
      const a:MetaDeletionAsset={workspaceId:c.workspaceId,platform:'instagram',appId:c.appId,providerAssetId:c.providerAccountId,connectionId:c.id,connectionVersion:c.version};
      await tx.instagramManagementConnection.update({where:{id:c.id},data:{status:'disconnected',tokenEncrypted:null,version:{increment:1},notificationsEnabled:false}});
-     await marker(tx,a,'asset',['version',a.connectionVersion],at);await marker(tx,a,'asset',['cutoff'],at,true);
+     await marker(tx,a,'asset',['connection',a.connectionId,'version',a.connectionVersion],at);await marker(tx,a,'asset',['cutoff'],at,true);
      const queued=await queue(tx,{asset:a,kind:'asset',phase:'pending'},reason,at);
      const child=await tx.metaInboxDeletionRequest.findUniqueOrThrow({where:{confirmationCode:queued.confirmationCode},select:{id:true,workspaceId:true}});targets.push(child);
     }
@@ -106,7 +110,10 @@ export function createMetaInboxDeletion({db,hmacKey,encrypt,decrypt,now=()=>new 
    });
   },
   async isDeleted(tx:Prisma.TransactionClient,s:MetaDeletionSubject){
-   const n=namespace(s),keys:Array<{subjectKind:string;subjectHash:string}>=[{subjectKind:'asset',subjectHash:digest(s,'asset',['version',s.connectionVersion])}];
+   if(!z.string().uuid().safeParse(s.connectionId).success)throw new HttpError(409,'Meta source connection unavailable');
+   // Legacy version markers are deliberately still restrictive; without their
+   // original connection identity it is unsafe to silently reinterpret/remove them.
+   const n=namespace(s),keys:Array<{subjectKind:string;subjectHash:string}>=[{subjectKind:'asset',subjectHash:digest(s,'asset',['connection',s.connectionId,'version',s.connectionVersion])},{subjectKind:'asset',subjectHash:digest(s,'asset',['version',s.connectionVersion])}];
    if(s.actorId)keys.push({subjectKind:'actor',subjectHash:digest(s,'actor',[s.actorId])});
    for(const kind of s.eventKind?[s.eventKind]:['comments','messages'])keys.push({subjectKind:'item',subjectHash:digest(s,'item',[kind,s.providerEventId])});
    if(await tx.metaInboxDeletionMarker.findFirst({where:{...n,OR:keys},select:{id:true}}))return true;

@@ -5,6 +5,7 @@ import {requireInboxAccess,type InboxDb} from '../interactionInbox/access';
 import type {Scope} from '../interactionInbox/types';
 import type {LiveInboxPolicy} from '../interactionInbox/livePolicy';
 import type {InstagramManagementGrant} from './types';
+import {createMetaGrantFence} from '../interactionInbox/grantFence';
 
 const hash=(value:string)=>createHash('sha256').update(value).digest('hex');
 export async function requireInstagramAccount(db:InboxDb,ctx:Scope,accountId:string,mode:'read'|'manage'='read'){
@@ -13,7 +14,8 @@ export async function requireInstagramAccount(db:InboxDb,ctx:Scope,accountId:str
  if(!account||!/^\d{1,256}$/.test(account.providerAccountId)||!['business','creator','BUSINESS','MEDIA_CREATOR','CREATOR'].includes(account.accountType??''))throw new HttpError(404,'Independent Instagram account unavailable');
  return account;
 }
-export function createInstagramManagementStore({db,encrypt,policy}:{db:PrismaClient;encrypt:(value:string)=>string;policy:LiveInboxPolicy}){
+export function createInstagramManagementStore({db,encrypt,policy,hmacKey}:{db:PrismaClient;encrypt:(value:string)=>string;policy:LiveInboxPolicy;hmacKey?:string}){
+ const grantFence=createMetaGrantFence(hmacKey);
  return{
   async createState(ctx:Scope,accountId:string,appId:string,state:string,callbackUrl:string){
    const account=await requireInstagramAccount(db,ctx,accountId,'manage');policy.requireAsset({workspaceId:ctx.workspaceId,platform:'instagram',appId,providerAssetId:account.providerAccountId},'read');
@@ -28,14 +30,18 @@ export function createInstagramManagementStore({db,encrypt,policy}:{db:PrismaCli
   async saveGrant(saved:InstagramManagementOAuthState,grant:InstagramManagementGrant){
    const ctx:Scope={workspaceId:saved.workspaceId,userId:saved.userId,sessionId:saved.sessionId};
    return db.$transaction(async tx=>{
+    // Subject lock precedes session/account/connection locks on both sides of
+    // the race, including first grants with no existing connection to lock.
+    const barrier=await grantFence.lockAndRead(tx,{platform:'instagram',appId:grant.appId},grant.providerUserId);
     await tx.$queryRaw`SELECT id FROM user_sessions WHERE id=${ctx.sessionId}::uuid FOR UPDATE`;
     await tx.$queryRaw`SELECT id FROM workspace_members WHERE workspace_id=${ctx.workspaceId}::uuid AND user_id=${ctx.userId}::uuid FOR UPDATE`;
     await tx.$queryRaw`SELECT id FROM social_accounts WHERE id=${saved.accountId}::uuid FOR UPDATE`;
     const account=await requireInstagramAccount(tx,ctx,saved.accountId,'manage');
     const state=await tx.instagramManagementOAuthState.findFirst({where:{id:saved.id,workspaceId:ctx.workspaceId,sessionId:ctx.sessionId,consumedAt:{not:null},expiresAt:{gt:new Date()}}});
     if(!state||account.providerAccountId!==saved.expectedProviderAccountId||grant.providerAccountId!==saved.expectedProviderAccountId||grant.appId!==saved.appId)throw new HttpError(409,'Independent Instagram identity changed');
+    if(barrier&&state.createdAt<=barrier.cutoff)throw new HttpError(409,'Independent authorization predates a deletion request');
     policy.requireAsset({workspaceId:ctx.workspaceId,platform:'instagram',appId:grant.appId,providerAssetId:grant.providerAccountId},'read');
-    const data={userId:ctx.userId,providerUserId:grant.providerUserId,tokenEncrypted:encrypt(grant.accessToken),scopes:grant.scopes,expiresAt:grant.expiresAt,displayName:grant.displayName??null,status:'active',notificationsEnabled:false,subscribedFields:[],authorizedAt:new Date()};
+    const data={userId:ctx.userId,providerUserId:grant.providerUserId,tokenEncrypted:encrypt(grant.accessToken),scopes:grant.scopes,expiresAt:grant.expiresAt,displayName:grant.displayName??null,status:'active',notificationsEnabled:false,subscribedFields:[],authorizedAt:new Date(),authorizationStartedAt:state.createdAt};
     const row=await tx.instagramManagementConnection.upsert({where:{workspaceId_appId_providerAccountId:{workspaceId:ctx.workspaceId,appId:grant.appId,providerAccountId:grant.providerAccountId}},create:{workspaceId:ctx.workspaceId,platform:'instagram',appId:grant.appId,providerAccountId:grant.providerAccountId,...data},update:{...data,version:{increment:1}}});
     await requireInboxAccess(tx,ctx,'manage');return row.id;
    },{timeout:15000});
