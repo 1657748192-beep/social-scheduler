@@ -28,7 +28,7 @@ export function createInstagramManagementAccess({db,appId,policy,decrypt,inspect
   await requireInboxAccess(db,ctx,capability.endsWith('.reply')?'write':'read');
   await requireAuthorizer(ctx,c.userId);
   const current=await db.instagramManagementConnection.findFirst({where:{id:c.id,workspaceId:ctx.workspaceId,appId,status:'active',version:c.version,tokenEncrypted:c.tokenEncrypted}});
-  if(!current)throw new HttpError(409,'Independent Instagram connection changed');
+  if(!current||current.expiresAt&&current.expiresAt<=new Date()||needed.some(scope=>!current.scopes.includes(scope)))throw new HttpError(409,'Independent Instagram connection changed');
   const asset:ResolvedAsset={ctx,accountId,platform:'instagram',canonicalKey:JSON.stringify(['instagram',appId,account.providerAccountId]),appNamespace:appId,providerAssetId:account.providerAccountId,connectionVersion:c.version,sourceRef:{platform:'instagram',instagramAccountId:accountId,connectionId:c.id,connectionVersion:c.version}};
   return{asset,accessToken};
  }

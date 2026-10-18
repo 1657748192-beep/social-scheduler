@@ -26,3 +26,9 @@ test('authorizerDemotedDuringInspectionCannotReturnCredentials',async()=>withMet
  }});
  await assert.rejects(access.resolve(f.adminCtx,f.instagramAccountIds[0],'messages.read'));
 }));
+test('scopesRevokedDuringInspectionCannotReturnCredentials',async()=>withMetaInboxFixture(async f=>{
+ const policy=createLiveInboxPolicy([{workspaceId:f.adminCtx.workspaceId,platform:'instagram',appId:'456',providerAssetId:'100',readEnabled:true,sendEnabled:false,policy:{product:'synthetic-test-only',graphVersion:'v25.0',checkedAt:'2020-01-01T00:00:00Z',sources:['https://developers.facebook.com/docs/'],rawRetentionDays:7,contentRetentionDays:90,replyWindowMs:86400000,reviewed:true}}]);
+ const access=createInstagramManagementAccess({db:f.db,appId:'456',policy,decrypt:v=>v,inspect:async()=>{
+  await f.db.instagramManagementConnection.update({where:{id:f.instagramConnectionIds[0]},data:{scopes:['instagram_business_basic']}});return{appId:'456',providerAccountId:'100',scopes,expiresAt:new Date(Date.now()+86400000)};
+ }});await assert.rejects(access.resolve(f.adminCtx,f.instagramAccountIds[0],'messages.read'));
+}));
