@@ -31,6 +31,8 @@ Focused regression56/56 passed,0failed/skipped,112396.8826ms (`meta-review-five-
 
 Fresh owned-schema002->011 migration verification also passed after the FK correction: all9new migrations preserve the seven-model publishing snapshot, including encrypted credential and schedule/job fixtures, and the256-digit namespace check remains valid (`review-fresh-upgrade.log`). Only the random validated loopback test schema was removed afterward.
 
+The compatible rescue is now pinned to core fix revision `0e69a731ce97593c9426d0e7644df089c59cf4e4`, not the pre-review lifecycle baseline. The old rescue rejection test observed prepare returning0 before the pin change, then the full command-recorder safety suite passed10/10,0failed/skipped,43304.8279ms (`review-rescue-green.log`). Final whole-suite verification includes both this regression and the pending-key lookup race. New-build browser QA passed desktop and360px mobile checks, all three top tabs, independent expired-state/read/send distinctions, cancelled OAuth draft retention, partial-failure/mobile recovery and ordinary-customer denial. All browser API responses and writes were synthetic interceptions; external provider hosts were blocked.
+
 Read-only TAT recheck `inv-ta32g2gcps` succeeded0: same production revision `b6df277`, same Worker ID/image and `2026-10-13T06:01:58.401954871Z` start time. Meta developer browser still requires the user's personal login. No live grant, callback/subscription change, real send, permission application or review submission was performed.
 
 ### Task10 pre-review verification and deployment protection

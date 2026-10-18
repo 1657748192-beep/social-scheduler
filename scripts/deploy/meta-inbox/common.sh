@@ -4,7 +4,7 @@ umask 077
 target=${META_INBOX_TARGET:?Explicit target commit required}
 rescue=${META_INBOX_RESCUE_TARGET:?Explicit compatible rescue commit required}
 [[ $target =~ ^[0-9a-f]{40}$ && $rescue =~ ^[0-9a-f]{40}$ ]]
-[[ $rescue = 79420f69d5da9cb93a150bb74e6d16b0643a0ab5 ]]
+[[ $rescue = 0e69a731ce97593c9426d0e7644df089c59cf4e4 ]]
 [[ ${META_INBOX_INSTANCE:-} = lhins-qkg26b57 ]]
 [[ ${META_INBOX_DEPLOY_APPROVED:-} = yes ]]
 instance=$(curl -fsS --max-time 3 http://metadata.tencentyun.com/latest/meta-data/instance-id)
