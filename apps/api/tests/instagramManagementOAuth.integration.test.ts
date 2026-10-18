@@ -42,6 +42,15 @@ test('independentConsentPreservesPublishingSnapshot',async()=>withMetaInboxFixtu
  const result=await s.oauth.callback({state,code:'code'}),row=await f.db.instagramManagementConnection.findUniqueOrThrow({where:{id:result.connectionId}});
  assert.equal(row.tokenEncrypted,'sealed:independent-new-token');assert.equal(row.version,2);assert.deepEqual(row.scopes,scopes);assert.deepEqual(await f.publishingSnapshot(),before);
 }));
+
+test('onlySuccessfulIndependentConsentRecordsAuthorizationEpoch',async()=>withMetaInboxFixture(async f=>{
+ const old=new Date('2020-01-01T00:00:00Z');await f.db.instagramManagementConnection.update({where:{id:f.instagramConnectionIds[0]},data:{authorizedAt:old}});
+ const s=service(f),before=await f.publishingSnapshot(),state=await start(f,s),earliest=Date.now();
+ const result=await s.oauth.callback({state,code:'code'}),row=await f.db.instagramManagementConnection.findUniqueOrThrow({where:{id:result.connectionId}});
+ assert.ok(row.authorizedAt&&row.authorizedAt.getTime()>=earliest&&row.authorizedAt.getTime()<=Date.now(),'new consent must have its own server-recorded epoch, not inherit the old grant');
+ const invalid=service(f,async()=>({...service(f).grant,providerAccountId:'999'})),bad=await start(f,invalid);await assert.rejects(invalid.oauth.callback({state:bad,code:'bad'}));
+ assert.equal((await f.db.instagramManagementConnection.findUniqueOrThrow({where:{id:row.id}})).authorizedAt?.getTime(),row.authorizedAt.getTime());assert.deepEqual(await f.publishingSnapshot(),before);
+}));
 test('expiredStateAndForeignAppNeverExchange',async()=>withMetaInboxFixture(async f=>{
  let exchanges=0;const s=service(f,async()=>{exchanges++;return service(f).grant;}),state=await start(f,s);
  await f.db.instagramManagementOAuthState.updateMany({where:{workspaceId:f.adminCtx.workspaceId},data:{expiresAt:new Date(0)}});await assert.rejects(s.oauth.callback({state,code:'code'}));assert.equal(exchanges,0);

@@ -4,6 +4,11 @@ import {HttpError} from '../utils/errors';
 export type MetaDeletionNamespace={platform:'facebook'|'instagram';appId:string};
 declare const verifiedDeletion:unique symbol;
 export type VerifiedMetaDeletionProof={userId:string;issuedAt:number;readonly[verifiedDeletion]:true};
+const verifiedProofs=new WeakSet<object>();
+export function requireVerifiedMetaDeletionProof(proof:VerifiedMetaDeletionProof){
+ if(!proof||typeof proof!=='object'||!verifiedProofs.has(proof))throw new HttpError(403,'Invalid Meta deletion proof');
+ return proof;
+}
 /** Verifies the original encoded payload, never a reserialized frontend object. */
 export function verifyMetaSignedRequest(value:string,secret:string):VerifiedMetaDeletionProof{
  try{
@@ -14,7 +19,7 @@ export function verifyMetaSignedRequest(value:string,secret:string):VerifiedMeta
   const raw=Buffer.from(payload,'base64url');if(raw.toString('base64url')!==payload.replace(/=+$/,''))throw Error();
   const p=JSON.parse(raw.toString('utf8')),now=Math.floor(Date.now()/1000);
   if(p.algorithm!=='HMAC-SHA256'||typeof p.user_id!=='string'||!/^\d{1,256}$/.test(p.user_id)||!Number.isSafeInteger(p.issued_at)||p.issued_at<1||p.issued_at>now+300||p.issued_at<now-7*86400)throw Error();
-  return{userId:p.user_id,issuedAt:p.issued_at} as VerifiedMetaDeletionProof;
+  const proof=Object.freeze({userId:p.user_id,issuedAt:p.issued_at}) as VerifiedMetaDeletionProof;verifiedProofs.add(proof);return proof;
  }catch{throw new HttpError(403,'Invalid Meta deletion request');}
 }
 type Deletion={requestUserDeletion:(namespace:MetaDeletionNamespace,proof:VerifiedMetaDeletionProof,reason:'data_deletion'|'deauthorization')=>Promise<{confirmationCode:string}>};

@@ -1135,6 +1135,7 @@ model InstagramManagementConnection {
   version Int @default(1)
   notificationsEnabled Boolean @default(false)
   subscribedFields String[] @default([])
+  authorizedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   workspace Workspace @relation(fields:[workspaceId],references:[id],onDelete:Cascade)
@@ -1282,4 +1283,21 @@ model MetaInboxDeletionMarker {
   createdAt DateTime @default(now())
   workspace Workspace @relation(fields:[workspaceId],references:[id],onDelete:Cascade)
   @@unique([workspaceId,platform,appId,subjectKind,subjectHash],map:"meta_inbox_deleted_subject")
+}
+
+// App-level signed callbacks have no caller-selected workspace. The encrypted
+// locator pins independently verified workspace jobs; unknown mappings stay pending.
+model MetaInboxAppDeletionRequest {
+  id String @id @default(uuid()) @db.Uuid
+  platform String
+  appId String
+  subjectHash String
+  requestKey String @unique
+  reason String
+  confirmationCode String @unique
+  status String @default("pending")
+  targetEncrypted String?
+  createdAt DateTime @default(now())
+  completedAt DateTime?
+  @@index([status,createdAt])
 }

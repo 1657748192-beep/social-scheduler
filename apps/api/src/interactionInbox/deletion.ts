@@ -2,6 +2,7 @@ import {createHash,createHmac,randomBytes} from 'node:crypto';
 import type {PrismaClient,Prisma} from '@prisma/client';
 import {HttpError} from '../utils/errors';
 import {z} from 'zod';
+import {requireVerifiedMetaDeletionProof,type VerifiedMetaDeletionProof,type MetaDeletionNamespace} from './metaDeletionRoutes';
 export type MetaDeletionAsset={workspaceId:string;platform:'facebook'|'instagram';appId:string;providerAssetId:string;connectionId:string;connectionVersion:number};
 export type MetaDeletionSubject=Omit<MetaDeletionAsset,'connectionId'>&{actorId?:string;providerEventId:string;eventKind?:'comments'|'messages';occurredAt:Date};
 export type MetaDeletionTarget={asset:MetaDeletionAsset;kind:'item'|'actor'|'asset';eventKind?:'comments'|'messages';subjectId?:string;phase:'pending'|'messages'|'comments'|'sources_done';rawAfter?:string;sourceIds?:string[];activeCaseId?:string;cleanupCustomerId?:string;unmappedRaw?:boolean;unmappedItem?:boolean};
@@ -59,6 +60,49 @@ export function createMetaInboxDeletion({db,hmacKey,encrypt,decrypt,now=()=>new 
     await tx.instagramManagementConnection.update({where:{id:a.connectionId},data:{status:'disconnected',tokenEncrypted:null,version:{increment:1},notificationsEnabled:false}});
     await marker(tx,a,'asset',['version',a.connectionVersion],at);await marker(tx,a,'asset',['cutoff'],at,true);
     return queue(tx,{asset:a,kind:'asset',phase:'pending'},'connection_disconnected',at);
+   });
+  },
+  async requestUserDeletion(n:MetaDeletionNamespace,proof:VerifiedMetaDeletionProof,reason:'data_deletion'|'deauthorization'){
+   const verified=requireVerifiedMetaDeletionProof(proof),at=now();
+   if(n.platform!=='instagram'||!/^\d{1,256}$/.test(n.appId)||!['data_deletion','deauthorization'].includes(reason))throw new HttpError(409,'Meta app deletion mapping unavailable');
+   const subjectHash=createHmac('sha256',hmacKey).update(JSON.stringify(['app-user',n.platform,n.appId,verified.userId])).digest('hex');
+   const requestKey=createHmac('sha256',hmacKey).update(JSON.stringify(['app-request',subjectHash,verified.issuedAt,reason])).digest('hex');
+   return db.$transaction(async tx=>{
+    // Serialize duplicate/multi-reason callbacks for the same app-scoped subject,
+    // then lock verified independent connections in stable order. No Graph calls.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${subjectHash},0))`;
+    const existing=await tx.metaInboxAppDeletionRequest.findUnique({where:{requestKey}});if(existing)return{confirmationCode:existing.confirmationCode};
+    const where={platform:'instagram' as const,appId:n.appId,providerUserId:verified.userId};
+    const candidates=await tx.instagramManagementConnection.findMany({where,orderBy:{id:'asc'},take:51,select:{id:true}});
+    if(candidates.length>50)throw new HttpError(409,'Meta app deletion mapping exceeds bounded admission');
+    const targets:Array<{id:string;workspaceId:string}>=[];let unresolved=candidates.length===0;
+    for(const candidate of candidates){
+     await tx.$queryRaw`SELECT id FROM "InstagramManagementConnection" WHERE id=${candidate.id}::uuid FOR UPDATE`;
+     const c=await tx.instagramManagementConnection.findFirst({where:{...where,id:candidate.id}});
+     // updatedAt is not consent time; unknown legacy provenance is not authority
+     // to disconnect a later grant. Same-second consent is conservatively newer.
+     if(!c||!c.authorizedAt||c.authorizedAt.getTime()>=verified.issuedAt*1000){unresolved=true;continue;}
+     const a:MetaDeletionAsset={workspaceId:c.workspaceId,platform:'instagram',appId:c.appId,providerAssetId:c.providerAccountId,connectionId:c.id,connectionVersion:c.version};
+     await tx.instagramManagementConnection.update({where:{id:c.id},data:{status:'disconnected',tokenEncrypted:null,version:{increment:1},notificationsEnabled:false}});
+     await marker(tx,a,'asset',['version',a.connectionVersion],at);await marker(tx,a,'asset',['cutoff'],at,true);
+     const queued=await queue(tx,{asset:a,kind:'asset',phase:'pending'},reason,at);
+     const child=await tx.metaInboxDeletionRequest.findUniqueOrThrow({where:{confirmationCode:queued.confirmationCode},select:{id:true,workspaceId:true}});targets.push(child);
+    }
+    const row=await tx.metaInboxAppDeletionRequest.create({data:{platform:n.platform,appId:n.appId,subjectHash,requestKey,reason,confirmationCode:randomBytes(32).toString('base64url'),targetEncrypted:encrypt(JSON.stringify({version:1,targets,unresolved})),createdAt:at}});
+    return{confirmationCode:row.confirmationCode};
+   },{timeout:15000});
+  },
+  async settleAppDeletion(code:string):Promise<boolean>{
+   if(!/^[a-zA-Z0-9_-]{32,128}$/.test(code))throw new HttpError(400,'Invalid Meta deletion receipt');
+   return db.$transaction(async tx=>{
+    await tx.$queryRaw`SELECT id FROM "MetaInboxAppDeletionRequest" WHERE "confirmationCode"=${code} FOR UPDATE`;
+    const row=await tx.metaInboxAppDeletionRequest.findUnique({where:{confirmationCode:code}});if(!row)throw new HttpError(404,'Meta deletion unavailable');if(row.status==='completed')return true;
+    let locator:{version:1;targets:Array<{id:string;workspaceId:string}>;unresolved:boolean};
+    try{locator=z.object({version:z.literal(1),targets:z.array(z.object({id:z.string().uuid(),workspaceId:z.string().uuid()}).strict()).max(50),unresolved:z.boolean()}).strict().parse(JSON.parse(decrypt(row.targetEncrypted!)));}catch{throw new HttpError(409,'Meta app deletion locator unavailable');}
+    if(locator.unresolved||!locator.targets.length||new Set(locator.targets.map(v=>v.id)).size!==locator.targets.length)return false;
+    const children=await tx.metaInboxDeletionRequest.findMany({where:{id:{in:locator.targets.map(v=>v.id)}},take:50,select:{id:true,workspaceId:true,appId:true,platform:true,subjectKind:true,status:true}});
+    if(children.length!==locator.targets.length||locator.targets.some(target=>!children.some(child=>child.id===target.id&&child.workspaceId===target.workspaceId&&child.appId===row.appId&&child.platform===row.platform&&child.subjectKind==='asset'&&child.status==='completed')))return false;
+    await tx.metaInboxAppDeletionRequest.update({where:{id:row.id},data:{status:'completed',completedAt:now(),targetEncrypted:null}});return true;
    });
   },
   async isDeleted(tx:Prisma.TransactionClient,s:MetaDeletionSubject){
@@ -187,7 +231,7 @@ export function createMetaInboxDeletion({db,hmacKey,encrypt,decrypt,now=()=>new 
   },
   async status(code:string):Promise<'pending'|'completed'|null>{
    if(!/^[a-zA-Z0-9_-]{32,128}$/.test(code))return null;
-   const row=await db.metaInboxDeletionRequest.findUnique({where:{confirmationCode:code},select:{status:true}});return row?row.status==='completed'?'completed':'pending':null;
+   const row=await db.metaInboxDeletionRequest.findUnique({where:{confirmationCode:code},select:{status:true}})??await db.metaInboxAppDeletionRequest.findUnique({where:{confirmationCode:code},select:{status:true}});return row?row.status==='completed'?'completed':'pending':null;
   }
  };
 }

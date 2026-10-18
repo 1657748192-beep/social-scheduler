@@ -35,7 +35,7 @@ export function createInstagramManagementStore({db,encrypt,policy}:{db:PrismaCli
     const state=await tx.instagramManagementOAuthState.findFirst({where:{id:saved.id,workspaceId:ctx.workspaceId,sessionId:ctx.sessionId,consumedAt:{not:null},expiresAt:{gt:new Date()}}});
     if(!state||account.providerAccountId!==saved.expectedProviderAccountId||grant.providerAccountId!==saved.expectedProviderAccountId||grant.appId!==saved.appId)throw new HttpError(409,'Independent Instagram identity changed');
     policy.requireAsset({workspaceId:ctx.workspaceId,platform:'instagram',appId:grant.appId,providerAssetId:grant.providerAccountId},'read');
-    const data={userId:ctx.userId,providerUserId:grant.providerUserId,tokenEncrypted:encrypt(grant.accessToken),scopes:grant.scopes,expiresAt:grant.expiresAt,displayName:grant.displayName??null,status:'active',notificationsEnabled:false,subscribedFields:[]};
+    const data={userId:ctx.userId,providerUserId:grant.providerUserId,tokenEncrypted:encrypt(grant.accessToken),scopes:grant.scopes,expiresAt:grant.expiresAt,displayName:grant.displayName??null,status:'active',notificationsEnabled:false,subscribedFields:[],authorizedAt:new Date()};
     const row=await tx.instagramManagementConnection.upsert({where:{workspaceId_appId_providerAccountId:{workspaceId:ctx.workspaceId,appId:grant.appId,providerAccountId:grant.providerAccountId}},create:{workspaceId:ctx.workspaceId,platform:'instagram',appId:grant.appId,providerAccountId:grant.providerAccountId,...data},update:{...data,version:{increment:1}}});
     await requireInboxAccess(tx,ctx,'manage');return row.id;
    },{timeout:15000});

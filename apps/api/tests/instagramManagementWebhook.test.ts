@@ -39,6 +39,10 @@ test('realAppMountsNewRawCallbackOnlyWhenEnabledAndKeepsRetiredRoutesClosed',asy
  const env=require('../../../scripts/run-tests.cjs').environment(true,true);
  process.env.DATABASE_URL=env.FACEBOOK_TEST_DATABASE_URL;process.env.REDIS_URL=env.LOCAL_UPLOAD_TEST_REDIS_URL;process.env.FACEBOOK_MANAGEMENT_ENABLED='false';process.env.INSTAGRAM_MANAGEMENT_ENABLED='false';process.env.INSTAGRAM_MANAGEMENT_RECEPTION_ENABLED='false';
  const {redis}=await import('../src/redis');redis.on('error',()=>{});const {createApp}=await import('../src/app');appLoaded=true;
+ // App imports instantiate BullMQ asynchronously. Await its actual ready command
+ // before the fixture can close it; closing an initializing connection rejects
+ // a pending ioredis command after the test has already ended.
+ const {publishQueue}=await import('../src/queues/publishQueue');await(await publishQueue.waitUntilReady()).ping();
  let accepted=0;const hook=createInstagramManagementWebhook({appSecret:secret,verifyToken:'synthetic-verify',store:{enqueue:async()=>{accepted++;}}});
  for(const enabled of [false,true]){
   const runtime:any={enabled:true,receptionEnabled:enabled,webhook:hook,require:async()=>{},oauth:{},status:async()=>({}),disconnect:async()=>({})};
