@@ -13,7 +13,7 @@ export function createInstagramManagementGateway({config,fetchImpl=fetch}:{confi
    if(!config.enabled||callbackUrl!==config.callbackUrl||!code||code.length>8192)throw Error();
    const form=new URLSearchParams({grant_type:'authorization_code',client_id:config.appId,client_secret:config.appSecret,redirect_uri:callbackUrl,code});
    phase='short_request';
-   let raw=z.record(z.unknown()).parse(await readBoundedInstagramJson(observedFetch,new URL('https://api.instagram.com/oauth/access_token'),{method:'POST',body:form,headers:{'Content-Type':'application/x-www-form-urlencoded'}}));
+   let raw=z.record(z.unknown()).parse(await readBoundedInstagramJson(observedFetch,new URL('https://api.instagram.com/oauth/access_token'),{method:'POST',body:form,headers:{'Content-Type':'application/x-www-form-urlencoded'}},true));
    phase='short_payload';
    if(raw.data!==undefined){if(raw.access_token!==undefined||!Array.isArray(raw.data)||raw.data.length!==1)throw Error();raw=z.record(z.unknown()).parse(raw.data[0]);}
    if(typeof raw.user_id==='number'&&!Number.isSafeInteger(raw.user_id)){phase='short_owner_precision';throw Error();}
@@ -26,7 +26,7 @@ export function createInstagramManagementGateway({config,fetchImpl=fetch}:{confi
    const long=z.object({access_token:token,expires_in:z.number().int().positive().max(31536000)}).parse(longRaw);
    const profileUrl=new URL(`https://graph.instagram.com/${config.graphVersion}/me`);profileUrl.searchParams.set('fields','id,user_id,username,account_type');
    phase='identity_request';status=0;
-   const profileRaw=await readBoundedInstagramJson(observedFetch,profileUrl,{headers:{Authorization:'Bearer '+long.access_token}});phase='identity_payload';
+   const profileRaw=await readBoundedInstagramJson(observedFetch,profileUrl,{headers:{Authorization:'Bearer '+long.access_token}},true);phase='identity_payload';
    const profile=z.object({id:providerId,user_id:providerId.optional(),username:z.string().max(180).optional(),account_type:z.enum(['BUSINESS','MEDIA_CREATOR','CREATOR'])}).parse(profileRaw);
    phase='identity_mismatch';
    if(![profile.id,profile.user_id].includes(owner))throw Error();

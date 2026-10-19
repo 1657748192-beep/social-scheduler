@@ -4,15 +4,31 @@ import {createInstagramManagementOAuth} from '../src/instagramManagement/oauth';
 import {createInstagramManagementStore} from '../src/instagramManagement/store';
 import {createLiveInboxPolicy} from '../src/interactionInbox/livePolicy';
 import {getInstagramManagementConfig} from '../src/instagramManagement/config';
+import {createInstagramManagementGateway} from '../src/instagramManagement/oauthGateway';
 const scopes=['instagram_business_basic','instagram_business_manage_comments','instagram_business_manage_messages'];
-function service(f:MetaInboxFixture,exchange?:any){
+function service(f:MetaInboxFixture,exchange?:any,providerAccountId='100'){
  const config=getInstagramManagementConfig({INSTAGRAM_MANAGEMENT_ENABLED:'true',INSTAGRAM_CLIENT_ID:'456',INSTAGRAM_CLIENT_SECRET:'synthetic-secret',API_PUBLIC_URL:'https://app.example.test',INSTAGRAM_MANAGEMENT_CALLBACK_URL:'https://app.example.test/api/v1/integrations/instagram-management/oauth/callback',INSTAGRAM_MANAGEMENT_GRAPH_API_VERSION:'v25.0',INSTAGRAM_MANAGEMENT_SCOPES:scopes.join(',')});
- const policy=createLiveInboxPolicy(f.workspaceIds.map(workspaceId=>({workspaceId,platform:'instagram',appId:'456',providerAssetId:'100',readEnabled:true,sendEnabled:false,policy:{product:'synthetic-test-only',graphVersion:'v25.0',checkedAt:'2020-01-01T00:00:00Z',sources:['https://developers.facebook.com/docs/'],rawRetentionDays:7,contentRetentionDays:90,replyWindowMs:86400000,reviewed:true}})));
+ const policy=createLiveInboxPolicy(f.workspaceIds.map(workspaceId=>({workspaceId,platform:'instagram',appId:'456',providerAssetId:providerAccountId,readEnabled:true,sendEnabled:false,policy:{product:'synthetic-test-only',graphVersion:'v25.0',checkedAt:'2020-01-01T00:00:00Z',sources:['https://developers.facebook.com/docs/'],rawRetentionDays:7,contentRetentionDays:90,replyWindowMs:86400000,reviewed:true}})));
  const grant={appId:'456',providerAccountId:'100',providerUserId:'200',accessToken:'independent-new-token',scopes,expiresAt:new Date(Date.now()+86400000),displayName:'Synthetic IG'};
  const store=createInstagramManagementStore({db:f.db,encrypt:v=>'sealed:'+v,policy});
- return{store,grant,oauth:createInstagramManagementOAuth({db:f.db,config,policy,store,exchange:exchange??(async()=>grant)})};
+ return{config,store,grant,oauth:createInstagramManagementOAuth({db:f.db,config,policy,store,exchange:exchange??(async()=>grant)})};
 }
 async function start(f:MetaInboxFixture,s:ReturnType<typeof service>){const r=await s.oauth.start(f.adminCtx,f.instagramAccountIds[0]);return new URL(r.authorizationUrl).searchParams.get('state')!;}
+
+test('actualGatewayStoresExactLargeIndependentIdentityWithoutChangingPublishing',async()=>withMetaInboxFixture(async f=>{
+ const exact='17841414555024979';await f.db.socialAccount.update({where:{id:f.instagramAccountIds[0]},data:{providerAccountId:exact}});
+ const before=await f.publishingSnapshot();let calls=0;
+ const fetchImpl:typeof fetch=async input=>{calls++;const u=new URL(String(input));
+  if(u.hostname==='api.instagram.com')return new Response('{"data":[{"access_token":"short-private","user_id":17841414555024979,"permissions":"instagram_business_basic,instagram_business_manage_comments,instagram_business_manage_messages"}]}');
+  if(u.pathname==='/access_token')return Response.json({access_token:'independent-long-private',expires_in:5184000});
+  return new Response('{"id":17841414555024979,"user_id":17841414555024979,"username":"synthetic","account_type":"BUSINESS"}');
+ };
+ const s=service(f,(code:string,callback:string)=>createInstagramManagementGateway({config:s.config,fetchImpl}).exchange(code,callback),exact);
+ const state=await start(f,s),result=await s.oauth.callback({state,code:'one-use-code'});
+ const row=await f.db.instagramManagementConnection.findUniqueOrThrow({where:{id:result.connectionId}});
+ assert.equal(calls,3);assert.equal(row.providerAccountId,exact);assert.equal(row.providerUserId,exact);assert.equal(row.tokenEncrypted,'sealed:independent-long-private');assert.deepEqual(row.scopes,scopes);assert.ok(row.authorizedAt&&row.authorizationStartedAt);assert.equal(row.notificationsEnabled,false);
+ assert.deepEqual(await f.publishingSnapshot(),before);
+}));
 test('wrongAccountNoGrantSaved',async()=>withMetaInboxFixture(async f=>{
  const s=service(f,async()=>({...service(f).grant,providerAccountId:'999'})),before=await f.publishingSnapshot(),c=await f.db.instagramManagementConnection.findUniqueOrThrow({where:{id:f.instagramConnectionIds[0]}});
  const state=await start(f,s);await assert.rejects(s.oauth.callback({state,code:'code'}));

@@ -2,10 +2,31 @@ import test from 'node:test';import assert from 'node:assert/strict';
 import {createInstagramManagementGateway} from '../src/instagramManagement/oauthGateway';
 const config={enabled:true,appId:'456',appSecret:'private-app-secret',graphVersion:'v25.0',callbackUrl:'https://app.example.test/api/v1/integrations/instagram-management/oauth/callback',requiredScopes:['instagram_business_basic','instagram_business_manage_comments']};
 
+test('gatewayPreservesLargeUnquotedIdsBeforeIdentityValidation',async()=>{
+ const gateway=createInstagramManagementGateway({config,fetchImpl:async input=>{
+  const u=new URL(String(input));
+  if(u.hostname==='api.instagram.com')return new Response('{"data":[{"access_token":"short-private","user_id":17841414555024979,"permissions":"instagram_business_basic,instagram_business_manage_comments"}]}');
+  if(u.pathname==='/access_token')return Response.json({access_token:'long-private',expires_in:5184000});
+  return new Response('{"id":17841414555024979,"user_id":17841414555024979,"username":"synthetic","account_type":"BUSINESS"}');
+ }});
+ const grant=await gateway.exchange('one-use-code',config.callbackUrl);
+ assert.equal(grant.providerUserId,'17841414555024979');assert.equal(grant.providerAccountId,'17841414555024979');
+});
+
+test('nearbyLargeOwnerIdsNeverMatchThroughNumericRounding',async()=>{
+ let calls=0;const gateway=createInstagramManagementGateway({config,fetchImpl:async input=>{
+  calls++;const u=new URL(String(input));
+  if(u.hostname==='api.instagram.com')return new Response('{"access_token":"short-private","user_id":17841414555024979,"permissions":"instagram_business_basic,instagram_business_manage_comments"}');
+  if(u.pathname==='/access_token')return Response.json({access_token:'long-private',expires_in:5184000});
+  return new Response('{"id":17841414555024980,"user_id":17841414555024980,"account_type":"BUSINESS"}');
+ }});
+ await assert.rejects(gateway.exchange('one-use-code',config.callbackUrl));assert.equal(calls,3,'must verify distinct exact provider identities, not reject before reading identity');
+});
+
 test('gatewayReportsOnlyFixedFailureStageAndHttpStatusNeverProviderSecrets',async()=>{
  const original=console.warn,lines:string[]=[];console.warn=(...values)=>{lines.push(values.join(' '));};
  try{
-  await assert.rejects(createInstagramManagementGateway({config,fetchImpl:(async()=>Response.json({access_token:'short-private',user_id:9007199254740992,permissions:config.requiredScopes,private:'private-app-secret one-use-code'})) as any}).exchange('one-use-code',config.callbackUrl));
+  await assert.rejects(createInstagramManagementGateway({config,fetchImpl:(async()=>Response.json({access_token:'short-private',user_id:1.5,permissions:config.requiredScopes,private:'private-app-secret one-use-code'})) as any}).exchange('one-use-code',config.callbackUrl));
   assert.deepEqual(lines,['IG_MANAGEMENT_EXCHANGE_FAILURE short_owner_precision 200']);
   lines.length=0;
   await assert.rejects(createInstagramManagementGateway({config,fetchImpl:(async()=>Response.json({error:{message:'private-app-secret one-use-code short-private'}},{status:400})) as any}).exchange('one-use-code',config.callbackUrl));
@@ -26,9 +47,16 @@ test('missingActualScopesNeverFallbackToRequestedScopes',async()=>{
  let calls=0;const gateway=createInstagramManagementGateway({config,fetchImpl:(async()=>{calls++;return Response.json({access_token:'short-private',user_id:'100'});}) as any});
  await assert.rejects(gateway.exchange('one-use-code',config.callbackUrl),e=>!String(e).includes('short-private'));assert.equal(calls,1);
 });
-test('gatewayRejectsAmbiguousOrUnsafeOwnerResponsesAndRedirects',async()=>{
- for(const payload of [{access_token:'short-private',user_id:9007199254740992,permissions:config.requiredScopes},{data:[{access_token:'short-private',user_id:'100',permissions:config.requiredScopes},{access_token:'other',user_id:'101'}]}])await assert.rejects(createInstagramManagementGateway({config,fetchImpl:(async()=>Response.json(payload)) as any}).exchange('code',config.callbackUrl));
+test('gatewayRejectsAmbiguousOwnerResponsesAndRedirects',async()=>{
+ const payload={data:[{access_token:'short-private',user_id:'100',permissions:config.requiredScopes},{access_token:'other',user_id:'101'}]};await assert.rejects(createInstagramManagementGateway({config,fetchImpl:(async()=>Response.json(payload)) as any}).exchange('code',config.callbackUrl));
  await assert.rejects(createInstagramManagementGateway({config,fetchImpl:(async()=>new Response('',{status:302,headers:{location:'https://evil.test'}})) as any}).exchange('code',config.callbackUrl));
+});
+
+test('nonDecimalOrFractionalNumericOwnersNeverBorrowAnExactIdentity',async()=>{
+ for(const raw of ['1e17','17841414555024979.5','-17841414555024979']){
+  let calls=0;const gateway=createInstagramManagementGateway({config,fetchImpl:async()=>{calls++;return new Response('{"access_token":"short-private","user_id":'+raw+',"permissions":"instagram_business_basic,instagram_business_manage_comments"}');}});
+  await assert.rejects(gateway.exchange('one-use-code',config.callbackUrl));assert.equal(calls,1);
+ }
 });
 test('gatewayBoundsBodyAndSanitizesTransportErrors',async()=>{
  for(const fetchImpl of [(async()=>new Response('x'.repeat(1048577))) as any,(async()=>{throw Error('private-app-secret one-use-code short-private');}) as any])await assert.rejects(createInstagramManagementGateway({config,fetchImpl}).exchange('one-use-code',config.callbackUrl),e=>!String(e).includes('private-app-secret')&&!String(e).includes('one-use-code')&&!String(e).includes('short-private'));
