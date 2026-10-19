@@ -21,13 +21,15 @@ export function createFacebookInboxAdapter({db,engagement,policy=createLiveInbox
     if(threads.nextCursor)nextCursor=encodeInboxCursor(scope,{after:threads.nextCursor});
    }else{
     const offset=typeof c.offset==='string'?c.offset:undefined,scheduleId=typeof c.scheduleId==='string'?c.scheduleId:undefined;
-    const rows=await db.schedule.findMany({where:{workspaceId:a.ctx.workspaceId,status:'published',postVariant:{platform:'facebook',socialAccountId:a.accountId},...(scheduleId?{id:scheduleId}:offset?{id:{gt:offset}}:{})},orderBy:{id:'asc'},take:25,include:{publishJobs:{where:{status:'succeeded'},take:1,orderBy:{createdAt:'desc'}}}});
+    const restricted=engagement.commentReadScheduleId;
+    if(restricted&&(scheduleId&&scheduleId!==restricted||offset))throw new HttpError(403,'Post is outside the controlled comment test');
+    const rows=await db.schedule.findMany({where:{workspaceId:a.ctx.workspaceId,status:'published',postVariant:{platform:'facebook',socialAccountId:a.accountId},...(restricted?{id:restricted}:scheduleId?{id:scheduleId}:offset?{id:{gt:offset}}:{})},orderBy:{id:'asc'},take:25,include:{publishJobs:{where:{status:'succeeded'},take:1,orderBy:{createdAt:'desc'}}}});
     for(let i=0;i<rows.length;i++){
      budget();const s=rows[i],postId=s.publishJobs[0]?.providerPostId;if(!postId)continue;
      const page=await engagement.comments(ctx,s.id,scheduleId===s.id?after:undefined);
      for(const v of page.items)items.push({providerEventId:v.id,threadId:s.id+':'+v.id,actorId:v.senderId??null,actorName:v.senderName??null,kind:'comments',occurredAt:v.timestamp,inbound:true,deleted:!!v.deleted,sourceRef:{...sourceSchema.parse(a.sourceRef),scheduleId:s.id,postId,commentId:v.id}});
      if(page.nextCursor){nextCursor=encodeInboxCursor(scope,{scheduleId:s.id,after:page.nextCursor});break;}
-     if(scheduleId||i===rows.length-1&&rows.length===25)nextCursor=encodeInboxCursor(scope,{offset:s.id});
+     if(!restricted&&(scheduleId||i===rows.length-1&&rows.length===25))nextCursor=encodeInboxCursor(scope,{offset:s.id});
     }
    }
    return{items,nextCursor,coverage:kind==='comments'?'verified_published_posts':'received_and_read_threads',warnings:kind==='messages'?['recent_message_page_only']:['parent_relationship_unavailable']};

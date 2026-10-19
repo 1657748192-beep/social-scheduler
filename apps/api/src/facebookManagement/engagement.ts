@@ -37,7 +37,7 @@ export function createFacebookManagementEngagement(deps:Dependencies){
   }
   async function authorized(ctx:PageContext,capability:FacebookCapability,write=false){
     assertReplyTestContext(rule,ctx,now());
-    if(rule&&!['readMessages','replyMessages'].includes(capability))throw new HttpError(403,'Only the controlled message test is enabled');
+    if(rule&&!(rule.kind==='comment'?['readComments','replyComments']:['readMessages','replyMessages']).includes(capability))throw new HttpError(403,'Only the controlled reply test is enabled');
     const access=await deps.resolvePageAccess(ctx,{write,requirePublishingBinding:true});
     assertReplyTestGrant(rule,access);
     if(permissions(access)[capability].status!=='available')throw new HttpError(403,'Facebook Page permission or task is missing');
@@ -49,7 +49,7 @@ export function createFacebookManagementEngagement(deps:Dependencies){
     return {...page,readAt:now().toISOString(),source:'graph',stale:false,warnings:[]};
   }
   async function conversation(api:Client,id:string,access:Access){
-    if(rule&&id!==rule.conversationId)throw new HttpError(403,'Conversation is outside the controlled test');
+    if(rule&&(rule.kind==='comment'||id!==rule.conversationId))throw new HttpError(403,'Conversation is outside the controlled test');
     const item=await api.getConversation(id);
     if(item.id!==id||!/^\d{1,256}$/.test(item.counterpartyId)||item.counterpartyId===access.pageId)throw new HttpError(404,'Conversation unavailable for this Page');
     if(rule&&item.counterpartyId!==rule.participantId)throw new HttpError(403,'Controlled conversation participant changed');
@@ -74,7 +74,7 @@ export function createFacebookManagementEngagement(deps:Dependencies){
   async function verifiedHistorical(api:Client,access:Access,storedId:string){
     const remote=await api.getPostIdentity(storedId);
     if(remote.pageId!==access.pageId||!new RegExp(`^${access.pageId}_[0-9]+$`).test(remote.id)||
-      (storedId.includes('_')?remote.id!==storedId:remote.id.split('_')[1]!==storedId))return null;
+      (storedId.includes('_')?remote.id!==storedId:remote.id.split('_')[1]!==storedId&&remote.sourceId!==storedId))return null;
     return remote.id;
   }
   async function send(access:Access,action:()=>Promise<SendOutcome>):Promise<SendOutcome>{
@@ -84,13 +84,15 @@ export function createFacebookManagementEngagement(deps:Dependencies){
     }
   }
   return {
+    commentReadScheduleId:rule?.kind==='comment'?rule.scheduleId:null,
     async postAvailability(ctx:PageContext,scheduleId:string){
+      if(rule&&(rule.kind!=='comment'||scheduleId!==rule.scheduleId))throw new HttpError(403,'Post is outside the controlled comment test');
       const {access,api}=await authorized(ctx,'readComments'),storedId=await published(ctx,access,scheduleId,true);
       // Read only: do not invalidate grants, repair records, or infer deletion from 100/33.
       let status:string;
       try{
         const postId=await verifiedHistorical(api,access,storedId);
-        if(postId){wrap(await api.listComments(postId));status='readable';}else status='identity_unverified';
+        if(postId&&(!rule||rule.kind==='comment'&&postId===rule.postId)){wrap(await api.listComments(postId));status='readable';}else status='identity_unverified';
       }
       catch(error){if(!(error instanceof FacebookEngagementError))throw error;status=error.kind;}
       return {status,checkedAt:now().toISOString()};
@@ -98,12 +100,12 @@ export function createFacebookManagementEngagement(deps:Dependencies){
     async capabilities(ctx:PageContext){
       assertReplyTestContext(rule,ctx,now());
       const access=await deps.resolvePageAccess(ctx,{requirePublishingBinding:true});assertReplyTestGrant(rule,access);
-      const caps=permissions(access);if(rule)for(const key of ['readComments','replyComments','subscription'] as const)caps[key]={status:'missing'};
+      const caps=permissions(access);if(rule)for(const key of (rule.kind==='comment'?['readMessages','replyMessages','subscription']:['readComments','replyComments','subscription']) as Array<keyof FacebookCapabilities>)caps[key]={status:'missing'};
       return caps;
     },
     async conversations(ctx:PageContext,after?:string){
       validateAfter(after);const {access,api}=await authorized(ctx,'readMessages');
-      if(rule)return provider(access,async()=>wrap({items:after?[]:[await conversation(api,rule.conversationId,access)],nextCursor:null}));
+      if(rule&&rule.kind!=='comment')return provider(access,async()=>wrap({items:after?[]:[await conversation(api,rule.conversationId,access)],nextCursor:null}));
       return provider(access,async()=>wrap(await api.listConversations(after)));
     },
     async messages(ctx:PageContext,conversationId:string,after?:string){
@@ -117,9 +119,11 @@ export function createFacebookManagementEngagement(deps:Dependencies){
       });
     },
     async comments(ctx:PageContext,scheduleId:string,after?:string){
+      if(rule&&(rule.kind!=='comment'||scheduleId!==rule.scheduleId))throw new HttpError(403,'Post is outside the controlled comment test');
       validateAfter(after);const {access,api}=await authorized(ctx,'readComments');const storedId=await published(ctx,access,scheduleId,true);
       const postId=storedId.includes('_')?storedId:await provider(access,()=>verifiedHistorical(api,access,storedId));
       if(!postId)throw new HttpError(409,'Verified Facebook post identity is unavailable');
+      if(rule&&rule.kind==='comment'&&postId!==rule.postId)throw new HttpError(403,'Controlled post identity changed');
       return provider(access,async()=>{
         const remote=wrap(await api.listComments(postId,after));
         const local=await deps.receivedComments?.(access.managedPageId,postId,remote.items.map(c=>c.id),!after)??[];
@@ -128,7 +132,8 @@ export function createFacebookManagementEngagement(deps:Dependencies){
         // times, so they cannot establish which body is newer. A successful
         // current Graph body wins. Keep local-only arrivals and tombstones.
         for(const comment of local){if(comment.deleted)merged.delete(comment.id);else if(!merged.has(comment.id))merged.set(comment.id,comment);}
-        return{...remote,items:[...merged.values()].sort((a,b)=>Date.parse(b.timestamp)-Date.parse(a.timestamp)),source:local.length?'mixed' as const:remote.source};
+        const items=[...merged.values()].filter(c=>!rule||rule.kind==='comment'&&c.id===rule.commentId).sort((a,b)=>Date.parse(b.timestamp)-Date.parse(a.timestamp));
+        return{...remote,items,nextCursor:rule?null:remote.nextCursor,source:local.length?'mixed' as const:remote.source};
       });
     },
     async replyMessage(ctx:PageContext,input:{conversationId:string;text:string;requestKey:string}){
@@ -151,7 +156,11 @@ export function createFacebookManagementEngagement(deps:Dependencies){
       });
     },
     async replyComment(ctx:PageContext,input:{scheduleId:string;commentId:string;text:string;requestKey:string}){
-      validateText(input.text,8000);const {access,api}=await authorized(ctx,'replyComments',true);const postId=await published(ctx,access,input.scheduleId);
+      assertReplyTestContext(rule,ctx,now());assertReplyTestInput(rule,{...input,kind:'comment'});
+      validateText(input.text,8000);const {access,api}=await authorized(ctx,'replyComments',true);const storedId=await published(ctx,access,input.scheduleId,true);
+      const postId=storedId.includes('_')?storedId:await provider(access,()=>verifiedHistorical(api,access,storedId));
+      if(!postId)throw new HttpError(409,'Verified Facebook post identity is unavailable');
+      if(rule&&rule.kind==='comment'&&postId!==rule.postId)throw new HttpError(403,'Controlled post identity changed');
       if(permissions(access).readComments.status!=='available')throw new HttpError(403,'Facebook comment read permission is missing');
       let after:string|undefined,found=false;const seen=new Set<string>();
       for(let i=0;i<100;i++){
@@ -163,9 +172,13 @@ export function createFacebookManagementEngagement(deps:Dependencies){
       }
       if(!found)throw new HttpError(404,'Comment could not be verified on this published post');
       return deps.executeFacebookSend(ctx,{requestKey:input.requestKey,targetId:input.commentId,kind:'comment',text:input.text},async()=>{
-        const fresh=await authorized(ctx,'replyComments',true);await published(ctx,fresh.access,input.scheduleId);
+        const fresh=await authorized(ctx,'replyComments',true);const freshStored=await published(ctx,fresh.access,input.scheduleId,true);
+        if(freshStored!==storedId||!storedId.includes('_')&&await provider(fresh.access,()=>verifiedHistorical(fresh.api,fresh.access,freshStored))!==postId)return{status:'failed',code:'post_identity_changed',diagnosticId:randomUUID()};
         if(fresh.access.connectionId!==access.connectionId||fresh.access.connectionVersion!==access.connectionVersion||fresh.access.pageToken!==access.pageToken)return{status:'failed',code:'authorization_changed',diagnosticId:randomUUID()};
-        return send(fresh.access,()=>fresh.api.replyComment(input.commentId,input.text));
+        const dispatch=storedId.includes('_')?fresh:await authorized(ctx,'replyComments',true);
+        if(dispatch.access.connectionId!==access.connectionId||dispatch.access.connectionVersion!==access.connectionVersion||dispatch.access.pageToken!==access.pageToken)return{status:'failed',code:'authorization_changed',diagnosticId:randomUUID()};
+        assertReplyTestContext(rule,ctx,now());
+        return send(dispatch.access,()=>dispatch.api.replyComment(input.commentId,input.text));
       });
     }
   };

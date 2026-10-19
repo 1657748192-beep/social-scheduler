@@ -85,8 +85,22 @@ export function createFacebookEngagementClient(input: {
     ['readComments','replyComments','readMessages','replyMessages','subscription'].map(key => [key,{status:'unknown',reason}])
   ) as FacebookCapabilities;
   return {
-    async getPostIdentity(postId:string):Promise<{id:string;pageId:string}>{
+    async getPostIdentity(postId:string):Promise<{id:string;pageId:string;sourceId?:string}>{
       const raw=await request(id(postId),{fields:'id,from{id}'},'GET',undefined,false,true);
+      if(raw.id===postId&&/^\d+$/.test(postId)){
+        if(record(raw.from).id!==input.pageId)throw new FacebookEngagementError('content_unavailable');
+        const photo=await request(id(postId),{fields:'id,page_story_id'},'GET',undefined,false,true);
+        const story=requiredString(photo.page_story_id);
+        if(photo.id!==postId||!new RegExp(`^${input.pageId}_[0-9]+$`).test(story))throw new FacebookEngagementError('content_unavailable');
+        const resolved=await request(id(story),{fields:'id,from{id},attachments{target,subattachments{target}}'},'GET',undefined,false,true);
+        const attachments=record(resolved.attachments).data;
+        const matches=Array.isArray(attachments)&&attachments.some(a=>{
+          const item=record(a),children=record(item.subattachments).data;
+          return record(item.target).id===postId||Array.isArray(children)&&children.some(c=>record(record(c).target).id===postId);
+        });
+        if(resolved.id!==story||record(resolved.from).id!==input.pageId||!matches)throw new FacebookEngagementError('content_unavailable');
+        return{id:story,pageId:input.pageId,sourceId:postId};
+      }
       return {id:requiredString(raw.id),pageId:requiredString(record(raw.from).id)};
     },
     async inspectCapabilities(): Promise<FacebookCapabilities> {
@@ -111,7 +125,20 @@ export function createFacebookEngagementClient(input: {
       }
     },
     async listComments(postId: string, after?: string): Promise<FacebookPage<FacebookComment>> {
-      return page(await request(`${id(postId)}/comments`,{fields:'id,message,created_time,from',filter:'stream',limit:'25',...(after ? {after} : {})},'GET',undefined,false,true), raw => comment(raw,postId));
+      const path=`${id(postId)}/comments`,params={filter:'stream',limit:'25',...(after?{after}:{})};
+      // Meta can suppress entire rows when optional author fields are requested.
+      // The minimal page alone owns membership, bodies, timestamps and cursor.
+      const result=page(await request(path,{...params,fields:'id,message,created_time'},'GET',undefined,false,true),raw=>comment(raw,postId));
+      if(!result.items.length)return result;
+      try{
+        const authors=await request(path,{...params,fields:'id,from'},'GET',undefined,false,true);
+        if(!Array.isArray(authors.data))throw new FacebookEngagementError('invalid_response');
+        const byId=new Map(authors.data.map(v=>{const row=record(v);return[requiredString(row.id),record(row.from)] as const;}));
+        for(const item of result.items){const sender=byId.get(item.id);if(typeof sender?.id==='string'&&sender.id){item.senderId=sender.id;item.senderName=typeof sender.name==='string'?sender.name:undefined;}}
+      }catch(error){
+        if(!(error instanceof FacebookEngagementError)||!['permission_missing','content_unavailable','temporary_failure','rate_limited'].includes(error.kind))throw error;
+      }
+      return result;
     },
     async getComment(commentId: string): Promise<FacebookComment> {
       const raw=await request(id(commentId),{fields:'id,message,created_time,from,object{id}'});

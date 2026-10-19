@@ -87,3 +87,34 @@ test('restrictedRuleIsCopiedAndInvalidSessionCannotCreateAttempt',async()=>fixtu
  assert.equal(dispatches,0);assert.equal(await db.facebookInteractionSendAttempt.count({where:{managedPageId:ctx.managedPageId}}),0);
  assert.equal((await execute(ctx,input,send)).status,'sent');assert.equal(dispatches,1);
 }));
+
+async function commentFixture(run:(f:any)=>Promise<void>){return fixture(async(f:any)=>{
+ const {db,ctx,restriction,executor}=f;const account=await db.socialAccount.findFirstOrThrow({where:{workspaceId:ctx.workspaceId}});
+ const post=await db.post.create({data:{workspaceId:ctx.workspaceId,authorId:ctx.userId,baseText:'Synthetic',variants:{create:{platform:'facebook',socialAccountId:account.id,text:'Synthetic',publishStatus:'published'}}},include:{variants:true}});
+ const schedule=await db.schedule.create({data:{workspaceId:ctx.workspaceId,postVariantId:post.variants[0].id,createdBy:ctx.userId,scheduledAt:new Date(),status:'published'}});
+ await db.publishJob.create({data:{workspaceId:ctx.workspaceId,postVariantId:post.variants[0].id,scheduleId:schedule.id,status:'succeeded',idempotencyKey:randomUUID(),providerPostId:'200',rawResponse:{id:'200'}}});
+ const {conversationId,participantId,...common}=restriction,rule={...common,kind:'comment',scheduleId:schedule.id,postId:'100_201',commentId:'200_1'};
+ const reads:string[]=[],clock={at:Date.now()};let dispatches=0,resolutions=0,expireOnFinal=false;
+ const service=createFacebookManagementEngagement({db,testRestriction:rule,now:()=>new Date(clock.at),executeFacebookSend:executor(rule),
+ resolvePageAccess:async()=>{if(++resolutions===2&&expireOnFinal)clock.at=Date.parse(rule.expiresAt);return{managedPageId:ctx.managedPageId,pageId:'100',connectionId:rule.connectionId,connectionVersion:1,appId:'123',pageToken:'synthetic',tasks:['MODERATE'],scopes:['pages_read_engagement','pages_read_user_content','pages_manage_engagement'],role:'owner',publishingAccountId:account.id};},
+ createClient:()=>({getPostIdentity:async(id:string)=>{reads.push('identity:'+id);return{id:'100_201',pageId:'100',sourceId:'200'};},listComments:async(id:string)=>{reads.push('comments:'+id);return{items:[{id:'200_1',postId:id,text:'controlled',timestamp:new Date().toISOString()},{id:'200_2',postId:id,text:'not selected',timestamp:new Date().toISOString()}],nextCursor:'next'};},replyComment:async()=>{dispatches++;return{status:'sent',providerId:'one-comment-reply'};}})} as any);
+ await run({...f,rule,schedule,commentService:service,commentReads:reads,dispatches:()=>dispatches,expireFinal:()=>{expireOnFinal=true;},commentInput:{scheduleId:schedule.id,commentId:'200_1',text:f.input.text,requestKey:randomUUID()}});
+});}
+
+test('restrictedCommentOnlyExposesSelectedCommentAndRejectsOtherReadKinds',async()=>commentFixture(async({db,ctx,commentService:s,schedule,commentReads}:any)=>{
+ const p=await s.comments(ctx,schedule.id);assert.deepEqual(p.items.map((x:any)=>x.id),['200_1']);assert.equal(p.nextCursor,null);
+ commentReads.length=0;await assert.rejects(s.comments(ctx,randomUUID()));await assert.rejects(s.conversations(ctx));assert.deepEqual(commentReads,[]);
+ const other=await db.schedule.create({data:{workspaceId:ctx.workspaceId,postVariantId:schedule.postVariantId,createdBy:ctx.userId,scheduledAt:new Date(),status:'published'}});
+ await db.publishJob.create({data:{workspaceId:ctx.workspaceId,postVariantId:schedule.postVariantId,scheduleId:other.id,status:'succeeded',idempotencyKey:randomUUID(),providerPostId:'200'}});
+ await assert.rejects(s.postAvailability(ctx,other.id));assert.deepEqual(commentReads,[]);
+}));
+
+test('restrictedCommentDifferentKeysDispatchOnceAndWrongTargetTextNeverReadProvider',async()=>commentFixture(async({ctx,commentService:s,commentInput,commentReads,dispatches}:any)=>{
+ for(const altered of [{...commentInput,commentId:'200_2'},{...commentInput,text:'changed'},{...commentInput,scheduleId:randomUUID()}])await assert.rejects(s.replyComment(ctx,altered));assert.deepEqual(commentReads,[]);
+ const values=await Promise.all([randomUUID(),randomUUID()].map(requestKey=>s.replyComment(ctx,{...commentInput,requestKey})));assert.ok(values.some(x=>x.status==='sent'));assert.equal(dispatches(),1);
+ assert.equal((await s.replyComment(ctx,{...commentInput,requestKey:randomUUID()})).status,'sent');assert.equal(dispatches(),1);
+}));
+
+test('restrictedCommentExpiryDuringFinalAuthorizationNeverDispatches',async()=>commentFixture(async({ctx,commentService:s,commentInput,dispatches,expireFinal}:any)=>{
+ expireFinal();const result=await s.replyComment(ctx,commentInput);assert.notEqual(result.status,'sent');assert.equal(dispatches(),0);
+}));

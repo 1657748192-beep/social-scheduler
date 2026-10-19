@@ -86,6 +86,14 @@ test('readsGraphWithoutWebhookHistory',async()=>fixture(async({db,ctx,service,sc
   assert.deepEqual(await snapshot(),before);
 }));
 
+test('historicalPhotoStoryCanBeReadAndRepliedWithoutChangingPublishingRows',async()=>fixture(async({db,ctx,service,api,schedule,job,snapshot,calls}:any)=>{
+ await db.publishJob.update({where:{id:job.id},data:{providerPostId:'200',rawResponse:{id:'200'}}});
+ const before=await snapshot();api.getPostIdentity=async(id:string)=>{assert.equal(id,'200');return{id:'100_201',pageId:'100',sourceId:'200'};};
+ assert.equal((await service.comments(ctx,schedule.id)).items[0].postId,'100_201');
+ assert.equal((await service.replyComment(ctx,{scheduleId:schedule.id,commentId:'100_10',text:'One test reply',requestKey:randomUUID()})).status,'sent');
+ assert.equal(calls(),1);assert.deepEqual(await snapshot(),before);
+}));
+
 test('pageConversationAndPostIdentityAreServerVerified',async()=>fixture(async({db,ctx,viewer,service,schedule,job,account,calls}:any)=>{
   const reply=()=>({scheduleId:schedule.id,commentId:'100_10',text:'Reply',requestKey:randomUUID()});
   assert.equal((await service.conversations(viewer)).items.length,1);
