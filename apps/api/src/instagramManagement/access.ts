@@ -6,9 +6,9 @@ import {parseInboxSource} from '../interactionInbox/source';
 import {isPlatformAdmin} from '../utils/platformAdmin';
 import {HttpError} from '../utils/errors';
 import {requireInstagramAccount} from './store';
-import type {InstagramGrantInspection} from './types';
+import type {InstagramGrantInspection,InstagramGrantInspector} from './types';
 
-export function createInstagramManagementAccess({db,appId,policy,decrypt,inspect}:{db:PrismaClient;appId:string;policy:LiveInboxPolicy;decrypt:(value:string)=>string;inspect?:(accountId:string,token:string)=>Promise<InstagramGrantInspection>}){
+export function createInstagramManagementAccess({db,appId,policy,decrypt,inspect}:{db:PrismaClient;appId:string;policy:LiveInboxPolicy;decrypt:(value:string)=>string;inspect?:InstagramGrantInspector}){
  async function requireAuthorizer(ctx:Scope,userId:string,store:InboxDb=db){
   const owner=await store.workspaceMember.findUnique({where:{workspaceId_userId:{workspaceId:ctx.workspaceId,userId}},include:{user:{select:{email:true}}}});
   if(!owner||owner.status!=='active'||!['owner','admin'].includes(owner.role)||!isPlatformAdmin(owner.user.email))throw new HttpError(409,'Independent Instagram authorizer unavailable');
@@ -25,7 +25,7 @@ export function createInstagramManagementAccess({db,appId,policy,decrypt,inspect
   const needed=['instagram_business_basic',capability.startsWith('comments.')?'instagram_business_manage_comments':'instagram_business_manage_messages'];
   if(needed.some(scope=>!c.scopes.includes(scope)))throw new HttpError(403,'Independent Instagram permission unavailable');
   let proof:InstagramGrantInspection,accessToken:string;
-  try{accessToken=decrypt(c.tokenEncrypted);proof=await inspect(account.providerAccountId,accessToken);}catch{throw new HttpError(409,'Independent Instagram verification unavailable');}
+  try{accessToken=decrypt(c.tokenEncrypted);proof=await inspect(account.providerAccountId,accessToken,{connection:c,capability});}catch{throw new HttpError(409,'Independent Instagram verification unavailable');}
   if(proof.appId!==appId||proof.providerAccountId!==account.providerAccountId||!Array.isArray(proof.scopes)||needed.some(s=>!proof.scopes.includes(s))||!(proof.expiresAt instanceof Date)||!Number.isFinite(proof.expiresAt.getTime())||proof.expiresAt<=new Date())throw new HttpError(403,'Independent Instagram identity or grant unavailable');
   await requireInboxAccess(db,ctx,capability.endsWith('.reply')?'write':'read');
   await requireAuthorizer(ctx,c.userId);
@@ -50,7 +50,14 @@ export function createInstagramManagementAccess({db,appId,policy,decrypt,inspect
    if(!account||!c||c.expiresAt&&c.expiresAt<=new Date()||needed.some(v=>!c.scopes.includes(v)))throw new HttpError(404,'Independent Instagram connection changed');
    await requireAuthorizer(a.ctx,c.userId,tx);
   },
-  async resolve(ctx:Scope,accountId:string,capability?:Capability){return(await resolveInternal(ctx,accountId,capability)).asset;},
+  async resolve(ctx:Scope,accountId:string,capability?:Capability){
+   if(capability)return(await resolveInternal(ctx,accountId,capability)).asset;
+   // Discovery needs one verified read capability, not necessarily comments.
+   // Each real operation still verifies its explicitly requested capability.
+   try{return(await resolveInternal(ctx,accountId,'messages.read')).asset;}
+   catch(error){if(!(error instanceof HttpError)||![403,409].includes(error.statusCode))throw error;}
+   return(await resolveInternal(ctx,accountId,'comments.read')).asset;
+  },
   async withAccess<T>(ctx:Scope,accountId:string,capability:Capability,action:(asset:ResolvedAsset,accessToken:string)=>Promise<T>){const {asset,accessToken}=await resolveInternal(ctx,accountId,capability);return action(asset,accessToken);}
  };
 }

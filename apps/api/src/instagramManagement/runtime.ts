@@ -7,13 +7,13 @@ import {requireInstagramAccount,createInstagramManagementStore} from './store';
 import {createInstagramManagementOAuth} from './oauth';
 import {createInstagramManagementGateway} from './oauthGateway';
 import {createInstagramManagementAccess} from './access';
-import type {InstagramManagementConfig,InstagramGrantInspection,InstagramManagementGrant,InstagramSourceSubject} from './types';
+import type {InstagramManagementConfig,InstagramGrantInspector,InstagramManagementGrant,InstagramSourceSubject} from './types';
 import {createInstagramManagementReceptionStore} from './receptionStore';
 import {createInstagramManagementWebhook} from './webhook';
 import {createInstagramManagementEngagement} from './engagement';
 import {createInstagramManagementGraph} from './graph';
 
-export function createInstagramManagementRuntime(input:{db:PrismaClient;config:InstagramManagementConfig;policy:LiveInboxPolicy;encrypt:(value:string)=>string;decrypt:(value:string)=>string;deletionHmacKey?:string;fetchImpl?:typeof fetch;exchange?:(code:string,callbackUrl:string)=>Promise<InstagramManagementGrant>;inspect?:(accountId:string,token:string)=>Promise<InstagramGrantInspection>;onDisconnect?:(tx:Prisma.TransactionClient,connection:InstagramManagementConnection)=>Promise<void>;onDeleted?:(tx:Prisma.TransactionClient,subject:InstagramSourceSubject)=>Promise<unknown>;reception?:{enabled:boolean;verifyToken:string};isDeleted?:(tx:Prisma.TransactionClient,subject:InstagramSourceSubject)=>Promise<boolean>}){
+export function createInstagramManagementRuntime(input:{db:PrismaClient;config:InstagramManagementConfig;policy:LiveInboxPolicy;encrypt:(value:string)=>string;decrypt:(value:string)=>string;deletionHmacKey?:string;fetchImpl?:typeof fetch;exchange?:(code:string,callbackUrl:string)=>Promise<InstagramManagementGrant>;inspect?:InstagramGrantInspector;onDisconnect?:(tx:Prisma.TransactionClient,connection:InstagramManagementConnection)=>Promise<void>;onDeleted?:(tx:Prisma.TransactionClient,subject:InstagramSourceSubject)=>Promise<unknown>;reception?:{enabled:boolean;verifyToken:string};isDeleted?:(tx:Prisma.TransactionClient,subject:InstagramSourceSubject)=>Promise<boolean>}){
  const {db,config,policy}=input,store=createInstagramManagementStore({db,encrypt:input.encrypt,policy,hmacKey:input.deletionHmacKey});
  const gateway=createInstagramManagementGateway({config,fetchImpl:input.fetchImpl});
  const oauth=createInstagramManagementOAuth({db,config,policy,store,exchange:input.exchange??gateway.exchange});

@@ -14,7 +14,7 @@ export function createInstagramManagementOAuth({db,config,policy,store,exchange}
    if(!config.enabled)throw new HttpError(409,'Independent Instagram authorization is disabled');
    z.string().uuid().parse(accountId);
    const state=randomBytes(32).toString('base64url');await store.createState(ctx,accountId,config.appId,state,config.callbackUrl);
-   const url=new URL('https://www.instagram.com/oauth/authorize');url.search=new URLSearchParams({client_id:config.appId,redirect_uri:config.callbackUrl,response_type:'code',scope:config.requiredScopes.join(','),state,force_authentication:'1'}).toString();
+   const url=new URL('https://www.instagram.com/oauth/authorize');url.search=new URLSearchParams({client_id:config.appId,redirect_uri:config.callbackUrl,response_type:'code',scope:config.requiredScopes.join(','),state,force_reauth:'true'}).toString();
    return{authorizationUrl:url.href};
   },
   async callback(input:{state:string;code?:string;error?:string}){
