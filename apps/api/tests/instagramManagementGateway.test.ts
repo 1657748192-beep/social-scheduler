@@ -1,6 +1,17 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {createInstagramManagementGateway} from '../src/instagramManagement/oauthGateway';
 const config={enabled:true,appId:'456',appSecret:'private-app-secret',graphVersion:'v25.0',callbackUrl:'https://app.example.test/api/v1/integrations/instagram-management/oauth/callback',requiredScopes:['instagram_business_basic','instagram_business_manage_comments']};
+
+test('gatewayReportsOnlyFixedFailureStageAndHttpStatusNeverProviderSecrets',async()=>{
+ const original=console.warn,lines:string[]=[];console.warn=(...values)=>{lines.push(values.join(' '));};
+ try{
+  await assert.rejects(createInstagramManagementGateway({config,fetchImpl:(async()=>Response.json({access_token:'short-private',user_id:9007199254740992,permissions:config.requiredScopes,private:'private-app-secret one-use-code'})) as any}).exchange('one-use-code',config.callbackUrl));
+  assert.deepEqual(lines,['IG_MANAGEMENT_EXCHANGE_FAILURE short_owner_precision 200']);
+  lines.length=0;
+  await assert.rejects(createInstagramManagementGateway({config,fetchImpl:(async()=>Response.json({error:{message:'private-app-secret one-use-code short-private'}},{status:400})) as any}).exchange('one-use-code',config.callbackUrl));
+  assert.deepEqual(lines,['IG_MANAGEMENT_EXCHANGE_FAILURE short_request 400']);
+ }finally{console.warn=original;}
+});
 test('gatewayUsesFixedHostsActualGrantsAndOwnerIdentity',async()=>{
  const seen:string[]=[];const fetchImpl:any=async(url:URL,init:any)=>{
   seen.push(url.origin+url.pathname);assert.equal(init.redirect,'error');assert.ok(init.signal);

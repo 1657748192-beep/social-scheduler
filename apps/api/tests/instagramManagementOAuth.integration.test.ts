@@ -68,3 +68,11 @@ test('providerFailureNeverLeaksTokenOrFallsBackToPublishing',async()=>withMetaIn
  const before=await f.publishingSnapshot(),s=service(f,async()=>{throw Error('private-app-secret private-token oauth-code');}),state=await start(f,s);
  await assert.rejects(s.oauth.callback({state,code:'oauth-code'}),e=>!String(e).includes('private-token')&&!String(e).includes('oauth-code')&&!String(e).includes('private-app-secret'));assert.deepEqual(await f.publishingSnapshot(),before);
 }));
+
+test('failedCallbackReportsOnlyItsFixedStageAndLeavesPublishingUntouched',async()=>withMetaInboxFixture(async f=>{
+ const before=await f.publishingSnapshot(),s=service(f,async()=>{throw Error('private-token oauth-code private-app-secret');}),state=await start(f,s);
+ const original=console.warn,lines:string[]=[];console.warn=(...values)=>{lines.push(values.join(' '));};
+ try{await assert.rejects(s.oauth.callback({state,code:'oauth-code'}));assert.deepEqual(lines,['IG_MANAGEMENT_CALLBACK_FAILURE exchange']);}
+ finally{console.warn=original;}
+ assert.deepEqual(await f.publishingSnapshot(),before);
+}));

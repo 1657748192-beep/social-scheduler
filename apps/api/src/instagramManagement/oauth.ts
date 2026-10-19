@@ -19,16 +19,22 @@ export function createInstagramManagementOAuth({db,config,policy,store,exchange}
   },
   async callback(input:{state:string;code?:string;error?:string}){
    if(!config.enabled||typeof input.state!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(input.state))throw fail();
+   let phase='state_claim';
    try{
     const saved=await store.consumeState(input.state);
-    if(!saved||input.error||!input.code||input.code.length>8192||saved.appId!==config.appId||saved.callbackUrl!==config.callbackUrl)throw fail();
+    if(!saved)throw fail();
+    phase='provider_response';
+    if(input.error||!input.code||input.code.length>8192||saved.appId!==config.appId||saved.callbackUrl!==config.callbackUrl)throw fail();
+    phase='session_or_account';
     const ctx:Scope={workspaceId:saved.workspaceId,userId:saved.userId,sessionId:saved.sessionId},account=await requireInstagramAccount(db,ctx,saved.accountId,'manage');
     if(account.providerAccountId!==saved.expectedProviderAccountId)throw fail();
-    policy.requireAsset({workspaceId:ctx.workspaceId,platform:'instagram',appId:config.appId,providerAssetId:account.providerAccountId},'read');
+    phase='policy';policy.requireAsset({workspaceId:ctx.workspaceId,platform:'instagram',appId:config.appId,providerAssetId:account.providerAccountId},'read');
+    phase='exchange';
     const grant=grantSchema.parse(await exchange(input.code,config.callbackUrl));
+    phase='grant_validation';
     if(grant.appId!==config.appId||grant.providerAccountId!==account.providerAccountId||grant.expiresAt<=new Date()||config.requiredScopes.some(scope=>!grant.scopes.includes(scope)))throw fail();
-    return{connectionId:await store.saveGrant(saved,grant)};
-   }catch{throw fail();}
+    phase='save_grant';return{connectionId:await store.saveGrant(saved,grant)};
+   }catch{console.warn('IG_MANAGEMENT_CALLBACK_FAILURE',phase);throw fail();}
   }
  };
 }
