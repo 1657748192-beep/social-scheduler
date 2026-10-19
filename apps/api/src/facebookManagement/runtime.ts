@@ -19,8 +19,9 @@ import {createFacebookManagementReceptionStore} from './receptionStore';
 import {createFacebookSubscriptionService} from './subscriptions';
 import {createFacebookWebhookRouter} from '../routes/facebookWebhookRoutes';
 import {createMetaInboxDeletion} from '../interactionInbox/deletion';
+import {parseFacebookReplyTestRestriction,type FacebookReplyTestRestriction} from './replyTestRestriction';
 
-export function createFacebookManagementRuntime(input:{db:PrismaClient;settings:FacebookManagementConfig;appSecret:string;verifyToken?:string;encrypt:(v:string)=>string;decrypt:(v:string)=>string;fetchImpl?:typeof fetch}){
+export function createFacebookManagementRuntime(input:{db:PrismaClient;settings:FacebookManagementConfig;appSecret:string;verifyToken?:string;testRestriction?:FacebookReplyTestRestriction|null;encrypt:(v:string)=>string;decrypt:(v:string)=>string;fetchImpl?:typeof fetch}){
   const {db,settings,appSecret}=input;
   const deletion=createMetaInboxDeletion({db,encrypt:input.encrypt,decrypt:input.decrypt});
   const store=createFacebookManagementStore(db,input.encrypt,{onDisconnect:async(tx,c,pages)=>{for(const page of pages)await deletion.recordDisconnectInTransaction(tx,{workspaceId:c.workspaceId,platform:'facebook',appId:c.appId,providerAssetId:page.pageId,connectionId:c.id,connectionVersion:c.version});}});
@@ -39,7 +40,7 @@ export function createFacebookManagementRuntime(input:{db:PrismaClient;settings:
     if(!connection?.userTokenEncrypted)throw new FacebookDirectoryError('authorization_invalid');
     return directoryClient({...connection,userToken:input.decrypt(connection.userTokenEncrypted)}).inspectPageToken(pageId,token);
   }});
-  const engagement=createFacebookManagementEngagement({db,resolvePageAccess:access.resolvePageAccess,executeFacebookSend:createFacebookSendExecutor({db}).executeFacebookSend,
+  const engagement=createFacebookManagementEngagement({db,testRestriction:input.testRestriction,resolvePageAccess:access.resolvePageAccess,executeFacebookSend:createFacebookSendExecutor({db,testRestriction:input.testRestriction}).executeFacebookSend,
     receivedMessages:receptionStore.messages,receivedComments:receptionStore.comments,latestInbound:receptionStore.latestInbound,
     createClient:({pageId,accessToken})=>createFacebookEngagementClient({pageId,accessToken,apiVersion:settings.graphVersion,fetchImpl:input.fetchImpl})});
   const notifications=createFacebookSubscriptionService({db,appId:settings.appId,resolvePageAccess:access.resolvePageAccess,createClient:access=>createFacebookEngagementClient({pageId:access.pageId,accessToken:access.pageToken,apiVersion:settings.graphVersion,appId:settings.appId,fetchImpl:input.fetchImpl})});
@@ -56,4 +57,4 @@ export function createFacebookManagementRuntime(input:{db:PrismaClient;settings:
   };
 }
 export type FacebookManagementRuntime=ReturnType<typeof createFacebookManagementRuntime>;
-export const facebookManagementRuntime=createFacebookManagementRuntime({db:prisma,settings:getFacebookManagementConfig(process.env),appSecret:config.FACEBOOK_CLIENT_SECRET,verifyToken:config.FACEBOOK_WEBHOOK_VERIFY_TOKEN,encrypt:encryptToken,decrypt:decryptToken});
+export const facebookManagementRuntime=createFacebookManagementRuntime({db:prisma,settings:getFacebookManagementConfig(process.env),testRestriction:parseFacebookReplyTestRestriction(process.env.FACEBOOK_MANAGEMENT_REPLY_TEST_JSON),appSecret:config.FACEBOOK_CLIENT_SECRET,verifyToken:config.FACEBOOK_WEBHOOK_VERIFY_TOKEN,encrypt:encryptToken,decrypt:decryptToken});

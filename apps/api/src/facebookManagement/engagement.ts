@@ -7,10 +7,11 @@ import {HttpError} from '../utils/errors';
 import type {PageContext,ReadPage,SendOutcome} from './types';
 import type {createFacebookPageAccess} from './access';
 import type {createFacebookSendExecutor} from './sendAttempts';
+import {copyReplyTestRestriction,assertReplyTestContext,assertReplyTestGrant,assertReplyTestInput,type FacebookReplyTestRestriction} from './replyTestRestriction';
 
 type Access=Awaited<ReturnType<ReturnType<typeof createFacebookPageAccess>['resolvePageAccess']>>;
 type Client=Pick<FacebookEngagementClient,'getPostIdentity'|'listConversations'|'getConversation'|'listMessages'|'listComments'|'replyComment'|'sendMessage'>;
-type Dependencies={db:PrismaClient;resolvePageAccess:ReturnType<typeof createFacebookPageAccess>['resolvePageAccess'];executeFacebookSend:ReturnType<typeof createFacebookSendExecutor>['executeFacebookSend'];
+type Dependencies={db:PrismaClient;testRestriction?:FacebookReplyTestRestriction|null;resolvePageAccess:ReturnType<typeof createFacebookPageAccess>['resolvePageAccess'];executeFacebookSend:ReturnType<typeof createFacebookSendExecutor>['executeFacebookSend'];
   createClient:(input:{pageId:string;accessToken:string})=>Client;now?:()=>Date;latestInbound?:(managedPageId:string,participantId:string)=>Promise<Date|null>;
   receivedMessages?:(managedPageId:string,participantId:string,conversationId:string)=>Promise<FacebookMessage[]>;
   receivedComments?:(managedPageId:string,postId:string,ids:string[],recent:boolean)=>Promise<FacebookComment[]>};
@@ -23,6 +24,7 @@ function validateAfter(after?:string){if(after!==undefined&&(!after||after.lengt
 function validateText(text:string,max:number){if(typeof text!=='string'||!text.trim()||text.length>max)throw new HttpError(400,'Invalid reply text');}
 export function createFacebookManagementEngagement(deps:Dependencies){
   const now=deps.now??(()=>new Date());
+  const rule=copyReplyTestRestriction(deps.testRestriction);
   async function provider<T>(access:Access,action:()=>Promise<T>):Promise<T>{
     try{return await action();}catch(error){
       if(error instanceof HttpError)throw error;
@@ -34,7 +36,10 @@ export function createFacebookManagementEngagement(deps:Dependencies){
     }
   }
   async function authorized(ctx:PageContext,capability:FacebookCapability,write=false){
+    assertReplyTestContext(rule,ctx,now());
+    if(rule&&!['readMessages','replyMessages'].includes(capability))throw new HttpError(403,'Only the controlled message test is enabled');
     const access=await deps.resolvePageAccess(ctx,{write,requirePublishingBinding:true});
+    assertReplyTestGrant(rule,access);
     if(permissions(access)[capability].status!=='available')throw new HttpError(403,'Facebook Page permission or task is missing');
     return {access,api:deps.createClient({pageId:access.pageId,accessToken:access.pageToken})};
   }
@@ -44,8 +49,10 @@ export function createFacebookManagementEngagement(deps:Dependencies){
     return {...page,readAt:now().toISOString(),source:'graph',stale:false,warnings:[]};
   }
   async function conversation(api:Client,id:string,access:Access){
+    if(rule&&id!==rule.conversationId)throw new HttpError(403,'Conversation is outside the controlled test');
     const item=await api.getConversation(id);
     if(item.id!==id||!/^\d{1,256}$/.test(item.counterpartyId)||item.counterpartyId===access.pageId)throw new HttpError(404,'Conversation unavailable for this Page');
+    if(rule&&item.counterpartyId!==rule.participantId)throw new HttpError(403,'Controlled conversation participant changed');
     return item;
   }
   function messagesFor(page:FacebookPage<FacebookMessage>,item:FacebookConversation,access:Access){
@@ -88,9 +95,15 @@ export function createFacebookManagementEngagement(deps:Dependencies){
       catch(error){if(!(error instanceof FacebookEngagementError))throw error;status=error.kind;}
       return {status,checkedAt:now().toISOString()};
     },
-    async capabilities(ctx:PageContext){return permissions(await deps.resolvePageAccess(ctx,{requirePublishingBinding:true}));},
+    async capabilities(ctx:PageContext){
+      assertReplyTestContext(rule,ctx,now());
+      const access=await deps.resolvePageAccess(ctx,{requirePublishingBinding:true});assertReplyTestGrant(rule,access);
+      const caps=permissions(access);if(rule)for(const key of ['readComments','replyComments','subscription'] as const)caps[key]={status:'missing'};
+      return caps;
+    },
     async conversations(ctx:PageContext,after?:string){
       validateAfter(after);const {access,api}=await authorized(ctx,'readMessages');
+      if(rule)return provider(access,async()=>wrap({items:after?[]:[await conversation(api,rule.conversationId,access)],nextCursor:null}));
       return provider(access,async()=>wrap(await api.listConversations(after)));
     },
     async messages(ctx:PageContext,conversationId:string,after?:string){
@@ -119,6 +132,7 @@ export function createFacebookManagementEngagement(deps:Dependencies){
       });
     },
     async replyMessage(ctx:PageContext,input:{conversationId:string;text:string;requestKey:string}){
+      assertReplyTestContext(rule,ctx,now());assertReplyTestInput(rule,{...input,kind:'message'});
       validateText(input.text,2000);const {access,api}=await authorized(ctx,'replyMessages',true);
       if(permissions(access).readMessages.status!=='available')throw new HttpError(403,'Facebook conversation read permission is missing');
       const item=await provider(access,()=>conversation(api,input.conversationId,access));
@@ -132,6 +146,7 @@ export function createFacebookManagementEngagement(deps:Dependencies){
         if(fresh.access.connectionId!==access.connectionId||fresh.access.connectionVersion!==access.connectionVersion||fresh.access.pageToken!==access.pageToken)return{status:'failed',code:'authorization_changed',diagnosticId:randomUUID()};
         if(permissions(fresh.access).readMessages.status!=='available')return{status:'failed',code:'permission_missing',diagnosticId:randomUUID()};
         if(!isFacebookMessagingWindowOpen(latest,now()))return{status:'failed',code:'reply_window_closed',diagnosticId:randomUUID()};
+        assertReplyTestContext(rule,ctx,now());
         return send(fresh.access,()=>fresh.api.sendMessage(item.counterpartyId,input.text));
       });
     },
