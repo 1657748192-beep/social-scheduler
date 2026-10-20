@@ -1801,6 +1801,10 @@ textarea {
 .account-manager-avatar .official-platform-logo img { width: 18px; height: 18px; }
 .account-manager-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .account-manager-actions .button { padding: 8px 12px; font-size: 12px; }
+.page-import-header { flex-wrap: wrap; }
+.page-import-group { margin-top: 18px; }
+.page-import-group h4 { margin: 0 0 12px; }
+.page-import-history { border-top: 1px solid var(--line); padding-top: 16px; }
 .account-manager-count { text-align: right; font-size: 13px; }
 .account-manager-empty { padding: 36px 20px; text-align: center; border: 1px dashed var(--line); border-radius: 12px; }
 .account-manager-empty p { margin-top: 10px; }
