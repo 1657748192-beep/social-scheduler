@@ -5,6 +5,7 @@ FROM base AS deps
 COPY package*.json ./
 COPY apps/api/package*.json apps/api/
 COPY apps/web/package*.json apps/web/
+COPY packages/timezone-rules packages/timezone-rules/
 RUN npx --yes --package npm@11.18.0 npm ci
 
 FROM deps AS build
@@ -16,6 +17,7 @@ RUN npm run build
 FROM base AS runner
 ENV NODE_ENV=production
 COPY --from=build /app/node_modules /app/node_modules
+COPY --from=build /app/packages /app/packages
 COPY --from=build /app/apps/api/dist /app/apps/api/dist
 COPY --from=build /app/apps/api/prisma /app/apps/api/prisma
 COPY --from=build /app/apps/api/package.json /app/apps/api/package.json

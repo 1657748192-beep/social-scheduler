@@ -1,0 +1,7 @@
+{
+  "source": "https://raw.githubusercontent.com/moment/moment-timezone/0.6.5/data/packed/latest.json",
+  "tzdbVersion": "2026e",
+  "sha256": "4bfad054e91d7a4beba7bbff199cd60ab0fe05934cb9fc7f42b19fc3e820a53d",
+  "momentTimezone": "0.6.5",
+  "moment": "2.31.0"
+}

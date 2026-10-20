@@ -1,0 +1,8 @@
+{
+  "name": "@social-scheduler/timezone-rules",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.cjs",
+  "types": "index.d.ts",
+  "dependencies": {"moment-timezone":"0.6.5","moment":"2.31.0","js-sha256":"1.0.0"}
+}

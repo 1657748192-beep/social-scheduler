@@ -9,6 +9,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@social-scheduler/timezone-rules": "*",
     "cos-js-sdk-v5": "1.8.3",
     "luxon": "3.7.2",
     "next": "^15.5.27",

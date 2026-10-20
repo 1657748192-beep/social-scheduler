@@ -5,6 +5,7 @@ FROM base AS deps
 COPY package*.json ./
 COPY apps/api/package*.json apps/api/
 COPY apps/web/package*.json apps/web/
+COPY packages/timezone-rules packages/timezone-rules/
 RUN npx --yes --package npm@11.18.0 npm ci
 
 FROM deps AS build
@@ -19,6 +20,7 @@ ENV NODE_ENV=production
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 COPY --from=deps /app/node_modules /app/node_modules
+COPY --from=deps /app/packages /app/packages
 COPY --from=build /app/apps/web/.next /app/apps/web/.next
 COPY --from=build /app/apps/web/app /app/apps/web/app
 COPY --from=build /app/apps/web/components /app/apps/web/components
