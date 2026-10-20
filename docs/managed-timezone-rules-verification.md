@@ -67,3 +67,5 @@
 390px手机宽度，scrollWidth375，无横向溢出。英文、navigator.onLine=false、Storage读写抛错时仍显示纽约20:00／北京次日08:00，提交按钮未被存储故障禁用；未实际向外发送。浏览器控制台仅React开发提示，无应用错误。一次英文测试按钮标签写错导致查询超时，按真实页面标签读回确认，没有修改产品文案来让测试通过。
 
 截图在 `output/playwright/managed-timezone-desktop.png`、`managed-timezone-mobile-picker.png`、`managed-timezone-gap.png`、`managed-timezone-offline-english.png`。元素截图已人工查看；顶部手机整页截图只证明页面布局，不冒充时区选择器截图。专用浏览器已关闭，预览Node进程核对PID和完整命令后仅停止本轮服务。
+
+收尾：最终本地修复提交 `de6c424`，Task5完成门禁再次运行真实集成2/2通过，15248ms。本轮临时验证目录的清理被工具策略拒绝，未执行删除或尝试绕过，故 `.superpowers/sdd/2026-10-20-managed-timezone-rules/` 保留；不影响实现、报告或截图，不含真实凭据。分支与工作区继续保留，未合并、推送或部署。
