@@ -66,3 +66,24 @@ test('picker labels switch language and Escape dismisses options without choosin
    assert.ok(view.root.findByProps({'aria-label':'Local hour'}));
  },auth);
 });
+
+test('choosing a country city keeps that representative label when its canonical zone is shared',async()=>{
+ await withFacebookUI(<Editor/>,async({view}:any)=>{
+   const input=view.root.findByProps({'aria-label':'发布地区与时区'});
+   await act(async()=>input.props.onFocus());await act(async()=>input.props.onChange({target:{value:'哥本哈根'}}));
+   await act(async()=>input.props.onKeyDown({key:'ArrowDown',preventDefault(){}}));await act(async()=>input.props.onKeyDown({key:'Enter',preventDefault(){}}));
+   assert.ok(input.props.value.includes('丹麦'));assert.ok(input.props.value.includes('哥本哈根'));
+ },auth);
+});
+
+test('corrupt persisted favorites cannot block local-time editing or change the Beijing default',async()=>{
+ let finish!:(response:Response)=>void;
+ const pending=new Promise<Response>(resolve=>{finish=resolve;});
+ await withFacebookUI(<Editor/>,async({view}:any)=>{
+   (globalThis as any).window.localStorage.getItem=()=>'{broken-json';
+   await act(async()=>finish(Response.json({id:'u1'})));
+   assert.ok(view.root.findByProps({'aria-label':'发布地区与时区'}).props.value.includes('Asia/Shanghai'));
+   await act(async()=>view.root.findByProps({'aria-label':'当地日期'}).props.onChange({target:{value:'2099-10-20'}}));
+   assert.ok(facebookText(view).includes('2099-10-20 00:00'));
+ },url=>url.pathname.endsWith('/auth/me')?pending:undefined);
+});

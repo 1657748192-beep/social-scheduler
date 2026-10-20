@@ -20,3 +20,10 @@ test('catalog resolves explicit historical aliases without accepting invented or
   assert.equal(canonicalTimeZone('UTC'), 'UTC');
   for (const id of ['CST', 'UTC+8', 'america/new_york', 'Unknown/Zone', '']) assert.equal(canonicalTimeZone(id), null);
 });
+
+test('canonical scheduling IDs do not replace each country representative city or lose translated historical keys',()=>{
+ for(const [query,country,city] of [['Copenhagen','DK','哥本哈根'],['哥本哈根','DK','哥本哈根'],['Stockholm','SE','斯德哥尔摩'],['Amsterdam','NL','阿姆斯特丹']]){
+   assert.ok(searchTimeZones(query).some(e=>e.countryCode===country&&e.cityZh===city));
+ }
+ for(const [query,zone] of [['加德满都','Asia/Kathmandu'],['加尔各答','Asia/Kolkata'],['基辅','Europe/Kyiv'],['北京','Asia/Shanghai']])assert.ok(searchTimeZones(query).some(e=>e.zoneId===zone));
+});

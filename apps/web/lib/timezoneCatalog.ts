@@ -1,6 +1,6 @@
 import catalog from './timezones/catalog.json';
 
-export type TimeZoneEntry = { zoneId: string; countryCode: string; countryZh: string; countryEn: string; cityZh: string; cityEn: string };
+export type TimeZoneEntry = { zoneId: string; sourceZoneId:string; countryCode: string; countryZh: string; countryEn: string; cityZh: string; cityEn: string; searchAliases:string[] };
 export const commonTimeZones = ['Asia/Shanghai', 'America/New_York', 'America/Los_Angeles', 'Europe/London', 'Europe/Paris', 'Asia/Tokyo', 'Asia/Singapore', 'Australia/Sydney', 'Asia/Dubai'];
 export const timeZoneEntries: readonly TimeZoneEntry[] = catalog.entries;
 const ids = new Set(timeZoneEntries.map(entry => entry.zoneId));

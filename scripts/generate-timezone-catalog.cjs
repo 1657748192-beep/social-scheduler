@@ -31,14 +31,20 @@ async function main() {
   const links = Object.fromEntries(raw.aliases.split('\n').filter(l => /^Link\s/.test(l)).map(l => { const [, target, alias] = l.split(/\s+/); return [alias, target]; }));
   const canonical = id => { const seen = new Set(); while (links[id] && !seen.has(id)) { seen.add(id); id = links[id]; } return id; };
   const city = (id, locale) => {
-    const node = id.split('/').reduce((obj, part) => obj?.[part], byLocale[locale]);
-    return node?.exemplarCity || id.split('/').at(-1).replaceAll('_', ' ');
+    const name = candidate => candidate.split('/').reduce((obj, part) => obj?.[part], byLocale[locale])?.exemplarCity;
+    if (name(id)) return name(id);
+    // English exemplar names default to the geographic row, not another country's canonical target.
+    if (locale === 'zh') {
+      const candidates = [canonical(id), ...Object.keys(links).filter(alias => canonical(alias) === canonical(id))];
+      for (const candidate of candidates) if (name(candidate)) return name(candidate);
+    }
+    return id.split('/').at(-1).replaceAll('_', ' ');
   };
   const entries = raw.zones.split('\n').filter(l => l && !l.startsWith('#')).map(line => {
     const [countryCode, , rawId] = line.split('\t'), zoneId = canonical(rawId);
-    return { zoneId, countryCode, countryZh: countryNames.zh[countryCode] || countryCode, countryEn: countryNames.en[countryCode] || countryCode, cityZh: city(zoneId, 'zh'), cityEn: city(zoneId, 'en') };
+    return { zoneId, sourceZoneId:rawId, countryCode, countryZh: countryNames.zh[countryCode] || countryCode, countryEn: countryNames.en[countryCode] || countryCode, cityZh: city(rawId, 'zh'), cityEn: city(rawId, 'en'), searchAliases:rawId === 'Asia/Shanghai' ? ['北京','北京时间','Beijing','Beijing time'] : [] };
   });
-  entries.push({ zoneId: 'UTC', countryCode: '001', countryZh: '全球', countryEn: 'World', cityZh: '协调世界时', cityEn: 'Coordinated Universal Time' });
+  entries.push({ zoneId: 'UTC', sourceZoneId:'UTC', countryCode: '001', countryZh: '全球', countryEn: 'World', cityZh: '协调世界时', cityEn: 'Coordinated Universal Time',searchAliases:[] });
   const ids = new Set(entries.map(e => e.zoneId));
   const aliases = Object.fromEntries(Object.keys(links).sort().map(id => [id, canonical(id)]).filter(([, target]) => ids.has(target)));
   aliases['Etc/UTC'] = 'UTC'; aliases['Etc/GMT'] = 'UTC';
