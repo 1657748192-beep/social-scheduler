@@ -1,8 +1,9 @@
 "use client";
 import {formatScheduleTimes} from '../../lib/scheduleTimeZone';
 import {useLanguage} from '../LanguageProvider';
-export function ScheduledTimePreview({instant,zoneId}:{instant:string;zoneId?:string}){
-  const {locale,t}=useLanguage(), value=formatScheduleTimes(instant,zoneId,locale);
+import {getBaseline,type RuleSnapshot} from '@social-scheduler/timezone-rules';
+export function ScheduledTimePreview({instant,zoneId,rules=getBaseline()}:{instant:string;zoneId?:string;rules?:RuleSnapshot}){
+  const {locale,t}=useLanguage(), value=formatScheduleTimes(instant,zoneId,locale,rules);
   return <div className="schedule-time-preview" aria-live="polite">
     {value.localLabel?<div><span>{t('目标地区时间','Target local time')}</span><strong>{value.localLabel}</strong><small>{zoneId}</small></div>:<p className="muted">{t('原时区不可用或未记录，仅显示北京时间。','Original time zone unavailable or not recorded. Showing Beijing time only.')}</p>}
     <div><span>{t('对应北京时间','Corresponding Beijing time')}</span><strong>{value.beijingLabel}</strong>

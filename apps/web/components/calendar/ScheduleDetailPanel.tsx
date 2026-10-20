@@ -5,6 +5,7 @@ import {SchedulePicker} from '../composer/SchedulePicker';
 import {ScheduledTimePreview} from '../scheduling/ScheduledTimePreview';
 import {createScheduleTimeState,getScheduleSubmission,type ScheduleTimeState} from '../../lib/scheduleTimeZone';
 import {buildScheduleEdit} from '../../lib/scheduleEdit';
+import {useScheduleRuleSession} from '../scheduling/useScheduleRuleSession';
 import { apiRequest, type CalendarSchedule } from "../../lib/api";
 import { platformLabel, publishJobStatusLabel, scheduleStatusLabel } from "../../lib/labels";
 import { useLanguage } from "../LanguageProvider";
@@ -35,6 +36,9 @@ function ScheduleDetailEditor({
   const { locale, t } = useLanguage();
   const [text, setText] = useState("");
   const [time, setTime] = useState<ScheduleTimeState>(() => createScheduleTimeState(schedule?.scheduledAt,schedule?.timezone));
+  const [timeTouched,setTimeTouched]=useState(false);
+  const ruleSession=useScheduleRuleSession({token,workspaceId,sessionKey:schedule?.id??'',existingZone:schedule?.timezone,dirty:timeTouched});
+  useEffect(()=>{if(!timeTouched&&schedule)setTime(createScheduleTimeState(schedule.scheduledAt,schedule.timezone,ruleSession.rules));},[ruleSession.rules,schedule?.scheduledAt,schedule?.timezone,timeTouched]);
   const active=useRef(true);
   useEffect(()=>{active.current=true;return()=>{active.current=false;};},[]);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -80,7 +84,7 @@ function ScheduleDetailEditor({
     try {
       body=buildScheduleEdit({scheduledAt:schedule.scheduledAt,timezone:schedule.timezone,text:schedule.postVariant.text},{time,text:trimmedText});
       if (!body) {setFormError(null);setFeedback(t('实际发布时间和内容未变，无需保存。','The instant and content are unchanged. Nothing to save.'));return;}
-      if (Date.parse(body.scheduledAt)!==Date.parse(schedule.scheduledAt) && getScheduleSubmission(time,Date.now()).kind!=='scheduled') throw Error('Invalid time');
+      if (Date.parse(body.scheduledAt)!==Date.parse(schedule.scheduledAt) && (!ruleSession.ready||getScheduleSubmission(time,Date.now(),ruleSession.rules).kind!=='scheduled')) throw Error('Invalid time');
     } catch {setFormError(t('请确认有效的未来发布时间。','Confirm a valid future publishing time.'));return;}
 
     setFormError(null);
@@ -157,7 +161,7 @@ function ScheduleDetailEditor({
         <dt>{t("发布账号", "Publishing account")}</dt>
         <dd>{schedule.postVariant.socialAccount?.displayName ?? t("未指定（旧任务）", "Unspecified (legacy task)")}</dd>
         <dt>{t("发布时间", "Publishing time")}</dt>
-        <dd><ScheduledTimePreview instant={schedule.scheduledAt} zoneId={schedule.timezone}/></dd>
+        <dd><ScheduledTimePreview instant={schedule.scheduledAt} zoneId={schedule.timezone} rules={ruleSession.rules}/></dd>
         <dt>{t("状态", "Status")}</dt>
         <dd>{scheduleStatusLabel(schedule.status, locale)}</dd>
         <dt>{t("发布任务", "Publishing task")}</dt>
@@ -178,7 +182,7 @@ function ScheduleDetailEditor({
             />
           </label>
 
-          <SchedulePicker value={time} onChange={setTime} token={token} workspaceId={workspaceId} editing/>
+          <SchedulePicker value={time} onChange={value=>{setTimeTouched(true);setTime(value);}} token={token} workspaceId={workspaceId} editing rules={ruleSession.rules} ready={ruleSession.ready} updateAvailable={ruleSession.updateAvailable}/>
 
           <div className="schedule-edit-actions">
             <button className="button" disabled={isSaving || isDeleting} type="submit">

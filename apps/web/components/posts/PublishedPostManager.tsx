@@ -1,5 +1,6 @@
 "use client";
 import {ScheduledTimePreview} from '../scheduling/ScheduledTimePreview';
+import {useScheduleRuleSession} from '../scheduling/useScheduleRuleSession';
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -380,6 +381,7 @@ function getMediaReuseStatus(post: PublishedPost, now: number, locale: "zh-CN" |
 export function PublishedPostManager({ token, workspaces }: PublishedPostManagerProps) {
   const { t, locale } = useLanguage();
   const [workspaceId, setWorkspaceId] = useState("");
+  const ruleSession=useScheduleRuleSession({token,workspaceId,sessionKey:'published-history'});
   const [platform, setPlatform] = useState<ComposerPlatform | "all">("all");
   const [accountId, setAccountId] = useState("all");
   const [accounts, setAccounts] = useState<SocialAccount[]>([]);
@@ -592,7 +594,7 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
                   </div>
                   <div>
                     <dt>{t("原计划时间", "Original scheduled time")}</dt>
-                    <dd><ScheduledTimePreview instant={post.scheduledAt} zoneId={post.timezone}/></dd>
+                    <dd><ScheduledTimePreview instant={post.scheduledAt} zoneId={post.timezone} rules={ruleSession.rules}/></dd>
                   </div>
                   <div>
                     <dt>{t("素材复用", "Media reuse")}</dt>

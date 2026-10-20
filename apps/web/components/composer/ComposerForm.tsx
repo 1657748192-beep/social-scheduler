@@ -29,6 +29,7 @@ import { PostPreview } from "./PostPreview";
 import { ProductPostTemplatePicker } from "./ProductPostTemplatePicker";
 import { applyProductPostTemplate, wouldOverwriteProductContent, type ProductPostTemplate } from "./productPostTemplate";
 import { SchedulePicker } from "./SchedulePicker";
+import {useScheduleRuleSession} from '../scheduling/useScheduleRuleSession';
 import { TextInsertToolbar } from "./TextInsertToolbar";
 import { TikTokPublishSettings, type TikTokPublishSettingsValue } from "./TikTokPublishSettings";
 import { useLanguage } from "../LanguageProvider";
@@ -161,6 +162,10 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
     createPlatformMediaSourceMap()
   );
   const [scheduleTime, setScheduleTime] = useState<ScheduleTimeState>(() => createScheduleTimeState());
+  const [scheduleTouched,setScheduleTouched]=useState(false);
+  const [ruleSessionKey,setRuleSessionKey]=useState(0);
+  const ruleSession=useScheduleRuleSession({token,workspaceId,sessionKey:String(ruleSessionKey),dirty:scheduleTouched});
+  useEffect(()=>{if(!scheduleTouched)setScheduleTime(createScheduleTimeState(undefined,ruleSession.defaultZone,ruleSession.rules));},[ruleSession.ready,ruleSession.defaultZone,ruleSession.rules,scheduleTouched]);
   const [publishMode, setPublishMode] = useState<"draft" | "scheduled" | "now">("draft");
   const [result, setResult] = useState<ComposerPost | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -201,7 +206,7 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
     setWorkspaceId(nextWorkspaceId);
   }
 
-  useEffect(() => { setScheduleTime(createScheduleTimeState()); }, [workspaceId, token]);
+  useEffect(() => {setScheduleTouched(false);setScheduleTime(createScheduleTimeState());}, [workspaceId, token]);
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === workspaceId),
@@ -400,7 +405,7 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
             reusableVariants.flatMap((variant) => (variant.socialAccountId ? [variant.socialAccountId] : []))
           );
           setActivePlatform(reusableVariants[0]?.platform ?? activePlatforms[0] ?? "facebook");
-          setScheduleTime(createScheduleTimeState());
+          setScheduleTouched(false);setRuleSessionKey(n=>n+1);setScheduleTime(createScheduleTimeState());
           setPublishMode("draft");
           setResult(null);
           setCopyNotice(
@@ -580,7 +585,7 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
     };
   }, [selectedPinterestAccountIds, t, token, workspaceId]);
 
-  const scheduleSubmission = getScheduleSubmission(scheduleTime, Date.now());
+  const scheduleSubmission = ruleSession.ready?getScheduleSubmission(scheduleTime, Date.now(),ruleSession.rules):{kind:'error' as const,reason:'unresolved'};
   const publishChecks = [
     {
       label: t("内容文案", "Post copy"),
@@ -770,7 +775,7 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
       return;
     }
 
-    const confirmedTime = publishMode === "scheduled" ? getScheduleSubmission(scheduleTime, Date.now()) : null;
+    const confirmedTime = publishMode === "scheduled" ? (ruleSession.ready?getScheduleSubmission(scheduleTime, Date.now(),ruleSession.rules):{kind:'error' as const,reason:'unresolved'}) : null;
     if (confirmedTime?.kind === "error") {
       setError(t("发布时间尚未确定或已失效，请检查地区、当地时间及重复时刻选择。", "Publishing time is unresolved or no longer valid. Check the region, local time and occurrence."));
       return;
@@ -1174,7 +1179,7 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
               {t("保存草稿", "Save draft")}
             </button>
           </div>
-          {publishMode === "scheduled" ? <SchedulePicker onChange={setScheduleTime} value={scheduleTime} token={token} workspaceId={workspaceId} /> : null}
+          {publishMode === "scheduled" ? <SchedulePicker onChange={value=>{setScheduleTouched(true);setScheduleTime(value);}} value={scheduleTime} token={token} workspaceId={workspaceId} rules={ruleSession.rules} ready={ruleSession.ready} updateAvailable={ruleSession.updateAvailable}/> : null}
           {publishMode === "now" ? <p className="muted">{t("确认后会为每个已选账号分别入队并立即发布。", "After confirmation, each selected account is queued and published immediately.")}</p> : null}
           {publishMode === "draft" ? <p className="muted">{t("稍后可从内容日历继续安排发布时间。", "You can schedule it later from the content calendar.")}</p> : null}
           {publishingLocked ? (
