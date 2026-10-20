@@ -4,6 +4,7 @@ import {HttpError} from '../utils/errors';
 import {z} from 'zod';
 import {requireVerifiedMetaDeletionProof,type VerifiedMetaDeletionProof,type MetaDeletionNamespace} from './metaDeletionRoutes';
 import {createMetaGrantFence} from './grantFence';
+import {invalidatePageImportInvitations} from '../facebookPageImportInvitations/deletion';
 import {deriveMetaDeletionKey} from '../utils/tokenCrypto';
 import {purgeFacebookDeletionSources} from './facebookDeletionSources';
 export type MetaDeletionAsset={workspaceId:string;platform:'facebook'|'instagram';appId:string;providerAssetId:string;connectionId:string;connectionVersion:number};
@@ -113,6 +114,7 @@ export function createMetaInboxDeletion({db,hmacKey=deriveMetaDeletionKey(),encr
     // Serialize duplicate/multi-reason callbacks for the same app-scoped subject,
     // then lock verified independent connections in stable order. No Graph calls.
     await grantFence.advance(tx,n,verified.userId,new Date((verified.issuedAt+1)*1000-1));
+    if(n.platform==='facebook')await invalidatePageImportInvitations(tx,{platform:'facebook',appId:n.appId},subjectHash,new Date((verified.issuedAt+1)*1000-1));
     const existing=await tx.metaInboxAppDeletionRequest.findUnique({where:{requestKey}});if(existing)return{confirmationCode:existing.confirmationCode};
     const where={platform:'instagram' as const,appId:n.appId,providerUserId:verified.userId};
     const candidates=n.platform==='instagram'?await tx.instagramManagementConnection.findMany({where,orderBy:{id:'asc'},take:51,select:{id:true}}):await tx.facebookManagementConnection.findMany({where:{appId:n.appId,providerUserId:verified.userId},orderBy:{id:'asc'},take:51,select:{id:true}});

@@ -2,6 +2,7 @@ import type {Prisma,PrismaClient,FacebookManagementOAuthState,FacebookManagement
 import type {ManagementContext} from './types';
 import {LOGIN_SESSION_MAX_AGE_MS} from '../utils/sessionLifetime';
 import {createMetaGrantFence} from '../interactionInbox/grantFence';
+import {retirePageImportCreator} from '../facebookPageImportInvitations/deletion';
 
 export type ManagementGrant={appId:string;providerUserId:string;userToken:string;scopes:string[];expiresAt:Date|null;pages:Array<{
   pageId:string;name:string;pageToken:string|null;tasks:string[];scopes:string[];expiresAt:Date|null;profileUrl:string|null;avatarUrl:string|null;
@@ -9,6 +10,8 @@ export type ManagementGrant={appId:string;providerUserId:string;userToken:string
 export class ManagementAuthorizationError extends Error{constructor(){super('Facebook management authorization unavailable');}}
 export async function retireFacebookManagementAuthorizer(tx:Prisma.TransactionClient,workspaceId:string,userId:string){
   // Caller holds the membership row, matching the OAuth grant lock order.
+  // Invitation locks precede management connection locks, also on app deletion.
+  await retirePageImportCreator(tx,workspaceId,userId);
   await tx.facebookManagementConnection.updateMany({where:{workspaceId,userId},data:{status:'disconnected',userTokenEncrypted:null,version:{increment:1}}});
   await tx.facebookManagedPage.updateMany({where:{connection:{workspaceId,userId}},data:{active:false,pageTokenEncrypted:null,notificationsEnabled:false}});
   await tx.facebookManagementPageSelection.deleteMany({where:{workspaceId,page:{connection:{workspaceId,userId}}}});
