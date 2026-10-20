@@ -21,6 +21,7 @@ type ApiOptions = {
   method?: string;
   body?: unknown;
   signal?:AbortSignal;
+  cache?:RequestCache;
 };
 
 export function redirectToLoginAfterSessionExpiry() {
@@ -39,6 +40,7 @@ export async function apiRequest<T>(path: string, options: ApiOptions = {}): Pro
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: options.method ?? "GET",
     signal:options.signal,
+    cache:options.cache,
     headers: {
       "Content-Type": "application/json",
       ...(options.token ? { Authorization: `Bearer ${options.token}` } : {})

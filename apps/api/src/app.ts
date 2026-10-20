@@ -24,6 +24,8 @@ import {createFacebookManagementRouter} from './facebookManagement/routes';
 import {facebookManagementRuntime,type FacebookManagementRuntime} from './facebookManagement/runtime';
 import {createFacebookPageSyncRouter} from './facebookPageSync/routes';
 import {getFacebookPageSyncRuntime} from './facebookPageSync/runtime';
+import {createInvitationRouter} from './facebookPageImportInvitations/routes';
+import {getPageImportRuntime} from './facebookPageImportInvitations/runtime';
 import {createInteractionInboxRuntime} from './interactionInbox/runtime';
 import {createInteractionInboxRouter} from './interactionInbox/routes';
 import {prisma} from './prisma';
@@ -52,6 +54,7 @@ export function createApp(options:{facebookManagement?:FacebookManagementRuntime
   if(management.enabled)app.use('/api/v1/webhooks/facebook',management.webhook);
   if(instagram.receptionEnabled)app.use('/api/v1/webhooks/instagram',instagram.webhook);
   app.use(removedMetaEngagement);
+  app.use('/api/v1/facebook-page-import-public',express.json({limit:'2kb'}));
   app.use(express.json({ limit: "1mb" }));
   morgan.token("safe-url", req => safeRequestLogUrl(req.url ?? ""));
   app.use(morgan(":method :safe-url :status :response-time ms"));
@@ -65,6 +68,7 @@ export function createApp(options:{facebookManagement?:FacebookManagementRuntime
   app.use('/api/v1',createInstagramManagementRouter(instagram,{webAppUrl:config.WEB_APP_URL}));
   app.use('/api/v1',createInteractionInboxRouter(createInteractionInboxRuntime({db:prisma,redis,facebook:management,instagram})));
   app.use("/api/v1", tiktokSandboxRoutes);
+  app.use('/api/v1',createInvitationRouter(getPageImportRuntime,{webAppUrl:config.WEB_APP_URL}));
   app.use('/api/v1',createFacebookPageSyncRouter(getFacebookPageSyncRuntime,{webAppUrl:config.WEB_APP_URL}));
   app.use("/api/v1", socialAccountRoutes);
   app.use("/api/v1", createLocalUploadRouter(localUploadRuntime));
