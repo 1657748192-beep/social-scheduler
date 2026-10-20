@@ -16,6 +16,24 @@ test('external callback saves candidates but creates no publishing account or cr
  await assert.rejects(f.oauth.beginPublicFlow(invite.secret));
  assert.equal(await f.oauth.completePublicFlow({state,code:'controlled-code',flowCookie:start.cookie.value}),'unavailable');
 }));
+test('an authorized empty Page directory is saved without changing publishing data',()=>fixture(async f=>{
+ const before=await f.snapshot(),invite=await f.repo.createInvitation(f.ctx,''),start=await f.oauth.beginPublicFlow(invite.secret);
+ f.graph.discover=async()=>({providerUserId:'900',pages:[],rejected:[]});
+ assert.equal(await f.oauth.completePublicFlow({state:new URL(start.authorizationUrl).searchParams.get('state'),code:'controlled',flowCookie:start.cookie.value}),'received');
+ const row=await f.repo.readPrivate(f.ctx,invite.view.id);assert.equal(row.status,'authorized_pending_selection');assert.deepEqual((await f.repo.candidates(row)).pages,[]);assert.deepEqual(await f.snapshot(),before);
+}));
+test('directory failure is visible to the creator without exposing provider errors or changing publishing data',()=>fixture(async f=>{
+ const before=await f.snapshot(),invite=await f.repo.createInvitation(f.ctx,''),start=await f.oauth.beginPublicFlow(invite.secret);
+ f.graph.discover=async()=>{throw Error('secret-provider-payload');};
+ assert.equal(await f.oauth.completePublicFlow({state:new URL(start.authorizationUrl).searchParams.get('state'),code:'controlled',flowCookie:start.cookie.value}),'unavailable');
+ const row=await f.repo.readPrivate(f.ctx,invite.view.id);assert.equal(row.diagnosticId,'page_directory_read_failed');assert.equal(row.status,'awaiting_authorization');assert.deepEqual(await f.snapshot(),before);
+ const {createFacebookPageImportInvitationService}=await import('../src/facebookPageImportInvitations/service');
+ const service=createFacebookPageImportInvitationService({...f,appId:'123',repo:f.repo,graph:{revalidate:async p=>p}});
+ assert.equal((await service.list(f.ctx)).items[0].authorizationOutcome,'read_failed');
+ const retry=await f.oauth.beginPublicFlow(invite.secret);f.graph.discover=async()=>({providerUserId:'900',pages:[],rejected:[]});
+ assert.equal(await f.oauth.completePublicFlow({state:new URL(retry.authorizationUrl).searchParams.get('state'),code:'controlled-retry',flowCookie:retry.cookie.value}),'received');
+ assert.equal((await f.repo.readPrivate(f.ctx,invite.view.id)).diagnosticId,null);assert.equal((await service.list(f.ctx)).items[0].authorizationOutcome,'no_new_pages');assert.deepEqual(await f.snapshot(),before);
+}));
 test('creator removal or revocation while Graph waits prevents candidate save',()=>fixture(async f=>{
  for(const revoke of [false,true]){const invite=await f.repo.createInvitation(f.ctx,''),start=await f.oauth.beginPublicFlow(invite.secret);const state=new URL(start.authorizationUrl).searchParams.get('state');
  f.graph.discover=async()=>{if(revoke)await f.db.facebookPageImportInvitation.update({where:{id:invite.view.id},data:{status:'revoked',version:{increment:1}}});else await f.db.workspaceMember.update({where:{workspaceId_userId:{workspaceId:f.ctx.workspaceId,userId:f.userId}},data:{role:'viewer'}});return{providerUserId:'900',pages:[importTestPage('101')],rejected:[]};};

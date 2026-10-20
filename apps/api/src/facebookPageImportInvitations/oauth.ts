@@ -26,8 +26,16 @@ export function createInvitationOAuth(deps:{db:PrismaClient;appId:string;repo:Re
     const before=await db.facebookPageImportInvitation.findUnique({where:{id:flow.invitationId}});
     if(!before||before.appId!==appId||before.version!==flow.version||before.status!=='awaiting_authorization'||before.expiresAt<=new Date())return'unavailable';
     if(!await creatorActive(db,before)){await retire(before.id);return'unavailable';}
-    const result=await graph.discover(input.code);
-    if(!/^\d{1,256}$/.test(result.providerUserId)||result.pages.length+result.rejected.length===0||!await flows.active(flow))return'unavailable';
+    let result:Awaited<ReturnType<typeof graph.discover>>;
+    try{result=await graph.discover(input.code);}catch{
+     await db.$transaction(async tx=>{
+      await tx.$queryRaw`SELECT id FROM workspace_members WHERE user_id=${before.createdById}::uuid AND workspace_id=${before.workspaceId}::uuid FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM "FacebookPageImportInvitation" WHERE id=${before.id}::uuid FOR UPDATE`;
+      const row=await tx.facebookPageImportInvitation.findUnique({where:{id:before.id}});
+      if(row&&row.appId===appId&&row.version===flow!.version&&row.status==='awaiting_authorization'&&row.expiresAt>new Date()&&await creatorActive(tx,row)&&await flows.active(flow!))await tx.facebookPageImportInvitation.update({where:{id:row.id},data:{diagnosticId:'page_directory_read_failed'}});
+     });return'unavailable';
+    }
+    if(!/^\d{1,256}$/.test(result.providerUserId)||!await flows.active(flow))return'unavailable';
     const startedAt=new Date(flow.startedAt),subjectHash=fence.subjectHash({platform:'facebook',appId},result.providerUserId);
     const encrypted=repo.encodeCandidates({...result,appId,authorizationStartedAt:startedAt.toISOString()});
     const claimed=flow;
@@ -39,7 +47,7 @@ export function createInvitationOAuth(deps:{db:PrismaClient;appId:string;repo:Re
      if(!row||row.appId!==appId||row.version!==claimed.version||row.status!=='awaiting_authorization'||row.expiresAt<=at||claimed.expiresAt<=at.getTime())return false;
      if(!await creatorActive(tx,row)){await tx.facebookPageImportInvitation.update({where:{id:row.id},data:terminalFields('revoked',at)});return false;}
      await tx.facebookPageImportCandidate.create({data:{invitationId:row.id,encryptedEnvelope:encrypted}});
-     await tx.facebookPageImportInvitation.update({where:{id:row.id},data:{status:'authorized_pending_selection',version:{increment:1},authorizedAt:at,authorizationStartedAt:startedAt,authorizerSubjectHash:subjectHash,candidateExpiresAt:new Date(Math.min(at.getTime()+day,row.createdAt.getTime()+2*day))}});return true;
+     await tx.facebookPageImportInvitation.update({where:{id:row.id},data:{status:'authorized_pending_selection',diagnosticId:null,version:{increment:1},authorizedAt:at,authorizationStartedAt:startedAt,authorizerSubjectHash:subjectHash,candidateExpiresAt:new Date(Math.min(at.getTime()+day,row.createdAt.getTime()+2*day))}});return true;
     });return saved?'received':'unavailable';
    }catch{return'unavailable';}finally{if(flow)await flows.release(flow).catch(()=>{});}
   }

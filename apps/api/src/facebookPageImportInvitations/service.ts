@@ -24,6 +24,23 @@ export function createFacebookPageImportInvitationService(deps:{db:PrismaClient;
   if(row.authorizerSubjectHash!==fence.subjectHash({platform:'facebook',appId},envelope.providerUserId)||row.authorizationStartedAt?.toISOString()!==envelope.authorizationStartedAt)throw unavailable();return row;
  }
  async function currentExisting(ctx:InvitationContext,ids:string[]){return new Set((await db.socialAccount.findMany({where:{workspaceId:ctx.workspaceId,platform:'facebook',providerAccountId:{in:ids}},select:{providerAccountId:true}})).map(p=>p.providerAccountId));}
+ async function summary(ctx:InvitationContext,row:InvitationRecord){
+  const base=invitationSummary(row);
+  if(row.status==='awaiting_authorization'&&row.diagnosticId==='page_directory_read_failed')base.authorizationOutcome='read_failed';
+  if(row.status==='authorized_pending_selection'&&invitationDeadline(row)>new Date()){
+   let envelope:CandidateEnvelope;
+   try{envelope=await repo.candidates(row);}catch(error){
+    if(!(error instanceof HttpError)||error.statusCode!==410)throw error;
+    const current=await db.facebookPageImportInvitation.findUnique({where:{id:row.id}});
+    if(current&&(current.version!==row.version||current.status!==row.status||invitationDeadline(current)<=new Date()))return invitationSummary(current);
+    throw error;
+   }
+   const ids=[...envelope.pages,...envelope.rejected].map(p=>p.pageId);
+   if(!ids.length)base.authorizationOutcome='no_new_pages';
+   else{const existing=await currentExisting(ctx,ids);if(ids.every(id=>existing.has(id)))base.authorizationOutcome='all_existing';}
+  }
+  return base;
+ }
  async function confirm(ctx:InvitationContext,id:string,input:string[],empty=false):Promise<InvitationResult>{
   const ids=empty?[]:[...new Set(idsSchema.parse(input))].sort(),digest=hash(ids),before=await repo.readPrivate(ctx,id);
   if(before.status==='completed')return replay(before,digest);available(before);
@@ -59,10 +76,10 @@ export function createFacebookPageImportInvitationService(deps:{db:PrismaClient;
    await requireInvitationAccess(db,ctx);let after:{date:string;id:string}|undefined;
    if(cursor){try{after=z.object({date:z.string().datetime(),id:z.string().uuid()}).strict().parse(JSON.parse(Buffer.from(cursor,'base64url').toString()));}catch{throw new HttpError(400,'Invalid Page import cursor');}}
    const rows=await db.facebookPageImportInvitation.findMany({where:{workspaceId:ctx.workspaceId,createdById:ctx.userId,OR:[{retentionExpiresAt:null},{retentionExpiresAt:{gt:new Date()}}],...(after?{AND:[{OR:[{createdAt:{lt:new Date(after.date)}},{createdAt:new Date(after.date),id:{lt:after.id}}]}]}:{})},orderBy:[{createdAt:'desc'},{id:'desc'}],take:21});
-   const items=rows.slice(0,20),last=items.at(-1);return{items:items.map(invitationSummary),nextCursor:rows.length>20&&last?Buffer.from(JSON.stringify({date:last.createdAt.toISOString(),id:last.id})).toString('base64url'):null};
+   const items=rows.slice(0,20),last=items.at(-1);return{items:await Promise.all(items.map(row=>summary(ctx,row))),nextCursor:rows.length>20&&last?Buffer.from(JSON.stringify({date:last.createdAt.toISOString(),id:last.id})).toString('base64url'):null};
   },
   async view(ctx:InvitationContext,id:string):Promise<InvitationView>{
-   const row=await repo.readPrivate(ctx,id),base=invitationSummary(row);
+   const row=await repo.readPrivate(ctx,id),base=await summary(ctx,row);
    if(!['authorized_pending_selection','importing'].includes(row.status))return{...base,pages:[],selectedPageIds:Array.isArray(row.selectedPageIds)?row.selectedPageIds as string[]:undefined};
    const e=await repo.candidates(row),existing=await currentExisting(ctx,[...e.pages,...e.rejected].map(p=>p.pageId));
    return{...base,selectedPageIds:Array.isArray(row.selectedPageIds)?row.selectedPageIds as string[]:undefined,pages:[...e.pages.map(p=>({pageId:p.pageId,name:p.name,avatarUrl:p.avatarUrl,profileUrl:p.profileUrl,existing:existing.has(p.pageId),eligible:!p.expiresAt||p.expiresAt>new Date()})),...e.rejected.map(p=>({...p,existing:existing.has(p.pageId)}))]};

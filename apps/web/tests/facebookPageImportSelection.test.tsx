@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';import test from 'node:test';import React from 'react';import {act} from 'react-test-renderer';
 import {withFacebookUI,facebookButton,facebookText} from './helpers/facebookManagementUI';
 const view:any={id:'invite',workspaceId:'w1',status:'authorized_pending_selection',note:'Partner A',candidateExpiresAt:new Date(Date.now()+86400000).toISOString(),result:null,pages:[{pageId:'100',name:'Same name',existing:true,eligible:true},{pageId:'101',name:'Same name',avatarUrl:'https://scontent.fbcdn.net/avatar',existing:false,eligible:true},{pageId:'102',name:'Other',existing:false,eligible:false}]};
+test('empty selection explains whether authorization returned no Pages or all Pages already exist',async()=>{
+ const {FacebookPageImportSelection}=await import('../components/social/FacebookPageImportSelection');
+ for(const [pages,message] of [[[],/授权已完成，暂无可新增的公共主页/],[[view.pages[0]],/这些公共主页已添加，无需重复导入/]] as const){
+  await withFacebookUI(<FacebookPageImportSelection view={{...view,pages}} busy={false} onConfirm={async()=>{throw Error('unexpected import');}} onCompleteEmpty={async()=>{}} onClose={()=>{}}/>,async({view:ui}:any)=>{assert.match(facebookText(ui),message);assert.ok(facebookButton(ui,'完成，无需导入'));});
+ }
+});
 test('creator explicitly selects new Pages, with a separate confirmation and existing Pages disabled',async()=>{
  const mod=await import('../components/social/FacebookPageImportSelection').catch(()=>null);assert.ok(mod,'selection component must exist');const sent:string[][]=[];
  await withFacebookUI(<mod.FacebookPageImportSelection view={view} busy={false} onConfirm={async(ids)=>{sent.push(ids);}} onCompleteEmpty={async()=>{}} onClose={()=>{}}/>,async({view:ui}:any)=>{
