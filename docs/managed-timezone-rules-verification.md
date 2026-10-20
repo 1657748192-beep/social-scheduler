@@ -69,3 +69,13 @@
 截图在 `output/playwright/managed-timezone-desktop.png`、`managed-timezone-mobile-picker.png`、`managed-timezone-gap.png`、`managed-timezone-offline-english.png`。元素截图已人工查看；顶部手机整页截图只证明页面布局，不冒充时区选择器截图。专用浏览器已关闭，预览Node进程核对PID和完整命令后仅停止本轮服务。
 
 收尾：最终本地修复提交 `de6c424`，Task5完成门禁再次运行真实集成2/2通过，15248ms。本轮临时验证目录的清理被工具策略拒绝，未执行删除或尝试绕过，故 `.superpowers/sdd/2026-10-20-managed-timezone-rules/` 保留；不影响实现、报告或截图，不含真实凭据。分支与工作区继续保留，未合并、推送或部署。
+
+## 腾讯云部署前只读核查（2026-10-20）
+
+用户后续批准：先核查缓存余量，确认安全后仅部署API／网页，禁止Worker重启、改动旧排程／权限／凭据或新增费用。已通过现有TAT通道运行只读脚本，固定实例 `lhins-qkg26b57`，元数据ID二次匹配；执行 `inv-ga55vp0hvc` 成功，UTC09:10:07–09:10:10，输出未截断。
+
+- 主机可用内存2361716KiB（约2.25GiB）；根盘可用9982056KiB（约9.52GiB），使用率84%。
+- Redis used_memory=8005048字节（约7.63MiB），maxmemory=0，maxmemory_policy=noeviction；容器HostConfig.Memory=0，Redis自身cgroup memory.max=max。
+- 服务器余量并非不足，但现有已验证实现明确要求Redis maxmemory非零且有至少32MiB可核验余量。当前配置会停用自动更新缓存，使用内置规则，故不能当成自动更新已就绪直接部署。
+- API镜像revision仍为 `9b2c48e9f7cc409fa8fae4c5e007325f5e5ee0d4`，网页仍为 `a0530a8dc69f773f05f9ee29d4ddbb1090bfff22`；Worker启动时间仍为2026-10-13T06:01:58.401954871Z。健康接口API／数据库／Redis均正常。
+- 未更改Redis配置、环境文件或任何服务，未创建发布任务、构建镜像、推送代码或部署；只读核查没有开通资源或付费功能。下一步需用户决定是否调整软件检测方式，或接受保留内置规则但自动更新暂不启用，不能擅自变更Redis限额。

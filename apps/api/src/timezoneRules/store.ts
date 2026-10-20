@@ -1,18 +1,8 @@
 import type Redis from 'ioredis';
-import {readFile} from 'node:fs/promises';
+import {cacheHeadroom} from './capacity';
+export {cacheHeadroom} from './capacity';
 import {baselineBundle,validateBundle,type RuleBundle} from '@social-scheduler/timezone-rules';
 import type {RuleStore,RuleStatus} from './updater';
-export async function cacheHeadroom(redis:Redis):Promise<boolean>{
- try{
-  const memory=await redis.info('memory');const read=(key:string)=>Number(new RegExp(`^${key}:(\\d+)`,'m').exec(memory)?.[1]??NaN);
-  const used=read('used_memory'),max=read('maxmemory'),total=read('total_system_memory');
-  if(!Number.isFinite(used)||!Number.isFinite(max))return false;
-  if(max>0)return max-used>=32*1024*1024;
-  // Host-reported total alone does not prove the Redis container limit; unbounded Redis is not safe to cache into.
-  void total;await readFile('/sys/fs/cgroup/memory.max','utf8').catch(()=>undefined);
-  return false;
- }catch{return false;}
-}
 export function createRuleStore(redis:Redis,{prefix='timezone-rules:v1:',hasCapacity=()=>cacheHeadroom(redis)}:{prefix?:string;hasCapacity?:()=>Promise<boolean>}={}):RuleStore & {readVersion(version:string):Promise<RuleBundle|null>}{
  if(!/^timezone-rules:v1:(?:test-[a-z0-9-]+:)?$/.test(prefix))throw Error('Invalid rules namespace');
  const key=(part:string)=>prefix+part;
