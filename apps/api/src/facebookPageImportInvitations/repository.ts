@@ -2,7 +2,7 @@ import {createHash,randomBytes} from 'node:crypto';
 import type {PrismaClient} from '@prisma/client';
 import {z} from 'zod';
 import {HttpError} from '../utils/errors';
-import {requireInvitationAccess} from './access';
+import {lockInvitationCreator,requireInvitationAccess} from './access';
 import {day,invitationDeadline,invitationSummary,type InvitationContext,type CandidateEnvelope} from './types';
 export const digestSecret=(secret:string)=>createHash('sha256').update(secret).digest('hex');
 export function createInvitationRepository(deps:{db:PrismaClient;encrypt:(s:string)=>string;decrypt:(s:string)=>string;appId:string;now?:()=>Date}){
@@ -10,7 +10,7 @@ export function createInvitationRepository(deps:{db:PrismaClient;encrypt:(s:stri
  return{
   async createInvitation(ctx:InvitationContext,note:string){
    await requireInvitationAccess(db,ctx,undefined,now());const safeNote=z.string().max(80).parse(note),at=now(),secret=randomBytes(32).toString('base64url');
-   const row=await db.$transaction(async tx=>{await requireInvitationAccess(tx,ctx,undefined,now());return tx.facebookPageImportInvitation.create({data:{workspaceId:ctx.workspaceId,createdById:ctx.userId,note:safeNote,secretHash:digestSecret(secret),appId,createdAt:at,expiresAt:new Date(at.getTime()+day)}});});
+   const row=await db.$transaction(async tx=>{await lockInvitationCreator(tx,ctx);await requireInvitationAccess(tx,ctx,undefined,now());return tx.facebookPageImportInvitation.create({data:{workspaceId:ctx.workspaceId,createdById:ctx.userId,note:safeNote,secretHash:digestSecret(secret),appId,createdAt:at,expiresAt:new Date(at.getTime()+day)}});});
    return{view:invitationSummary(row),secret};
   },
   async readPrivate(ctx:InvitationContext,id:string){await requireInvitationAccess(db,ctx,z.string().uuid().parse(id),now());const row=await db.facebookPageImportInvitation.findUniqueOrThrow({where:{id}});if(row.retentionExpiresAt&&row.retentionExpiresAt<=now())throw new HttpError(410,'Page import expired');return row;},
