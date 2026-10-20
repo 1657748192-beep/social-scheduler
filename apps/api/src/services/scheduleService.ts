@@ -15,6 +15,7 @@ import { withResolvedMediaUrl } from "./mediaStorageService";
 import { requireWorkspaceMembership, requireWorkspacePublishingAccess } from "./workspaceService";
 import { instagramAccountLinkState } from "./instagramPostAccountIdentity";
 import { resolveTikTokPostAccount } from "./tiktokPostAccountIdentity";
+import {scheduleTimeZoneSchema} from '../utils/scheduleTimeZone';
 
 const writableRoles: WorkspaceRole[] = ["owner", "admin", "editor"];
 const activeScheduleStatuses = ["scheduled", "locked"] as const;
@@ -22,7 +23,7 @@ const activeScheduleStatuses = ["scheduled", "locked"] as const;
 export const createScheduleSchema = z.object({
   postVariantId: z.string().uuid(),
   scheduledAt: z.string().datetime(),
-  timezone: z.string().min(1).max(80).default("Asia/Shanghai")
+  timezone: scheduleTimeZoneSchema.default("Asia/Shanghai")
 });
 
 export const listSchedulesSchema = z.object({
@@ -33,7 +34,7 @@ export const listSchedulesSchema = z.object({
 
 export const rescheduleSchema = z.object({
   scheduledAt: z.string().datetime(),
-  timezone: z.string().min(1).max(80).optional(),
+  timezone: scheduleTimeZoneSchema.optional(),
   text: z.string().trim().min(1).max(63206).optional()
 });
 
@@ -380,6 +381,7 @@ export async function listPublishedPosts(userId: string, workspaceId: string) {
       title: schedule.postVariant.post.title,
       baseText: schedule.postVariant.post.baseText,
       scheduledAt: schedule.scheduledAt,
+      timezone: schedule.timezone,
       publishedAt,
       mediaReuseExpiresAt,
       platform: schedule.postVariant.platform,

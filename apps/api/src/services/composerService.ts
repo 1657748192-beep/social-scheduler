@@ -21,6 +21,7 @@ import {
 import { enqueuePublishJobs } from "./scheduleService";
 import { requireWorkspaceMembership, requireWorkspacePublishingAccess } from "./workspaceService";
 import { instagramProviderAccountSnapshot } from "./instagramPostAccountIdentity";
+import {scheduleTimeZoneSchema} from '../utils/scheduleTimeZone';
 
 const writableRoles: WorkspaceRole[] = ["owner", "admin", "editor"];
 const maxPostTargets = 50;
@@ -38,6 +39,7 @@ export const createComposerPostSchema = z.object({
   baseText: z.string().min(1).max(63206),
   variants: z.array(variantSchema).min(1).max(maxPostTargets),
   scheduledAt: z.string().datetime().optional(),
+  timezone: scheduleTimeZoneSchema.optional(),
   publishNow: z.boolean().optional().default(false)
 });
 
@@ -324,7 +326,7 @@ export async function createComposerPost(
             postVariantId: createdVariant.id,
             workspaceId,
             scheduledAt,
-            timezone: "Asia/Shanghai",
+            timezone: input.publishNow ? "Asia/Shanghai" : input.timezone ?? "Asia/Shanghai",
             status: "scheduled",
             createdBy: userId
           }
