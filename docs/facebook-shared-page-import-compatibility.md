@@ -67,3 +67,12 @@ blockers：口令类型与当前发现策略未证明兼容；business_managemen
 - 普通工作区管理者仍被独立导入访问校验拒绝，匿名私有接口 401，缺有效 Origin 的公开 exchange 403，公开页安全响应头及 manifest 验证通过。
 - 最终只读核验 `inv-ia50fm0fxb` 于 14:04:28 成功退出 0：含三种新状态的实际公网 JavaScript chunk 与容器字节一致，health 为 database ok／Redis PONG，保护容器未变化。未发起 Meta 授权、导入真实主页、发帖或改排程；真实空列表授权仍需对方下一次受控授权验证。
 - 新留证／回退目录 `/opt/social-scheduler-releases/meta-inbox-9b2c48e9f7cc409fa8fae4c5e007325f5e5ee0d4`，完整原环境及回退镜像只在同机私有目录保留；不恢复旧数据、不重启 Worker、不创建云资源或收费服务。普通客户入口仍关闭，`liveAuthorizationReady=false` 不变。
+
+### 历史任务折叠：仅网页部署（2026-10-20，北京时间）
+
+- 用户批准“待处理展开、历史默认折叠、无待处理时紧凑展示、完成摘要”，只部署网页。产品提交 `fcc8b0ace9a9bb3b5ee9742e593c34ae5bc65d59` 仅含网页组件、局部样式与测试；没有 API、迁移或环境配置改动。
+- 三项新增行为测试先失败后通过；最终针对性 9/9。全量 npm test 为 998/998、失败／取消／跳过为 0、577896 ms、退出码 0（`page-import-history-full.log`）；网页生产构建退出 0。只读复核无 Critical／Important 问题，并补充了 importing、unknown、expired、cancelled 的分组覆盖。
+- 只读预检 `inv-ia50pcg27x` 成功。网页准备 `inv-ia51020qaq` 于 14:22:45 完成；激活 `inv-ia511cgj5w` 于 14:23:29 退出 0，只重建网页容器。启动期间一次短暂 502 后页面恢复，无回退；完整网页环境不变。
+- 公网含折叠逻辑的 JavaScript chunk 与新镜像字节一致；网页 revision 为产品提交，API 仍为 `9b2c48e9f7cc409fa8fae4c5e007325f5e5ee0d4`。API、Worker、Postgres、Redis、reverse-proxy 的容器 ID／镜像／启动时间均未变，两个环境文件摘要相同，短部署窗口内七类受保护发布数据 HMAC 摘要相同。
+- 真实已登录管理员页面刷新后显示“暂无待处理任务”和默认收起的“历史记录（2）”。只点击展开／收起，核实已完成、已撤销记录以及“新增 0 个主页，跳过 0 个已有主页”摘要，最终恢复收起。未生成邀请、授权、导入、发帖或排程。截图 `output/playwright/facebook-page-history-collapsed-deployed.png`；浏览器现有 tab 11 保持该页面。
+- 私有留证／仅网页回退目录 `/opt/social-scheduler-releases/meta-inbox-fcc8b0ace9a9bb3b5ee9742e593c34ae5bc65d59`。未新增云资源／收费服务，不重启 API 或 Worker，不恢复旧数据。既有管理员限制及真实外部授权 readiness 判定均保持不变。
