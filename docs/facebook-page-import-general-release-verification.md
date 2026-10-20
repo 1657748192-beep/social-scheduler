@@ -28,6 +28,16 @@ Playwright专用本地会话，只运行真实账号管理组件与合成Factory
 
 ## 部署门禁
 
-完整回归1060/1060通过，0失败、0跳过，退出码0，耗时511955ms。日志：`C:/Users/Administrator/AppData/Local/SocialSchedulerTools/page-import-release-final-tests-20261020.log`。最终网页构建日志：`page-import-release-web-final-build-20261020.log`。本次功能尚未部署。
+完整回归1060/1060通过，0失败、0跳过，退出码0，耗时511955ms。日志：`C:/Users/Administrator/AppData/Local/SocialSchedulerTools/page-import-release-final-tests-20261020.log`。最终网页构建日志：`page-import-release-web-final-build-20261020.log`。
 
 腾讯云只读预检`inv-ga57ppgh0a`，UTC10:12:00–10:12:03成功：API／网页仍为`0122a60d30449bd9144f8003e6b6d46f9a9ba6b4`；MemAvailable2381780KiB、磁盘可用9602032KiB，Redis仍maxmemory0/noeviction。Worker仍为原容器，自2026-10-13T06:01:58.401954871Z未重启；API／数据库／Redis健康正常。
+
+## 腾讯云部署结果
+
+- 功能版本`de1541325184c6706c8aacf4a6eb753fe478b055`，既有TAT通道、既有实例，无新建收费资源。
+- 准备`inv-ia57tq0i1h`，UTC10:16:17–10:17:48成功，容量校验通过，准备阶段未更换运行服务。
+- 激活`inv-ja57w3g8hp`，UTC10:18:47–10:18:56成功。只执行API／web的`up -d --no-deps --no-build`；API使用`node dist/server.js`，未运行数据库迁移。切换期间健康重试第一次502，随后正常，最终健康验证通过。
+- 前后完整环境变量及原有挂载一致；用户／工作区／会员／社交账号／OAuth凭据／TikTok沙盒凭据／帖子／变体／排程／发布任务十类数据的行数与HMAC完全一致。Worker、数据库、Redis、代理容器身份／镜像／启动时间一致，环境文件摘要一致。新只读探针无写权限，无Docker socket。
+- 网页线上构建清单与容器一致；API和网页镜像均为上述SHA。时区容量正常，规则2026e和更新状态ok。
+- 发布后只读检查`inv-ha57wggpgp`，UTC10:19:13–10:19:15成功：使用数据库中已有普通管理者有效会话，只调用权限检查，主页导入允许、互动收件箱403；未创建邀请、触发OAuth或导入。未登录HTTP主页导入入口401。
+- API新容器`eb49d8abf153abae9003d985695585cf369c43be4f133f062c1d686bff8a3c6a`；网页`c03ffede246de6cd5cb9f8f5eb5b2ef6dbd065c78d3db994b8465dacaf8ac61c`。Worker仍为`3cbc3bed81805673ee7a949da9fcefefecc3619761d68e5eb25da50344f97e5e`，启动时间仍2026-10-13T06:01:58.401954871Z；Redis仍为六月启动的原容器。最终API健康`ok=true`、数据库ok、Redis PONG。
