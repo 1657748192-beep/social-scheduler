@@ -12,7 +12,7 @@ import {useAccountProfileSync,type ProfileRefresh} from './useAccountProfileSync
 import {AccountPermissionSummary} from './AccountPermissionSummary';
 import {SupportedAccountType} from './SupportedAccountType';
 
-type Props={accounts:SocialAccount[];providers:OAuthProviderStatus[];workspaceId:string;token:string;canManage:boolean;loading:boolean;failed:boolean;actionError?:string|null;onAdd(provider:OAuthProviderStatus):void;onDisconnect(id:string):Promise<unknown>;onRefresh?:ProfileRefresh;onSyncFacebookPages?:()=>void};
+type Props={accounts:SocialAccount[];providers:OAuthProviderStatus[];workspaceId:string;token:string;canManage:boolean;loading:boolean;failed:boolean;actionError?:string|null;onAdd(provider:OAuthProviderStatus):void;onDisconnect(id:string):Promise<unknown>;onRefresh?:ProfileRefresh;onSyncFacebookPages?:()=>void;onShareFacebookPages?:()=>void};
 
 export function AccountDialog({title,onClose,closeLabel,children,wide=false}:{title:string;onClose():void;closeLabel:string;children:ReactNode;wide?:boolean}){
   const titleId=useId(),container=useRef<HTMLElement>(null);
@@ -49,7 +49,7 @@ function AccountAvatar({account}:{account:SocialAccount}){
 export function SocialAccountManager(props:Props){
   return <AccountManagerContent key={props.token+':'+props.workspaceId} {...props}/>;
 }
-function AccountManagerContent({accounts,providers,workspaceId,token,canManage,loading,failed,actionError,onAdd,onDisconnect,onRefresh,onSyncFacebookPages}:Props){
+function AccountManagerContent({accounts,providers,workspaceId,token,canManage,loading,failed,actionError,onAdd,onDisconnect,onRefresh,onSyncFacebookPages,onShareFacebookPages}:Props){
   const {t,locale}=useLanguage();
   const [platform,setPlatform]=useState('all'),[query,setQuery]=useState(''),[layout,setLayout]=useState<'cards'|'list'>('cards'),[selectedId,setSelectedId]=useState<string|null>(null),[adding,setAdding]=useState(false),[removing,setRemoving]=useState(false);
   const profileSync=useAccountProfileSync(accounts,canManage&&!loading&&!failed,onRefresh);
@@ -75,6 +75,7 @@ function AccountManagerContent({accounts,providers,workspaceId,token,canManage,l
       <input type="search" aria-label={t('搜索账号','Search accounts')} placeholder={t('搜索账号名称或 ID','Search account name or ID')} value={query} onChange={e=>setQuery(e.target.value)}/>
       {canManage?<button className="button" type="button" disabled={loading||!configuredProviders.some(p=>p.configured)} onClick={()=>{if(currentProvider?.configured)onAdd(currentProvider);else setAdding(true);}}>{t('添加账号','Add account')}</button>:null}
       {canManage&&onSyncFacebookPages&&configuredProviders.some(p=>p.platform==='facebook'&&p.configured)?<button className="button secondary" type="button" disabled={loading||failed} onClick={onSyncFacebookPages}>{t('同步公共主页','Sync Facebook Pages')}</button>:null}
+      {canManage&&onShareFacebookPages&&configuredProviders.some(p=>p.platform==='facebook'&&p.configured)?<button className="button secondary" type="button" disabled={loading||failed} onClick={onShareFacebookPages}>{t('分享链接导入主页','Import Pages by shared link')}</button>:null}
     </div>
     {loading?<p role="status" className="muted">{t('正在读取账号…','Loading accounts…')}</p>:failed?<p role="alert" className="error">{t('账号读取失败，请刷新页面重试。','Unable to load accounts. Refresh the page to retry.')}</p>:!visible.length?<div className="account-manager-empty"><strong>{supported.length?t('没有匹配的账号','No matching accounts'):t('暂无社交账号','No social accounts yet')}</strong><p className="muted">{supported.length?t('试试更换平台或搜索内容。','Try another platform or search.'):canManage?t('点击“添加账号”，通过平台官方授权连接。','Add an account using the platform’s official authorization.'):t('请联系工作区所有者或管理员添加账号。','Ask a workspace owner or administrator to add an account.')}</p></div>:layout==='cards'?<div className="account-manager-grid">
       {visible.map(account=><article className="account-manager-card" key={account.id}>{identity(account)}<div>{status(account)}</div><div className="account-manager-actions"><SocialAccountProfileLink platform={account.platform} profileUrl={account.profileUrl}/>{detailButton(account)}</div></article>)}

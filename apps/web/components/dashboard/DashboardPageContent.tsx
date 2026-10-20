@@ -11,6 +11,7 @@ import { SocialAccountProfileLink } from '../social/SocialAccountProfileLink';
 import { SocialAccountManager } from '../social/SocialAccountManager';
 import { SupportedAccountType } from '../social/SupportedAccountType';
 import {FacebookPageSyncDialog} from '../social/FacebookPageSyncDialog';
+import {FacebookPageImportInvitations} from '../social/FacebookPageImportInvitations';
 import {recoverFacebookSyncNavigation,clearFacebookSyncNavigation} from '../../lib/facebookPageSync';
 import {
   apiRequest,
@@ -110,6 +111,8 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
   const [pageSync,setPageSync]=useState<{workspaceId:string;syncId?:string}|null>(null);
   const [pageSyncNotice,setPageSyncNotice]=useState('');
   const [syncDismissed,setSyncDismissed]=useState(false);
+  const [pageImportCreate,setPageImportCreate]=useState(false);
+  useEffect(()=>{setPageImportCreate(false);},[selectedWorkspaceId,token]);
   useEffect(()=>{
     if(!accountsOnly||!token)return;
     let active=true;
@@ -488,7 +491,9 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
           onAdd={provider => setBindingProvider(provider)} onDisconnect={disconnectSocialAccount}
           onRefresh={refreshAccountProfile}
           onSyncFacebookPages={()=>{setSyncDismissed(false);setPageSync({workspaceId:selectedWorkspaceId});}}
+          onShareFacebookPages={()=>setPageImportCreate(true)}
         /> : null}
+        {accountsOnly&&token&&selectedWorkspaceId&&canManageMembers&&accountsWorkspaceId===selectedWorkspaceId&&supportedOAuthStatuses.some(p=>p.platform==='facebook'&&p.configured)?<FacebookPageImportInvitations key={token+':'+selectedWorkspaceId} token={token} workspaceId={selectedWorkspaceId} workspaceName={selectedWorkspace?.name??selectedWorkspaceId} canManage={canManageMembers} createRequested={pageImportCreate} onCreateClosed={()=>setPageImportCreate(false)} onImported={async()=>{if(currentWorkspaceId.current===selectedWorkspaceId&&currentToken.current===token)await loadWorkspaceDetails(token,selectedWorkspaceId);}}/>:null}
         {accountsOnly&&pageSyncNotice?<p role="alert" className="error">{pageSyncNotice}</p>:null}
         {accountsOnly&&pageSync&&selectedWorkspaceId&&pageSync.workspaceId!==selectedWorkspaceId?<p role="status">{t('请切回发起同步的原工作区查看候选，不会自动切换或导入主页。','Return to the workspace that started this sync. No automatic switching or import occurs.')}</p>:null}
         {accountsOnly&&pageSync&&syncDismissed?<button className="button secondary" type="button" onClick={()=>setSyncDismissed(false)}>{t('恢复同步','Resume sync')}</button>:null}
@@ -884,7 +889,7 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
 
                 <div className="binding-action-panel">
                   <div>
-                    <strong>{t("分享授权链接", "Share authorization link")}</strong>
+                    <strong>{bindingProvider.platform==='facebook'?t('普通绑定授权（可能更新已有绑定）','Standard authorization (may update existing connections)'):t("分享授权链接", "Share authorization link")}</strong>
                     <p className="muted">{t("复制给对方后，对方 24 小时内打开即可授权绑定到当前工作区。", "Anyone who opens this link within 24 hours can authorize an account for this workspace.")}</p>
                   </div>
                   <button
@@ -899,6 +904,7 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
                   </button>
                 </div>
 
+                {accountsOnly&&bindingProvider.platform==='facebook'?<div className="binding-action-panel"><div><strong>{t('分享链接导入主页','Import Pages by shared link')}</strong><p className="muted">{t('对方只授权，你来勾选新增主页；已有主页全部跳过。','They authorize; you select new Pages. Existing Pages are skipped.')}</p></div><button className="button" disabled={!bindingProvider.configured} onClick={()=>{setBindingProvider(null);setPageImportCreate(true);}}>{t('创建导入邀请','Create import invitation')}</button></div>:null}
                 {bindingShareLink?.shareUrl ? (
                   <div className="oauth-config-box share-link-box">
                     <span>{t("24 小时授权链接", "24-hour authorization link")}</span>

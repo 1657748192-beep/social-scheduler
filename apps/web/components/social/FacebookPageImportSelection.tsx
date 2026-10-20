@@ -1,0 +1,25 @@
+'use client';
+import {useRef,useState} from 'react';import {useLanguage} from '../LanguageProvider';import {AccountDialog} from './SocialAccountManager';import type {PageImportView} from '../../lib/facebookPageImportInvitations';
+import {safeFacebookAvatarUrl} from '../../lib/facebookManagement';
+type Props={view:PageImportView;busy:boolean;onConfirm:(ids:string[])=>Promise<void>;onCompleteEmpty:()=>Promise<void>;onClose:()=>void};
+export function FacebookPageImportSelection({view,busy,onConfirm,onCompleteEmpty,onClose}:Props){
+ const {t}=useLanguage(),[selected,setSelected]=useState<string[]>(view.status==='importing'?view.selectedPageIds??[]:[]),[query,setQuery]=useState(''),[review,setReview]=useState(false),[accepted,setAccepted]=useState(view.status==='importing'),[sending,setSending]=useState(false),pending=useRef(false);
+ const expired=Date.parse(view.candidateExpiresAt??view.expiresAt)<=Date.now(),locked=busy||sending||accepted||view.status==='importing',canSelect=view.status==='authorized_pending_selection'&&!locked&&!expired;
+ const filtered=view.pages.filter(p=>(p.name+' '+p.pageId).toLocaleLowerCase().includes(query.toLocaleLowerCase())),eligible=view.pages.filter(p=>!p.existing&&p.eligible);
+ async function submit(empty=false){if(pending.current||expired)return;pending.current=true;setSending(true);setAccepted(true);try{if(empty)await onCompleteEmpty();else await onConfirm([...selected].sort());}finally{pending.current=false;setSending(false);}}
+ return <AccountDialog title={t('选择新增公共主页','Select new Facebook Pages')} closeLabel={t('关闭','Close')} onClose={onClose} wide>
+ <p className="muted">{t('仅导入你勾选的新增主页。已有主页（包括已断开记录）全部跳过，不覆盖权限、凭据或排程。','Only selected new Pages are imported. Existing Pages, including disconnected ones, keep their permissions, credentials and schedules.')}</p>
+ {view.note?<p>{t('邀请备注：','Invitation note: ')}{view.note}</p>:null}
+ {view.result?<div role="status"><h3>{t(`新增 ${view.result.createdPageIds.length} 个，已存在跳过 ${view.result.skippedPageIds.length} 个。`,`${view.result.createdPageIds.length} added; ${view.result.skippedPageIds.length} existing Pages skipped.`)}</h3></div>:<>
+ <p>{t('候选有效至：','Candidates available until: ')}{new Date(view.candidateExpiresAt??view.expiresAt).toLocaleString()}</p>
+ {expired?<p role="alert">{t('候选已过期，请重新生成邀请并授权。','Candidates expired. Create and authorize a new invitation.')}</p>:null}
+ <div className="account-manager-toolbar"><input type="search" aria-label={t('搜索待导入主页','Search candidate Pages')} placeholder={t('搜索主页名称或 ID','Search Page name or ID')} value={query} onChange={e=>setQuery(e.target.value)}/>
+ <button className="button secondary" disabled={!canSelect} onClick={()=>{setReview(false);setSelected(ids=>[...new Set([...ids,...filtered.filter(p=>!p.existing&&p.eligible).map(p=>p.pageId)])].slice(0,50));}}>{t('全选当前筛选的新增主页','Select new Pages in this filter')}</button><span>{t(`已选 ${selected.length} / 50`,`${selected.length} / 50 selected`)}</span></div>
+ {accepted?<p role="status">{t('选择已锁定。若结果未确认，请重试原选择或查看任务结果，不要重复绑定。','Selection locked. Retry the same selection or check the task result if unconfirmed.')}</p>:null}
+ {!eligible.length?<p role="status">{t('没有可导入的新增主页。已有主页无需重复导入。','No new eligible Pages. Existing Pages do not need importing again.')}</p>:null}
+ <div className="facebook-page-sync-list">{filtered.map(p=><label key={p.pageId} className="facebook-page-sync-row"><input type="checkbox" aria-label={t(`选择主页 ${p.name} ${p.pageId}`,`Select Page ${p.name} ${p.pageId}`)} checked={selected.includes(p.pageId)} disabled={!canSelect||p.existing||!p.eligible||selected.length>=50&&!selected.includes(p.pageId)} onChange={()=>{setReview(false);setSelected(ids=>ids.includes(p.pageId)?ids.filter(id=>id!==p.pageId):[...ids,p.pageId]);}}/>{safeFacebookAvatarUrl(p.avatarUrl)?<img src={safeFacebookAvatarUrl(p.avatarUrl)!} alt="" width={40} height={40} referrerPolicy="no-referrer"/>:null}<span><strong>{p.name}</strong><small className="muted">{p.pageId} · {p.existing?t('已存在，保持不变','Existing, unchanged'):p.eligible?t('新增主页','New Page'):t('授权不足，不能导入','Insufficient authorization')}</small></span></label>)}</div>
+ {review||accepted&&selected.length?<div className="panel"><p>{t(`确认仅导入所选 ${selected.length} 个主页？已有权限、凭据和排程不变。`,`Import only these ${selected.length} Pages? Existing permissions, credentials and schedules remain unchanged.`)}</p><button className="button" disabled={busy||sending||expired||!selected.length} onClick={()=>void submit()}>{t(`确认导入 ${selected.length} 个主页`,`Confirm import of ${selected.length} Pages`)}</button></div>:<button className="button" disabled={!selected.length||busy||sending||expired} onClick={()=>setReview(true)}>{t('导入所选主页','Import selected Pages')}</button>}
+ {!eligible.length?<button className="button secondary" disabled={busy||sending||expired} onClick={()=>void submit(true)}>{t('完成，无需导入','Complete without importing')}</button>:null}
+ </>}
+ </AccountDialog>;
+}
