@@ -1,5 +1,7 @@
 import {withFacebookManagementFixture} from './facebookManagementFixture';
 import {encryptToken,decryptToken} from '../../src/utils/tokenCrypto';
+import {createInvitationRepository} from '../../src/facebookPageImportInvitations/repository';
+import {createMetaGrantFence} from '../../src/interactionInbox/grantFence';
 export const importTestPage=(id:string)=>({pageId:id,name:'Page '+id,avatarUrl:null,profileUrl:'https://www.facebook.com/'+id,pageToken:'synthetic-page-'+id,scopes:['pages_manage_posts','pages_read_engagement'],expiresAt:null});
 export async function withPageImportFixture(run:(f:any)=>Promise<void>){
  await withFacebookManagementFixture(async f=>{
@@ -14,4 +16,10 @@ export async function withPageImportFixture(run:(f:any)=>Promise<void>){
   try{await run({...f,ctx,snapshot,encrypt:encryptToken,decrypt:decryptToken});}
   finally{await f.db.facebookPageImportInvitation.deleteMany({where:{createdById:f.userId}});}
  });
+}
+export async function preparePageInvitation(f:any,pages=['100','101','102'].map(importTestPage)){
+ const repo=createInvitationRepository({...f,appId:'123'}),created=await repo.createInvitation(f.ctx,''),started=new Date();
+ const envelope={providerUserId:'900',appId:'123',authorizationStartedAt:started.toISOString(),pages,rejected:[]};
+ await f.db.facebookPageImportInvitation.update({where:{id:created.view.id},data:{status:'authorized_pending_selection',authorizedAt:started,authorizationStartedAt:started,authorizerSubjectHash:createMetaGrantFence().subjectHash({platform:'facebook',appId:'123'},'900'),candidateExpiresAt:new Date(Date.now()+86400000),candidate:{create:{encryptedEnvelope:repo.encodeCandidates(envelope)}}}});
+ return{id:created.view.id,repo};
 }
