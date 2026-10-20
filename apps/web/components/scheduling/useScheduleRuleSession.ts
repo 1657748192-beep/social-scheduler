@@ -9,6 +9,7 @@ export function useScheduleRuleSession({token,workspaceId,sessionKey,existingZon
  useEffect(()=>{
   let active=true;const controller=new AbortController();
   setState({identity,ready:false,rules:getBaseline(),defaultZone:existingZone??detectComputerZone(getBaseline()),updateAvailable:false});
+  if(!workspaceId)return()=>{active=false;controller.abort();};
   void getRulesForNewSession({token,signal:controller.signal}).then(rules=>{
    if(active&&identityRef.current===identity)setState(previous=>dirtyRef.current?{...previous,ready:true,updateAvailable:rules.digest!==previous.rules.digest}:{identity,ready:true,rules,defaultZone:existingZone??detectComputerZone(rules),updateAvailable:false});
   });

@@ -74,16 +74,16 @@ test('real scheduling HTTP persists selected zones and protects old instants, cr
     await act(async()=>view.root.findByProps({className:'composer-textarea compact'}).props.onChange({target:{value:text}}));
     await act(async()=>facebookButton(view,'定时发布').props.onClick());
     const zone=view.root.findByProps({'aria-label':'发布地区与时区'});
-    await act(async()=>zone.props.onFocus());await act(async()=>zone.props.onChange({target:{value:'America/New_York'}}));
+    await act(async()=>zone.props.onFocus());await act(async()=>zone.props.onChange({target:{value:'America/Winnipeg'}}));
     await act(async()=>zone.props.onKeyDown({key:'ArrowDown',preventDefault(){}}));await act(async()=>zone.props.onKeyDown({key:'Enter',preventDefault(){}}));
-    await act(async()=>view.root.findByProps({'aria-label':'当地日期'}).props.onChange({target:{value:'2099-10-20'}}));
+    await act(async()=>view.root.findByProps({'aria-label':'当地日期'}).props.onChange({target:{value:'2099-11-05'}}));
     await act(async()=>view.root.findByProps({'aria-label':'当地小时'}).props.onChange({target:{value:'20'}}));
-    assert.ok(facebookText(view).includes('2099-10-21 08:00'));
+    assert.ok(facebookText(view).includes('2099-11-06 09:00'));
     await act(async()=>view.root.findByType('form').props.onSubmit({preventDefault(){}}));
-    assert.equal(requests.find((r:any)=>r.method==='POST').body.scheduledAt,'2099-10-21T00:00:00.000Z');
+    assert.equal(requests.find((r:any)=>r.method==='POST').body.scheduledAt,'2099-11-06T01:00:00.000Z');
   },transport);
   const e2e=await f.db.post.findFirstOrThrow({where:{workspaceId,baseText:text},include:{variants:{include:{schedules:{include:{publishJobs:true}}}}}});
-  assert.equal(e2e.variants.length,2);for(const v of e2e.variants){assert.equal(v.schedules[0].timezone,'America/New_York');assert.equal(v.schedules[0].scheduledAt.toISOString(),'2099-10-21T00:00:00.000Z');assert.ok(await queue.getJob(v.schedules[0].publishJobs[0].id));}
+  assert.equal(e2e.variants.length,2);for(const v of e2e.variants){assert.equal(v.schedules[0].timezone,'America/Winnipeg');assert.equal(v.schedules[0].scheduledAt.toISOString(),'2099-11-06T01:00:00.000Z');assert.ok(await queue.getJob(v.schedules[0].publishJobs[0].id));}
   const e2eScheduleId=e2e.variants[0].schedules[0].id, original=await f.db.schedule.findUniqueOrThrow({where:{id:e2eScheduleId}});
   const detail:any=await(await call('/schedules/'+e2eScheduleId)).json();
   await withFacebookUI(React.createElement(ScheduleDetailPanel,{schedule:detail,token:softwareToken,workspaceId,onClose(){},onDeleted(){},onUpdated(){}}),async({view,requests}:any)=>{
@@ -93,7 +93,7 @@ test('real scheduling HTTP persists selected zones and protects old instants, cr
     await act(async()=>view.root.findByProps({'aria-label':'当地日期'}).props.onChange({target:{value:'2099-10-22'}}));
     await act(async()=>view.root.findByType('form').props.onSubmit({preventDefault(){}}));
   },transport);
-  const rescheduled=await f.db.schedule.findUniqueOrThrow({where:{id:e2eScheduleId}});assert.equal(rescheduled.timezone,'Asia/Tokyo');assert.equal(rescheduled.scheduledAt.toISOString(),'2099-10-22T00:00:00.000Z');
+  const rescheduled=await f.db.schedule.findUniqueOrThrow({where:{id:e2eScheduleId}});assert.equal(rescheduled.timezone,'Asia/Tokyo');assert.equal(rescheduled.scheduledAt.toISOString(),'2099-10-22T01:00:00.000Z');
   assert.deepEqual(await snapshot(),before);
  }catch(error){failure=error;}finally{
   if(child.connected)child.send('stop');

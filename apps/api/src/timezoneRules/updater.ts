@@ -18,6 +18,7 @@ export async function checkRulesOnce({source,store,now=Date.now,signal}:{source:
  try{
   active=await store.readActive()??baselineBundle;status.activeVersion=active.tzdbVersion;
   locked=await store.tryLock(owner,120000);if(!locked)return await store.status();
+  active=await store.readActive()??baselineBundle;status.activeVersion=active.tzdbVersion;
   signal?.throwIfAborted();const candidate=await source();signal?.throwIfAborted();status.upstreamVersion=candidate.ianaVersion;
   if(!candidate.bundle||compareVersions(candidate.bundle.tzdbVersion,candidate.ianaVersion)<0)status.state='pending-upstream';
   else{

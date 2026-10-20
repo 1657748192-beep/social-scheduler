@@ -22,6 +22,12 @@ test('upstream lag and expired lock cannot activate any candidate',async()=>{
  const m=memory();assert.equal((await checkRulesOnce({store:m.store,source:async()=>({ianaVersion:'2026g',bundle:next()}),now:()=>123})).state,'pending-upstream');assert.equal(m.writes,0);
  const n=memory();assert.equal((await checkRulesOnce({store:n.store,source:async()=>{n.expire();return {ianaVersion:'2026f',bundle:next()};},now:()=>123})).state,'failed');assert.equal(n.writes,0);
 });
+test('active version is reread under the owner lock before considering a downgrade',async()=>{
+ const m=memory(),lock=m.store.tryLock.bind(m.store);
+ m.store.tryLock=async(owner,ttl)=>{const ok=await lock(owner,ttl);if(ok)await m.store.activate(owner,next('2026g'));return ok;};
+ const result=await checkRulesOnce({store:m.store,source:async()=>({ianaVersion:'2026f',bundle:next('2026f')})});
+ assert.equal(result.state,'failed');assert.equal(m.active.tzdbVersion,'2026g');
+});
 test('fixed upstream source only reads bounded official JSON and refuses redirects or tag injection',async()=>{
  const seen:string[]=[];const sha='a'.repeat(40);
  const fake=async(input:string|URL|Request,init?:RequestInit)=>{const url=String(input);seen.push(url);assert.equal(init?.redirect,'error');return new Response(url.endsWith('/version')?'2026e\n':url.includes('api.github.com')?JSON.stringify([{name:'../../bad',commit:{sha}},{name:'0.6.5',commit:{sha}}]):Buffer.from(baselineBundle.sourceBytes,'base64'),{status:200});};
