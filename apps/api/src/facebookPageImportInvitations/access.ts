@@ -1,15 +1,14 @@
 import type {Prisma,PrismaClient} from '@prisma/client';
 import {HttpError} from '../utils/errors';
 import {LOGIN_SESSION_MAX_AGE_MS} from '../utils/sessionLifetime';
-import {isPlatformAdmin} from '../utils/platformAdmin';
 import type {InvitationContext,InvitationRecord} from './types';
 type Db=Pick<PrismaClient,'user'|'userSession'|'workspaceMember'|'facebookPageImportInvitation'>|Prisma.TransactionClient;
 export async function creatorActive(db:Db,row:Pick<InvitationRecord,'workspaceId'|'createdById'>){
- const [user,member]=await Promise.all([db.user.findUnique({where:{id:row.createdById},select:{email:true}}),db.workspaceMember.findFirst({where:{workspaceId:row.workspaceId,userId:row.createdById,status:'active',role:{in:['owner','admin']}}})]);return Boolean(user&&isPlatformAdmin(user.email)&&member);
+ const [user,member]=await Promise.all([db.user.findUnique({where:{id:row.createdById},select:{id:true}}),db.workspaceMember.findFirst({where:{workspaceId:row.workspaceId,userId:row.createdById,status:'active',role:{in:['owner','admin']}}})]);return Boolean(user&&member);
 }
 export async function requireInvitationAccess(db:Db,ctx:InvitationContext,invitationId?:string,now=new Date()){
- const [session,member,user]=await Promise.all([db.userSession.findFirst({where:{id:ctx.sessionId,userId:ctx.userId,revokedAt:null,expiresAt:{gt:now},createdAt:{gt:new Date(now.getTime()-LOGIN_SESSION_MAX_AGE_MS)}}}),db.workspaceMember.findFirst({where:{workspaceId:ctx.workspaceId,userId:ctx.userId,status:'active',role:{in:['owner','admin']}}}),db.user.findUnique({where:{id:ctx.userId},select:{email:true}})]);
- if(!session||!member||!user||!isPlatformAdmin(user.email))throw new HttpError(403,'Page import requires a platform administrator and current workspace manager session');
+ const [session,member,user]=await Promise.all([db.userSession.findFirst({where:{id:ctx.sessionId,userId:ctx.userId,revokedAt:null,expiresAt:{gt:now},createdAt:{gt:new Date(now.getTime()-LOGIN_SESSION_MAX_AGE_MS)}}}),db.workspaceMember.findFirst({where:{workspaceId:ctx.workspaceId,userId:ctx.userId,status:'active',role:{in:['owner','admin']}}}),db.user.findUnique({where:{id:ctx.userId},select:{id:true}})]);
+ if(!session||!member||!user)throw new HttpError(403,'Page import requires an active workspace manager session');
  if(invitationId&&!await db.facebookPageImportInvitation.findFirst({where:{id:invitationId,workspaceId:ctx.workspaceId,createdById:ctx.userId}}))throw new HttpError(403,'Page import access denied');
 }
 export async function lockInvitationCreator(tx:Prisma.TransactionClient,ctx:InvitationContext){

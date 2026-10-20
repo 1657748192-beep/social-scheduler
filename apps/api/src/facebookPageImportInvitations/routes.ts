@@ -28,7 +28,7 @@ export function createInvitationRouter(getRuntime:()=>PageImportRuntime,options:
  }catch(e){next(e);}});
  function action(run:(req:Request,ctx:InvitationContext,rt:PageImportRuntime)=>Promise<unknown>):RequestHandler{return async(req,res,next)=>{try{const ctx=context(req),rt=getRuntime();await rt.maintain();res.json(await run(req,ctx,rt));}catch(e){next(e);}};}
  const id=(req:Request)=>z.string().uuid().parse(req.params.inviteId);
- router.post(base,auth,action(async(req,ctx,rt)=>{const input=z.object({note:z.string().max(80).optional()}).strict().parse(req.body??{}),result=await rt.service.create(ctx,input);return{view:result.view,shareUrl:origin+'/facebook-page-import#'+result.secret};}));
+ router.post(base,auth,action(async(req,ctx,rt)=>{const input=z.object({note:z.string().max(80).optional()}).strict().parse(req.body??{});await rt.flows.rateLimit('creator:'+ctx.userId,30);const result=await rt.service.create(ctx,input);return{view:result.view,shareUrl:origin+'/facebook-page-import#'+result.secret};}));
  router.get(base,auth,action((req,ctx,rt)=>{const q=z.object({cursor:z.string().max(2048).optional()}).strict().parse(req.query);return rt.service.list(ctx,q.cursor);}));
  router.get(base+'/:inviteId',auth,action((req,ctx,rt)=>rt.service.view(ctx,id(req))));
  router.post(base+'/:inviteId/confirm',auth,action((req,ctx,rt)=>{const input=z.object({pageIds:z.array(z.string().regex(/^\d{1,256}$/)).min(1).max(50)}).strict().parse(req.body);return rt.service.confirm(ctx,id(req),input.pageIds);}));

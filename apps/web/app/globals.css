@@ -5442,3 +5442,11 @@ textarea {
 .schedule-global-picker .field { min-width:0; }
 .schedule-global-picker .beijing-datetime-picker input { min-width:0; width:100%; }
 @media(max-width:640px) { .schedule-time-preview { grid-template-columns:minmax(0,1fr); } }
+.facebook-page-action { display:inline-flex; align-items:stretch; max-width:100%; }
+.facebook-page-action > .button { border-radius:10px 0 0 10px; }
+.facebook-page-action-info { display:inline-flex; align-items:center; justify-content:center; min-width:34px; min-height:44px; padding:0 8px; border:0; border-left:1px solid #dce9e3; border-radius:0 10px 10px 0; background:#eff6f3; color:#28705b; cursor:pointer; font-size:16px; }
+.facebook-page-action-info:hover { background:#e0f0e8; }
+.facebook-page-action-info:focus-visible { outline:2px solid #10b981; outline-offset:2px; }
+.facebook-page-action-hint { position:fixed; z-index:1100; display:grid; gap:8px; box-sizing:border-box; padding:14px 16px; max-height:calc(100dvh - 24px); overflow:auto; border:1px solid #d3e3dd; border-radius:12px; background:#fff; box-shadow:0 8px 28px #143c2b20; color:#38594c; font-size:13px; line-height:1.65; white-space:normal; overflow-wrap:anywhere; text-align:left; }
+.facebook-page-action-hint strong { color:#164b38; font-size:14px; }
+.facebook-page-action-hint small { padding-top:8px; border-top:1px solid #e5eee9; color:#607c70; font-size:12px; }

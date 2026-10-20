@@ -14,8 +14,11 @@ for service in api web; do
  docker image tag "$(<"$release/prior-$service")" "social-timezone-prior-$service:$target"
 done
 prior_api=$(docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$(dc ps -q api)")
-[[ $prior_api = 9b2c48e9f7cc409fa8fae4c5e007325f5e5ee0d4 ]]
-[[ $(docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$(dc ps -q web)") = a0530a8dc69f773f05f9ee29d4ddbb1090bfff22 ]]
+expected_api=${TIMEZONE_EXPECTED_API:?Exact previous API revision required}
+expected_web=${TIMEZONE_EXPECTED_WEB:?Exact previous web revision required}
+[[ $expected_api =~ ^[a-f0-9]{40}$ && $expected_web =~ ^[a-f0-9]{40}$ ]]
+[[ $prior_api = "$expected_api" ]]
+[[ $(docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$(dc ps -q web)") = "$expected_web" ]]
 git diff --quiet "$prior_api" "$target" -- apps/api/prisma
 mkdir -m 0700 "$release/context"
 git archive "$target" | tar -xf - -C "$release/context"

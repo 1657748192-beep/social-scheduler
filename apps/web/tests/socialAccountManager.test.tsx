@@ -93,27 +93,30 @@ test('loadingFailureAndWorkspaceChangesDoNotLeakOldAccountsOrInventEmptyResults'
 }));
 import {LanguageProvider as LanguageWrapper} from '../components/LanguageProvider';
 
-async function withAccountPage(run:(f:any)=>Promise<void>,override:(url:URL,init?:RequestInit)=>Response|Promise<Response>|undefined,providerStatus=providers,platformAdmin=false){
+async function withAccountPage(run:(f:any)=>Promise<void>,override:(url:URL,init?:RequestInit)=>Response|Promise<Response>|undefined,providerStatus=providers,platformAdmin=false,role='owner'){
   const previous={storage:(globalThis as any).localStorage,self:(globalThis as any).self};
   (globalThis as any).localStorage={getItem:(key:string)=>key==='social_scheduler_token'?'test-token':null,removeItem(){}};
   (globalThis as any).self={setTimeout:()=>1,clearTimeout(){}};
   const router={back(){},forward(){},refresh(){},push(){},replace(){},prefetch:async()=>{}};
   try{await withFacebookUI(<AppRouterContext.Provider value={router}><PathnameContext.Provider value="/social-accounts"><DashboardPageContent accountsOnly/></PathnameContext.Provider></AppRouterContext.Provider>,run,(url,init)=>{
     if(url.pathname.endsWith('/auth/me'))return Response.json({id:'user',name:'Owner',email:'owner@example.test',isPlatformAdmin:platformAdmin});
-    if(url.pathname.endsWith('/workspaces'))return Response.json([{id:'w1',name:'First workspace',role:'owner'},{id:'w2',name:'Second workspace',role:'owner'}]);
+    if(url.pathname.endsWith('/workspaces'))return Response.json([{id:'w1',name:'First workspace',role},{id:'w2',name:'Second workspace',role}]);
     if(url.pathname.endsWith('/integrations/oauth/status'))return Response.json(providerStatus);
     return override(url,init);
   });}finally{(globalThis as any).localStorage=previous.storage;(globalThis as any).self=previous.self;}
 }
 
-test('ordinary owner sees no trial share import entry and never requests trial data',async()=>{
+test('ordinary owner can use shared Page import only under Facebook without starting authorization',async()=>{
  await withAccountPage(async({view,requests}:any)=>{
-  assert.ok(!facebookButton(view,'分享链接导入主页'),'ordinary owner must not see share import');
+  assert.ok(!facebookButton(view,'分享链接导入主页'),'all-platform view must not show Facebook controls');
   assert.equal(requests.filter((r:any)=>r.path.includes('facebook-page-import-invitations')).length,0);
   await act(async()=>view.root.findByProps({'aria-label':'Facebook (0)'}).props.onClick());
+  assert.ok(facebookButton(view,'分享链接导入主页'));assert.match(facebookText(view),/分享导入任务/);
+  assert.equal(requests.filter((r:any)=>r.path.includes('facebook-page-import-invitations')).length,1);
   await act(async()=>facebookButton(view,'添加账号').props.onClick());
-  assert.ok(!facebookButton(view,'创建导入邀请'));assert.ok(facebookButton(view,'立即连接'));assert.ok(facebookButton(view,'生成链接'));
- },url=>url.pathname.endsWith('/social-accounts')?Response.json([accounts[0]]):undefined,providers.map(p=>({...p,configured:true})));
+  assert.ok(facebookButton(view,'创建导入邀请'));assert.ok(facebookButton(view,'立即连接'));assert.ok(facebookButton(view,'生成链接'));
+  assert.equal(requests.filter((r:any)=>r.method==='POST').length,0);
+ },url=>url.pathname.endsWith('/social-accounts')?Response.json([accounts[0]]):url.pathname.endsWith('/facebook-page-import-invitations')?Response.json({items:[],nextCursor:null}):undefined,providers.map(p=>({...p,configured:true})));
 });
 
 test('platform administrator retains trial share import controls without starting OAuth',async()=>{
@@ -128,14 +131,54 @@ test('platform administrator retains trial share import controls without startin
  },url=>url.pathname.endsWith('/social-accounts')?Response.json([accounts[0]]):url.pathname.endsWith('/facebook-page-import-invitations')?Response.json({items:[],nextCursor:null}):undefined,providers.map(p=>({...p,configured:true})),true);
 });
 
-test('administrator choosing shared Page import from the Facebook binding dialog switches to Facebook first',async()=>{
+test('ordinary manager choosing shared Page import from the binding dialog switches to Facebook first',async()=>{
  await withAccountPage(async({view,requests}:any)=>{
   await act(async()=>facebookButton(view,'添加账号').props.onClick());
   const picker=view.root.findByProps({role:'dialog'});await act(async()=>picker.findAllByType('button').find((b:any)=>b.props.children.includes('Facebook')).props.onClick());
   await act(async()=>facebookButton(view,'创建导入邀请').props.onClick());
   assert.ok(facebookButton(view,'确认生成链接'));assert.equal(facebookButton(view,'Facebook (0)').props['aria-pressed'],true);
   assert.equal(requests.filter((r:any)=>r.method==='POST').length,0);
- },url=>url.pathname.endsWith('/social-accounts')?Response.json([accounts[0]]):url.pathname.endsWith('/facebook-page-import-invitations')?Response.json({items:[],nextCursor:null}):undefined,providers.map(p=>({...p,configured:true})),true);
+ },url=>url.pathname.endsWith('/social-accounts')?Response.json([accounts[0]]):url.pathname.endsWith('/facebook-page-import-invitations')?Response.json({items:[],nextCursor:null}):undefined,providers.map(p=>({...p,configured:true})),false);
+});
+
+test('ordinary editors and viewers never see Page import controls or request private task lists',async()=>{
+ for(const role of ['editor','viewer'])await withAccountPage(async({view,requests}:any)=>{
+  await act(async()=>facebookButton(view,'Facebook (0)').props.onClick());
+  for(const label of ['同步公共主页','分享链接导入主页','添加账号'])assert.ok(!facebookButton(view,label));
+  assert.equal(requests.filter((r:any)=>r.path.includes('facebook-page-import-invitations')).length,0);
+ },url=>url.pathname.endsWith('/social-accounts')?Response.json([]):undefined,providers.map(p=>({...p,configured:true})),false,role);
+});
+
+test('Page action hints support hover, focus, Escape and tap without starting authorization',async()=>{
+ let actions=0;
+ await withFacebookUI(panel({providers:providers.map(p=>({...p,configured:true})),onSyncFacebookPages:()=>{actions++;},onShareFacebookPages:()=>{actions++;}}),async({view,requests}:any)=>{
+  await act(async()=>facebookButton(view,'Facebook (1)').props.onClick());
+  assert.equal(view.root.findAllByProps({role:'tooltip'}).length,0);
+  const sync=facebookButton(view,'同步公共主页');
+  await act(async()=>sync.parent.props.onPointerEnter({pointerType:'mouse'}));
+  assert.match(facebookText(view),/当前浏览器完成 Facebook 授权/);
+  assert.match(facebookText(view),/已有主页的权限、凭据和排程保持不变/);
+  assert.ok(sync.props['aria-describedby']);
+  await act(async()=>sync.parent.props.onPointerLeave());assert.equal(view.root.findAllByProps({role:'tooltip'}).length,0);
+  await act(async()=>sync.props.onFocus());assert.equal(view.root.findAllByProps({role:'tooltip'}).length,1);
+  await act(async()=>sync.parent.props.onKeyDown({key:'Escape',preventDefault(){},stopPropagation(){}}));assert.equal(view.root.findAllByProps({role:'tooltip'}).length,0);
+  const info=facebookButton(view,'分享链接导入主页说明');
+  await act(async()=>info.props.onClick());assert.equal(info.props['aria-expanded'],true);assert.match(facebookText(view),/也适用于另一个 Facebook 账号/);
+  await act(async()=>info.props.onClick());assert.equal(view.root.findAllByProps({role:'tooltip'}).length,0);
+  assert.equal(actions,0);assert.equal(requests.length,0);
+  await act(async()=>sync.props.onClick());assert.equal(actions,1);
+ });
+});
+
+test('long Page help uses its measured height to stay inside a small viewport',async()=>{
+ await withFacebookUI(panel({providers:providers.map(p=>({...p,configured:true})),onSyncFacebookPages:()=>{}}),async({view}:any)=>{
+  Object.assign((globalThis as any).window,{innerWidth:390,innerHeight:844});
+  await act(async()=>facebookButton(view,'Facebook (1)').props.onClick());
+  await act(async()=>facebookButton(view,'同步公共主页').props.onFocus());
+  const hint=view.root.findByProps({role:'tooltip'});
+  assert.equal(hint.props.style.top,undefined);assert.equal(hint.props.style.bottom,244);
+  assert.equal(hint.props.style.width,320);assert.equal(hint.props.style.left,58);
+ },undefined,(element:any)=>element.props.role==='tooltip'?{style:{},getBoundingClientRect:()=>({height:240})}:element.type==='span'&&element.props.onPointerEnter?{getBoundingClientRect:()=>({left:140,top:600,bottom:644}),contains:()=>false}:null);
 });
 
 test('real social account page opens a separate sync dialog without starting OAuth or changing bindings',async()=>{

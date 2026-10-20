@@ -56,7 +56,7 @@ test('real Compose rendering preserves exact environments and mounts while exclu
  try{
   const apiEnv=['NODE_ENV=production','SECRET_TEST_ONLY=test-$missing${UNSET_FOR_TEST:-fallback}$$literal','EXISTING_FLAG=true','EMPTY_VALUE='];
   const webEnv=['NODE_ENV=production','NEXT_PUBLIC_API_URL=https://example.invalid/api/v1'];
-  await writeFile(join(root,'api-before.private.json'),JSON.stringify([{Config:{Env:apiEnv,Cmd:['sh','-c','do-not-execute-migrate']},Mounts:[{Type:'volume',Name:'existing-upload-volume',Destination:'/app/apps/api/uploads',RW:true}]}]));
+  await writeFile(join(root,'api-before.private.json'),JSON.stringify([{Config:{Env:apiEnv,Cmd:['sh','-c','do-not-execute-migrate']},Mounts:[{Type:'volume',Name:'existing-upload-volume',Destination:'/app/apps/api/uploads',RW:true},{Type:'bind',Source:join(root,'previous-host-meminfo'),Destination:probeTarget,RW:false}]}]));
   await writeFile(join(root,'web-before.private.json'),JSON.stringify([{Config:{Env:webEnv,Cmd:['npm','run','start']},Mounts:[]}]));
   await writeFile(join(root,'probe.json'),JSON.stringify({mounts:[{type:'bind',source:join(root,'host-meminfo'),target:probeTarget,read_only:true,bind:{create_host_path:false}}]}));
   await writeFile(join(root,'base.json'),JSON.stringify({services:{api:{image:'old-api',environment:{NEW_DEFAULT_MUST_NOT_LEAK:'unsafe'},volumes:[]},web:{image:'old-web',environment:{NEW_DEFAULT_MUST_NOT_LEAK:'unsafe'}},worker:{image:'unchanged-worker'}},volumes:{}}));
@@ -71,11 +71,12 @@ test('real Compose rendering preserves exact environments and mounts while exclu
   assert.equal(config.services.api.volumes[0].source,'existing-upload-volume');
   assert.equal(config.volumes['existing-upload-volume'].external,true);
   const mounted=config.services.api.volumes.find((m:any)=>m.target===probeTarget);assert.equal(mounted.read_only,true);assert.equal(mounted.bind.create_host_path,false);
+  assert.equal(config.services.api.volumes.filter((m:any)=>m.target===probeTarget).length,1);assert.equal(mounted.source,join(root,'host-meminfo'));
   await writeFile(join(root,'rendered.private.json'),rendered.stdout);assert.equal(python(['--verify-rendered']).status,0);
   config.services.api.environment.EXISTING_FLAG='false';await writeFile(join(root,'rendered.private.json'),JSON.stringify(config));assert.equal(python(['--verify-rendered']).status,1);
   const rollback=compose('rollback.yml');assert.equal(rollback.status,0,rollback.stderr);const prior=JSON.parse(rollback.stdout);
   assert.equal(prior.services.api.image,'social-timezone-prior-api:'+target);
-  assert.equal(prior.services.api.volumes.length,1);assert.deepEqual(prior.services.api.environment,JSON.parse(rendered.stdout).services.api.environment);
+  assert.equal(prior.services.api.volumes.length,2);assert.equal(prior.services.api.volumes.find((m:any)=>m.target===probeTarget).source,join(root,'previous-host-meminfo'));assert.deepEqual(prior.services.api.environment,JSON.parse(rendered.stdout).services.api.environment);
   await writeFile(join(root,'run.yml'),'services:\n  api:\n    image: alpine:3.20\n    volumes: !reset []\n    network_mode: none\n');
   const actual=spawnSync('docker',['compose','-p','timezone-test','-f',join(root,'base.json'),'-f',join(root,'images.yml'),'-f',join(root,'run.yml'),'run','--rm','--no-deps','--pull','never','--entrypoint','printenv','api','SECRET_TEST_ONLY'],{encoding:'utf8'});
   assert.equal(actual.status,0,actual.stderr);assert.equal(actual.stdout.trim(),'test-$missing${UNSET_FOR_TEST:-fallback}$$literal');
