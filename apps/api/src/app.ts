@@ -34,6 +34,8 @@ import type {InstagramManagementRuntime} from './instagramManagement/runtime';
 import {getInstagramManagementRuntime} from './instagramManagement/defaultRuntime';
 import {createInstagramManagementRouter} from './instagramManagement/routes';
 import {getMetaInboxLifecycleRuntime,type MetaInboxLifecycleRuntime} from './interactionInbox/lifecycleRuntime';
+import {getRulesRuntime} from './timezoneRules/runtime';
+import {createRulesRouter} from './timezoneRules/routes';
 
 export function createApp(options:{facebookManagement?:FacebookManagementRuntime;instagramManagement?:InstagramManagementRuntime;metaLifecycle?:MetaInboxLifecycleRuntime;pageImport?:PageImportRuntime}={}) {
   const app = express();
@@ -62,6 +64,7 @@ export function createApp(options:{facebookManagement?:FacebookManagementRuntime
 
   app.use("/api/v1", healthRoutes);
   app.use("/api/v1/auth", authRoutes);
+  app.use('/api/v1/timezone-rules',createRulesRouter(getRulesRuntime()));
   app.use("/api/v1", adminRoutes);
   app.use("/api/v1", workspaceRoutes);
   app.use('/api/v1',createFacebookManagementRouter(management,{webAppUrl:config.WEB_APP_URL}));

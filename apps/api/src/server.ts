@@ -13,10 +13,13 @@ import {getInstagramManagementRuntime} from './instagramManagement/defaultRuntim
 import {startInstagramManagementPump} from './instagramManagement/receptionPump';
 import {getMetaInboxLifecycleRuntime} from './interactionInbox/lifecycleRuntime';
 import {startMetaDeletionMaintenance} from './interactionInbox/deletionMaintenance';
+import {getRulesRuntime} from './timezoneRules/runtime';
 
 const instagramRuntime=getInstagramManagementRuntime();
 const metaLifecycle=getMetaInboxLifecycleRuntime();
 const app = createApp({instagramManagement:instagramRuntime,metaLifecycle});
+const timezoneRules=getRulesRuntime();
+timezoneRules.start();
 const metaDeletionMaintenance=startMetaDeletionMaintenance({enabled:metaLifecycle.maintenanceEnabled,namespaces:metaLifecycle.namespaces,store:metaLifecycle.maintenanceStore});
 const instagramPump=startInstagramManagementPump({enabled:instagramRuntime.receptionEnabled,store:instagramRuntime.receptionStore});
 const uploadCleanup=startLocalUploadCleanup(localUploadRuntime);
@@ -31,7 +34,7 @@ const server = createApiServer(app).listen(config.API_PORT, () => {
 
 async function shutdown() {
   console.log("Shutting down API");
-  await closeApiServer(server,async()=>{await Promise.all([uploadCleanup.stop(),facebookPump.stop(),instagramPump.stop(),inboxRetention.stop(),metaDeletionMaintenance.stop()]);},async () => {
+  await closeApiServer(server,async()=>{await Promise.all([uploadCleanup.stop(),facebookPump.stop(),instagramPump.stop(),inboxRetention.stop(),metaDeletionMaintenance.stop(),timezoneRules.stop()]);},async () => {
     await prisma.$disconnect();
     localUploadRedis.disconnect();
     redis.disconnect();
