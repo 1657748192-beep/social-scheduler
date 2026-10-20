@@ -45,3 +45,13 @@ test('sync directory rejects beyond 2000 and rechecks selected page credentials'
  const overflow=fixture({count:2001});await assert.rejects(mod.createFacebookPageSyncGraph({provider,appSecret:'secret',callbackUrl:'https://example.test/callback',fetchImpl:overflow.fetchImpl}).discover('code'));
  const revoked=fixture({revoked:true});await assert.rejects(mod.createFacebookPageSyncGraph({provider,appSecret:'secret',callbackUrl:'https://example.test/callback',fetchImpl:revoked.fetchImpl}).revalidate([result.pages[0]]));
 });
+
+test('rejects system user as user and never discovers unproven assets',async()=>{
+ const mod=await load();assert.ok(mod);const f=fixture();
+ const graph=mod.createFacebookPageSyncGraph({provider,appSecret:'secret',callbackUrl:'https://example.test/callback',fetchImpl:async(url,init)=>{
+  const u=new URL(String(url));if(u.pathname.endsWith('/debug_token'))return Response.json({data:{is_valid:true,app_id:'app',type:'SYSTEM_USER',user_id:'900',expires_at:0,scopes}});
+  return f.fetchImpl(url,init);
+ }});
+ await assert.rejects(graph.discover('code'));
+ assert.equal(f.requests.filter(u=>u.pathname.endsWith('/me')||u.pathname.endsWith('/me/accounts')).length,0);
+});
