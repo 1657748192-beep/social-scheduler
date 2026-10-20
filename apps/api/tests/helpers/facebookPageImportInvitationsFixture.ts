@@ -3,9 +3,11 @@ import {encryptToken,decryptToken} from '../../src/utils/tokenCrypto';
 import {createInvitationRepository} from '../../src/facebookPageImportInvitations/repository';
 import {createMetaGrantFence} from '../../src/interactionInbox/grantFence';
 import {randomUUID} from 'node:crypto';
+import {config} from '../../src/config';
 export const importTestPage=(id:string)=>({pageId:id,name:'Page '+id,avatarUrl:null,profileUrl:'https://www.facebook.com/'+id,pageToken:'synthetic-page-'+id,scopes:['pages_manage_posts','pages_read_engagement'],expiresAt:null});
 export async function withPageImportFixture(run:(f:any)=>Promise<void>){
  await withFacebookManagementFixture(async f=>{
+  const previousAdmins=config.ADMIN_EMAILS;config.ADMIN_EMAILS=[previousAdmins,`${f.userId}@example.test`].filter(Boolean).join(',');
   const ctx=f.contexts[0];
   const post=await f.db.post.create({data:{workspaceId:ctx.workspaceId,authorId:f.userId,baseText:'Existing scheduled content',variants:{create:{platform:'facebook',socialAccountId:f.accounts[0].id,text:'Existing scheduled content'}}},include:{variants:true}});
   await f.db.schedule.create({data:{workspaceId:ctx.workspaceId,postVariantId:post.variants[0].id,createdBy:f.userId,scheduledAt:new Date(Date.now()+86400000),publishJobs:{create:{postVariantId:post.variants[0].id,workspaceId:ctx.workspaceId,idempotencyKey:randomUUID(),status:'waiting'}}}});
@@ -17,7 +19,7 @@ export async function withPageImportFixture(run:(f:any)=>Promise<void>){
    management:await f.db.facebookManagementConnection.findMany({where:{workspaceId:{in:f.workspaceIds}},include:{pages:true},orderBy:{id:'asc'}})
   });
   try{await run({...f,ctx,snapshot,encrypt:encryptToken,decrypt:decryptToken});}
-  finally{await f.db.facebookPageImportInvitation.deleteMany({where:{createdById:f.userId}});}
+  finally{config.ADMIN_EMAILS=previousAdmins;await f.db.facebookPageImportInvitation.deleteMany({where:{createdById:f.userId}});}
  });
 }
 export async function preparePageInvitation(f:any,pages=['100','101','102'].map(importTestPage)){

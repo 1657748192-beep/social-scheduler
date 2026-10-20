@@ -83,18 +83,36 @@ test('loadingFailureAndWorkspaceChangesDoNotLeakOldAccountsOrInventEmptyResults'
 }));
 import {LanguageProvider as LanguageWrapper} from '../components/LanguageProvider';
 
-async function withAccountPage(run:(f:any)=>Promise<void>,override:(url:URL,init?:RequestInit)=>Response|Promise<Response>|undefined,providerStatus=providers){
+async function withAccountPage(run:(f:any)=>Promise<void>,override:(url:URL,init?:RequestInit)=>Response|Promise<Response>|undefined,providerStatus=providers,platformAdmin=false){
   const previous={storage:(globalThis as any).localStorage,self:(globalThis as any).self};
   (globalThis as any).localStorage={getItem:(key:string)=>key==='social_scheduler_token'?'test-token':null,removeItem(){}};
   (globalThis as any).self={setTimeout:()=>1,clearTimeout(){}};
   const router={back(){},forward(){},refresh(){},push(){},replace(){},prefetch:async()=>{}};
   try{await withFacebookUI(<AppRouterContext.Provider value={router}><PathnameContext.Provider value="/social-accounts"><DashboardPageContent accountsOnly/></PathnameContext.Provider></AppRouterContext.Provider>,run,(url,init)=>{
-    if(url.pathname.endsWith('/auth/me'))return Response.json({id:'user',name:'Owner',email:'owner@example.test'});
+    if(url.pathname.endsWith('/auth/me'))return Response.json({id:'user',name:'Owner',email:'owner@example.test',isPlatformAdmin:platformAdmin});
     if(url.pathname.endsWith('/workspaces'))return Response.json([{id:'w1',name:'First workspace',role:'owner'},{id:'w2',name:'Second workspace',role:'owner'}]);
     if(url.pathname.endsWith('/integrations/oauth/status'))return Response.json(providerStatus);
     return override(url,init);
   });}finally{(globalThis as any).localStorage=previous.storage;(globalThis as any).self=previous.self;}
 }
+
+test('ordinary owner sees no trial share import entry and never requests trial data',async()=>{
+ await withAccountPage(async({view,requests}:any)=>{
+  assert.ok(!facebookButton(view,'分享链接导入主页'),'ordinary owner must not see share import');
+  assert.equal(requests.filter((r:any)=>r.path.includes('facebook-page-import-invitations')).length,0);
+  await act(async()=>view.root.findByProps({'aria-label':'Facebook (0)'}).props.onClick());
+  await act(async()=>facebookButton(view,'添加账号').props.onClick());
+  assert.ok(!facebookButton(view,'创建导入邀请'));assert.ok(facebookButton(view,'立即连接'));assert.ok(facebookButton(view,'生成链接'));
+ },url=>url.pathname.endsWith('/social-accounts')?Response.json([accounts[0]]):undefined,providers.map(p=>({...p,configured:true})));
+});
+
+test('platform administrator retains trial share import controls without starting OAuth',async()=>{
+ await withAccountPage(async({view,requests}:any)=>{
+  assert.ok(facebookButton(view,'分享链接导入主页'));assert.equal(requests.filter((r:any)=>r.path.includes('facebook-page-import-invitations')).length,1);
+  await act(async()=>facebookButton(view,'分享链接导入主页').props.onClick());assert.ok(facebookButton(view,'确认生成链接'));
+  assert.equal(requests.filter((r:any)=>r.method==='POST').length,0);
+ },url=>url.pathname.endsWith('/social-accounts')?Response.json([accounts[0]]):url.pathname.endsWith('/facebook-page-import-invitations')?Response.json({items:[],nextCursor:null}):undefined,providers.map(p=>({...p,configured:true})),true);
+});
 
 test('real social account page opens a separate sync dialog without starting OAuth or changing bindings',async()=>{
  await withAccountPage(async({view,requests}:any)=>{

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {randomUUID,createHash} from 'node:crypto';
-import {withFacebookManagementFixture} from './helpers/facebookManagementFixture';
+import {withPageImportFixture as withFacebookManagementFixture} from './helpers/facebookPageImportInvitationsFixture';
 import {encryptToken,decryptToken} from '../src/utils/tokenCrypto';
 const load=async()=>import('../src/facebookPageImportInvitations/repository').catch(()=>null);
 test('invitation has fixed lifetime and stores only a digest of the share secret',async()=>{
