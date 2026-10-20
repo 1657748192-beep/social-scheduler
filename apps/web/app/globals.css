@@ -5418,3 +5418,27 @@ textarea {
 .unified-inbox .inbox-connection-actions .button { font-size:12px; padding:7px 11px; min-height:32px; }
 .unified-inbox .inbox-connection-panel [role="alert"] { margin:10px 0 0; font-size:12px; color:#a34133; }
 @media(max-width:640px) { .unified-inbox .inbox-connection-panel { padding:12px; } .unified-inbox .inbox-connection-heading { flex-wrap:wrap; gap:7px; } }
+
+.schedule-global-picker { display:grid; gap:14px; min-width:0; }
+.schedule-global-picker > h2, .schedule-global-picker > p { margin:0; }
+.schedule-zone-selector { position:relative; min-width:0; }
+.schedule-zone-search { display:flex; gap:6px; }
+.schedule-zone-search input { min-width:0; width:100%; text-overflow:ellipsis; }
+.schedule-zone-search .button { flex:none; padding:8px 12px; }
+.schedule-zone-results { position:absolute; z-index:30; top:100%; left:0; width:100%; min-width:0; padding:6px; border:1px solid #d8e5df; border-radius:10px; background:#fff; box-shadow:0 8px 24px #153c2520; }
+.schedule-zone-results ul { list-style:none; padding:0; margin:0; max-height:260px; overflow:auto; }
+.schedule-zone-results button { border:0; background:transparent; text-align:left; width:100%; padding:9px 8px; color:#234a3e; overflow-wrap:anywhere; font:inherit; font-size:12px; cursor:pointer; }
+.schedule-zone-results [aria-selected="true"], .schedule-zone-results button:hover { background:#e9f6f0; border-radius:6px; }
+.schedule-zone-results p { margin:6px; font-size:12px; }
+.schedule-time-preview { display:grid; gap:8px; min-width:0; }
+.schedule-time-preview > div { display:grid; gap:5px; padding:12px; border:1px solid #dbe9e2; border-radius:10px; background:#f5faf7; overflow-wrap:anywhere; }
+.schedule-time-preview span, .schedule-time-preview small { color:#607c70; font-size:12px; }
+.schedule-time-preview strong { color:#164b38; font-size:14px; font-variant-numeric:tabular-nums; }
+.schedule-occurrences { border:1px solid #e3d3ad; border-radius:10px; padding:10px; min-width:0; }
+.schedule-occurrences legend { font-size:13px; }
+.schedule-occurrences label { display:flex; align-items:flex-start; gap:8px; padding:8px 0; font-size:13px; }
+.schedule-occurrences input { width:auto; margin-top:3px; }
+.schedule-occurrences small { display:block; margin-top:5px; font-size:12px; }
+.schedule-global-picker .field { min-width:0; }
+.schedule-global-picker .beijing-datetime-picker input { min-width:0; width:100%; }
+@media(max-width:640px) { .schedule-time-preview { grid-template-columns:minmax(0,1fr); } }

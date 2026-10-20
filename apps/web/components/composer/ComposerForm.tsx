@@ -12,7 +12,7 @@ import {
   type TikTokCreatorPublishInfo,
   type Workspace
 } from "../../lib/api";
-import { chinaLocalInputToISOString } from "../../lib/chinaTime";
+import {createScheduleTimeState, getScheduleSubmission, type ScheduleTimeState} from "../../lib/scheduleTimeZone";
 import { getActiveWorkspaceId, setActiveWorkspaceId } from "../../lib/activeWorkspace";
 import { AccountTargetSelector } from "./AccountTargetSelector";
 import { appendWebsiteToText, isValidWebsite } from "./contentUtils";
@@ -160,7 +160,7 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
   const [mediaSourceByPlatform, setMediaSourceByPlatform] = useState<Record<ComposerPlatform, MediaSource>>(() =>
     createPlatformMediaSourceMap()
   );
-  const [scheduledAt, setScheduledAt] = useState("");
+  const [scheduleTime, setScheduleTime] = useState<ScheduleTimeState>(() => createScheduleTimeState());
   const [publishMode, setPublishMode] = useState<"draft" | "scheduled" | "now">("draft");
   const [result, setResult] = useState<ComposerPost | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -200,6 +200,8 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
     setActiveWorkspaceId(nextWorkspaceId);
     setWorkspaceId(nextWorkspaceId);
   }
+
+  useEffect(() => { setScheduleTime(createScheduleTimeState()); }, [workspaceId, token]);
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === workspaceId),
@@ -398,7 +400,7 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
             reusableVariants.flatMap((variant) => (variant.socialAccountId ? [variant.socialAccountId] : []))
           );
           setActivePlatform(reusableVariants[0]?.platform ?? activePlatforms[0] ?? "facebook");
-          setScheduledAt("");
+          setScheduleTime(createScheduleTimeState());
           setPublishMode("draft");
           setResult(null);
           setCopyNotice(
@@ -578,6 +580,7 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
     };
   }, [selectedPinterestAccountIds, t, token, workspaceId]);
 
+  const scheduleSubmission = getScheduleSubmission(scheduleTime, Date.now());
   const publishChecks = [
     {
       label: t("内容文案", "Post copy"),
@@ -592,12 +595,16 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
     },
     {
       label: publishMode === "scheduled" ? t("定时发布时间", "Scheduled time") : t("发布方式", "Publishing method"),
-      done: true,
+      done: publishMode !== "scheduled" || scheduleSubmission.kind === "scheduled",
       detail:
         publishMode === "now"
           ? t("保存后将立即分别发布", "Each account will publish immediately after saving")
           : publishMode === "scheduled"
-            ? t("已选择北京时间", "Beijing time selected")
+            ? scheduleSubmission.kind === "scheduled"
+              ? t(`已确认 ${scheduleTime.zoneId}，共 ${selectedAccounts.length} 个账号使用同一时刻`, `Confirmed ${scheduleTime.zoneId}; ${selectedAccounts.length} accounts use the same instant`)
+              : scheduleSubmission.kind === "draft"
+                ? t("未设置时间，将保存为草稿", "No time set. This will be saved as a draft")
+                : t("请先确认有效的未来发布时间", "Confirm a valid future publishing time")
             : t("将保存为草稿", "Will be saved as a draft")
     }
   ];
@@ -763,6 +770,12 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
       return;
     }
 
+    const confirmedTime = publishMode === "scheduled" ? getScheduleSubmission(scheduleTime, Date.now()) : null;
+    if (confirmedTime?.kind === "error") {
+      setError(t("发布时间尚未确定或已失效，请检查地区、当地时间及重复时刻选择。", "Publishing time is unresolved or no longer valid. Check the region, local time and occurrence."));
+      return;
+    }
+
     if (publishMode !== "draft" && selectedTikTokAccounts.length) {
       const tiktokMedia = resolvedMediaByPlatform.tiktok;
       const hasSingleVideo =
@@ -852,10 +865,8 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
           body: {
             title: title || undefined,
             baseText,
-            scheduledAt:
-              publishMode === "scheduled" && scheduledAt
-                ? chinaLocalInputToISOString(scheduledAt)
-                : undefined,
+            scheduledAt: confirmedTime?.kind === "scheduled" ? confirmedTime.scheduledAt : undefined,
+            timezone: confirmedTime?.kind === "scheduled" ? confirmedTime.timezone : undefined,
             publishNow: publishMode === "now",
             variants: selectedAccounts.map((account) => ({
               socialAccountId: account.id,
@@ -1163,7 +1174,7 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
               {t("保存草稿", "Save draft")}
             </button>
           </div>
-          {publishMode === "scheduled" ? <SchedulePicker onChange={setScheduledAt} value={scheduledAt} /> : null}
+          {publishMode === "scheduled" ? <SchedulePicker onChange={setScheduleTime} value={scheduleTime} token={token} workspaceId={workspaceId} /> : null}
           {publishMode === "now" ? <p className="muted">{t("确认后会为每个已选账号分别入队并立即发布。", "After confirmation, each selected account is queued and published immediately.")}</p> : null}
           {publishMode === "draft" ? <p className="muted">{t("稍后可从内容日历继续安排发布时间。", "You can schedule it later from the content calendar.")}</p> : null}
           {publishingLocked ? (
@@ -1203,7 +1214,7 @@ export function ComposerForm({ token, workspaces, copyPostId, draftPostId, initi
           </ul>
           <button
             className="button publish-confirm-button"
-            disabled={isSaving || !selectedAccounts.length || requiresDraftOnly}
+            disabled={isSaving || !selectedAccounts.length || requiresDraftOnly || (publishMode === "scheduled" && scheduleSubmission.kind === "error")}
             type="submit"
           >
             {isSaving
