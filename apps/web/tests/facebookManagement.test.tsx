@@ -4,9 +4,9 @@ import React from 'react';
 import {act,create,type ReactTestRenderer} from 'react-test-renderer';
 import {FacebookManagementPanel} from '../components/facebook/FacebookManagementPanel';
 import {LanguageProvider} from '../components/LanguageProvider';
-import {safeFacebookProfileUrl,safeFacebookAvatarUrl} from '../lib/facebookManagement';
+import {safeFacebookProfileUrl,safeFacebookAvatarUrl,type FacebookManagedPage} from '../lib/facebookManagement';
 const workspaces=[{id:'w1',name:'First',role:'owner'},{id:'w2',name:'Second',role:'owner'}] as any;
-const rows=()=>Array.from({length:21},(_,i)=>({id:`p${i}`,connectionId:'c1',pageId:String(100+i),name:`Page ${i}`,profileUrl:'https://www.facebook.com/100',avatarUrl:null,businesses:i<10?[{id:'b1',name:'Business One',relation:'owned'}]:i<20?[{id:'b2',name:'Business Two',relation:'client'}]:[],publishingAccountId:i===0?'publishing-account':null,authorization:i===20?'missing':'available',lastReadAt:'2026-10-16T08:00:00.000Z',selectedManagedPageId:null,connectionChoices:[{managedPageId:`p${i}`,connectionId:'c1',available:true},...(i===0?[{managedPageId:'p-second',connectionId:'c2',available:true}]:[])]}));
+const rows=():FacebookManagedPage[]=>Array.from({length:21},(_,i)=>({id:`p${i}`,connectionId:'c1',pageId:String(100+i),name:`Page ${i}`,profileUrl:'https://www.facebook.com/100',avatarUrl:null,businesses:i<10?[{id:'b1',name:'Business One',relation:'owned'}]:i<20?[{id:'b2',name:'Business Two',relation:'client'}]:[],publishingAccountId:i===0?'publishing-account':null,authorization:i===20?'missing':'available',lastReadAt:'2026-10-16T08:00:00.000Z',selectedManagedPageId:null,connectionChoices:[{managedPageId:`p${i}`,connectionId:'c1',available:true},...(i===0?[{managedPageId:'p-second',connectionId:'c2',available:true}]:[])]}));
 async function environment(run:(f:any)=>Promise<void>,options:{viewer?:boolean;delayed?:boolean;paged?:boolean;empty?:boolean;initialFailure?:boolean;unsafe?:boolean}={}){
   const old={fetch:globalThis.fetch,window:(globalThis as any).window,document:(globalThis as any).document};
   (globalThis as any).React=React;(globalThis as any).IS_REACT_ACT_ENVIRONMENT=true;

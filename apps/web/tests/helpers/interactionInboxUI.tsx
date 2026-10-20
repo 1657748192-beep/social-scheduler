@@ -1,6 +1,7 @@
 import React from 'react';import {withFacebookUI} from './facebookManagementUI';
+import type {InboxCase} from '../../lib/interactionInbox';
 export const inboxAccount={id:'11111111-1111-4111-8111-111111111111',platform:'facebook',name:'Factory Wholesale',avatarUrl:null,publishingStatus:'active',capabilities:[{capability:'comments.read',available:true,reason:'available',verifiedAt:new Date().toISOString()}]};
-export const inboxCase={id:'22222222-2222-4222-8222-222222222222',kind:'comments',accountId:inboxAccount.id,customerId:'33333333-3333-4333-8333-333333333333',customerName:'Customer One',sourceLabel:'Facebook',status:'pending',version:1,lastInboundAt:new Date().toISOString(),unread:true,tags:[],assigneeId:null,sentiment:null};
+export const inboxCase:InboxCase={id:'22222222-2222-4222-8222-222222222222',kind:'comments',accountId:inboxAccount.id,customerId:'33333333-3333-4333-8333-333333333333',customerName:'Customer One',sourceLabel:'Facebook',status:'pending',version:1,lastInboundAt:new Date().toISOString(),unread:true,tags:[],assigneeId:null,sentiment:null};
 export const inboxPage=(items:any[])=>({items,nextCursor:null,accountsStatus:[{accountId:inboxAccount.id,status:'ok',count:items.length}],partial:false,observedAt:new Date().toISOString(),lastSuccessfulSyncAt:new Date().toISOString()});
 export function inboxResponse(url:URL,init?:RequestInit):Response{
  if(url.pathname.endsWith('/accounts'))return Response.json(inboxPage([inboxAccount]));
