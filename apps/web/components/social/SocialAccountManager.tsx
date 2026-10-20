@@ -12,7 +12,7 @@ import {useAccountProfileSync,type ProfileRefresh} from './useAccountProfileSync
 import {AccountPermissionSummary} from './AccountPermissionSummary';
 import {SupportedAccountType} from './SupportedAccountType';
 
-type Props={accounts:SocialAccount[];providers:OAuthProviderStatus[];workspaceId:string;token:string;canManage:boolean;loading:boolean;failed:boolean;actionError?:string|null;onAdd(provider:OAuthProviderStatus):void;onDisconnect(id:string):Promise<unknown>;onRefresh?:ProfileRefresh;onSyncFacebookPages?:()=>void;onShareFacebookPages?:()=>void};
+type Props={accounts:SocialAccount[];providers:OAuthProviderStatus[];workspaceId:string;token:string;canManage:boolean;loading:boolean;failed:boolean;actionError?:string|null;onAdd(provider:OAuthProviderStatus):void;onDisconnect(id:string):Promise<unknown>;onRefresh?:ProfileRefresh;onSyncFacebookPages?:()=>void;onShareFacebookPages?:()=>void;facebookTasks?:ReactNode;facebookTasksRequested?:boolean};
 
 export function AccountDialog({title,onClose,closeLabel,children,wide=false}:{title:string;onClose():void;closeLabel:string;children:ReactNode;wide?:boolean}){
   const titleId=useId(),container=useRef<HTMLElement>(null);
@@ -49,10 +49,11 @@ function AccountAvatar({account}:{account:SocialAccount}){
 export function SocialAccountManager(props:Props){
   return <AccountManagerContent key={props.token+':'+props.workspaceId} {...props}/>;
 }
-function AccountManagerContent({accounts,providers,workspaceId,token,canManage,loading,failed,actionError,onAdd,onDisconnect,onRefresh,onSyncFacebookPages,onShareFacebookPages}:Props){
+function AccountManagerContent({accounts,providers,workspaceId,token,canManage,loading,failed,actionError,onAdd,onDisconnect,onRefresh,onSyncFacebookPages,onShareFacebookPages,facebookTasks,facebookTasksRequested}:Props){
   const {t,locale}=useLanguage();
   const [platform,setPlatform]=useState('all'),[query,setQuery]=useState(''),[layout,setLayout]=useState<'cards'|'list'>('cards'),[selectedId,setSelectedId]=useState<string|null>(null),[adding,setAdding]=useState(false),[removing,setRemoving]=useState(false);
   const profileSync=useAccountProfileSync(accounts,canManage&&!loading&&!failed,onRefresh);
+  useEffect(()=>{if(facebookTasksRequested)setPlatform('facebook');},[facebookTasksRequested]);
   const supported=filterSupportedPlatforms(accounts),search=query.trim().toLocaleLowerCase();
   const visible=supported.filter(a=>(platform==='all'||a.platform===platform)&&(!search||[a.displayName,a.providerAccountId].some(value=>value.toLocaleLowerCase().includes(search))));
   const selected=!loading&&!failed?supported.find(a=>a.id===selectedId):undefined;
@@ -62,7 +63,7 @@ function AccountManagerContent({accounts,providers,workspaceId,token,canManage,l
   function status(account:SocialAccount){const warning=authorizationWarning(account);return <span className={account.status==='active'&&!warning?'status-pill ready':'status-pill warning'}>{accountStatusLabel(account.status,locale)}{warning?<span> · {warning==='expired'?t('续期凭证已到期','Renewal credential expired'):t('续期凭证即将到期','Renewal credential expires soon')}</span>:null}</span>;}
   function identity(account:SocialAccount){return <div className="account-manager-identity"><AccountAvatar key={account.id+':'+account.avatarUrl+':'+account.capabilities.profileSync?.lastSuccessAt} account={account}/><div><strong>{account.displayName}</strong><small className="muted">{platformLabel(account.platform)}{account.accountType==='page'?t(' · 公共主页',' · Page'):''}</small></div></div>;}
   function detailButton(account:SocialAccount){return <button className="button secondary" type="button" aria-label={t(`查看 ${account.displayName} 详情`,`View ${account.displayName} details`)} onClick={()=>setSelectedId(account.id)}>{t('详情','Details')}</button>;}
-  return <section className="panel account-manager" aria-label={t('账号管理','Account management')} aria-busy={loading}>
+  return <><section className="panel account-manager" aria-label={t('账号管理','Account management')} aria-busy={loading}>
     <div className="row"><div><p className="section-kicker">{t('我的社交账号','My social accounts')}</p><h2>{t('账号管理','Account management')}</h2></div><p className="muted">{t('查看与管理当前工作区的账号','Browse and manage accounts in this workspace')}</p></div>
     <div className="account-manager-platforms" role="group" aria-label={t('筛选平台','Filter by platform')}>
       {['all',...supportedPlatformIds].map(id=>{const count=loading||failed?'—':id==='all'?supported.length:supported.filter(a=>a.platform===id).length;const label=(id==='all'?t('全部','All'):platformLabel(id))+` (${count})`;return <button className={platform===id?'account-platform-filter selected':'account-platform-filter'} type="button" aria-pressed={platform===id} aria-label={label} key={id} onClick={()=>setPlatform(id)}>{id!=='all'?<PlatformLogo platform={id}/>:null}{label}</button>;})}
@@ -74,8 +75,8 @@ function AccountManagerContent({accounts,providers,workspaceId,token,canManage,l
       </div>
       <input type="search" aria-label={t('搜索账号','Search accounts')} placeholder={t('搜索账号名称或 ID','Search account name or ID')} value={query} onChange={e=>setQuery(e.target.value)}/>
       {canManage?<button className="button" type="button" disabled={loading||!configuredProviders.some(p=>p.configured)} onClick={()=>{if(currentProvider?.configured)onAdd(currentProvider);else setAdding(true);}}>{t('添加账号','Add account')}</button>:null}
-      {canManage&&onSyncFacebookPages&&configuredProviders.some(p=>p.platform==='facebook'&&p.configured)?<button className="button secondary" type="button" disabled={loading||failed} onClick={onSyncFacebookPages}>{t('同步公共主页','Sync Facebook Pages')}</button>:null}
-      {canManage&&onShareFacebookPages&&configuredProviders.some(p=>p.platform==='facebook'&&p.configured)?<button className="button secondary" type="button" disabled={loading||failed} onClick={onShareFacebookPages}>{t('分享链接导入主页','Import Pages by shared link')}</button>:null}
+      {platform==='facebook'&&canManage&&onSyncFacebookPages&&configuredProviders.some(p=>p.platform==='facebook'&&p.configured)?<button className="button secondary" type="button" disabled={loading||failed} onClick={onSyncFacebookPages}>{t('同步公共主页','Sync Facebook Pages')}</button>:null}
+      {platform==='facebook'&&canManage&&onShareFacebookPages&&configuredProviders.some(p=>p.platform==='facebook'&&p.configured)?<button className="button secondary" type="button" disabled={loading||failed} onClick={onShareFacebookPages}>{t('分享链接导入主页','Import Pages by shared link')}</button>:null}
     </div>
     {loading?<p role="status" className="muted">{t('正在读取账号…','Loading accounts…')}</p>:failed?<p role="alert" className="error">{t('账号读取失败，请刷新页面重试。','Unable to load accounts. Refresh the page to retry.')}</p>:!visible.length?<div className="account-manager-empty"><strong>{supported.length?t('没有匹配的账号','No matching accounts'):t('暂无社交账号','No social accounts yet')}</strong><p className="muted">{supported.length?t('试试更换平台或搜索内容。','Try another platform or search.'):canManage?t('点击“添加账号”，通过平台官方授权连接。','Add an account using the platform’s official authorization.'):t('请联系工作区所有者或管理员添加账号。','Ask a workspace owner or administrator to add an account.')}</p></div>:layout==='cards'?<div className="account-manager-grid">
       {visible.map(account=><article className="account-manager-card" key={account.id}>{identity(account)}<div>{status(account)}</div><div className="account-manager-actions"><SocialAccountProfileLink platform={account.platform} profileUrl={account.profileUrl}/>{detailButton(account)}</div></article>)}
@@ -93,5 +94,5 @@ function AccountManagerContent({accounts,providers,workspaceId,token,canManage,l
       {actionError?<p role="alert" className="error">{actionError}</p>:null}
       {canManage?<div className="account-manager-detail-footer"><p className="muted">{t('解除绑定前会再次确认，不会删除平台上的内容。','Confirmation is required before disconnecting. Content on the platform is not deleted.')}</p><button className="button danger-button" type="button" disabled={removing} onClick={async()=>{if(removing)return;setRemoving(true);try{await onDisconnect(selected.id);}finally{setRemoving(false);}}}>{removing?t('处理中…','Working…'):selected.status==='disconnected'?t('删除记录','Delete record'):t('解除绑定','Disconnect')}</button></div>:null}
     </AccountDialog>:null}
-  </section>;
+  </section>{platform==='facebook'&&canManage?facebookTasks:null}</>;
 }

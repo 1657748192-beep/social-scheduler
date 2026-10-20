@@ -16,8 +16,18 @@ const panel=(overrides:any={})=><SocialAccountManager accounts={accounts} provid
 
 test('Facebook Page sync is separate from add and only enabled for configured manager access',async()=>{
  let started=0;const configured=providers.map(p=>({...p,configured:true}));
- await withFacebookUI(panel({providers:configured,onSyncFacebookPages:()=>{started++;}}),async({view,requests}:any)=>{const button=facebookButton(view,'同步公共主页');assert.ok(button);await act(async()=>button.props.onClick());assert.equal(started,1);assert.equal(requests.length,0);});
+ await withFacebookUI(panel({providers:configured,onSyncFacebookPages:()=>{started++;}}),async({view,requests}:any)=>{await act(async()=>facebookButton(view,'Facebook (1)').props.onClick());const button=facebookButton(view,'同步公共主页');assert.ok(button);await act(async()=>button.props.onClick());assert.equal(started,1);assert.equal(requests.length,0);});
  await withFacebookUI(panel({providers:configured,canManage:false,onSyncFacebookPages:()=>{started++;}}),async({view}:any)=>assert.equal(facebookButton(view,'同步公共主页'),undefined));
+});
+
+test('Facebook-specific toolbar actions are absent on all and every other platform',async()=>{
+ const configured=providers.map(p=>({...p,configured:true}));
+ await withFacebookUI(panel({providers:configured,onSyncFacebookPages:()=>{},onShareFacebookPages:()=>{}}),async({view,requests}:any)=>{
+  const hidden=()=>{assert.ok(!facebookButton(view,'同步公共主页'));assert.ok(!facebookButton(view,'分享链接导入主页'));assert.ok(facebookButton(view,'添加账号'));};
+  hidden();await act(async()=>facebookButton(view,'Facebook (1)').props.onClick());assert.ok(facebookButton(view,'同步公共主页'));assert.ok(facebookButton(view,'分享链接导入主页'));
+  for(const label of ['Instagram (1)','YouTube (0)','TikTok (1)','Pinterest (0)','全部 (3)']){await act(async()=>facebookButton(view,label).props.onClick());hidden();}
+  assert.equal(requests.length,0);
+ });
 });
 
 test('platform picker explains each supported account type before any authorization',async()=>{
@@ -108,14 +118,29 @@ test('ordinary owner sees no trial share import entry and never requests trial d
 
 test('platform administrator retains trial share import controls without starting OAuth',async()=>{
  await withAccountPage(async({view,requests}:any)=>{
-  assert.ok(facebookButton(view,'分享链接导入主页'));assert.equal(requests.filter((r:any)=>r.path.includes('facebook-page-import-invitations')).length,1);
+  assert.ok(!facebookButton(view,'分享链接导入主页'));assert.doesNotMatch(facebookText(view),/分享导入任务/);assert.equal(requests.filter((r:any)=>r.path.includes('facebook-page-import-invitations')).length,0);
+  await act(async()=>facebookButton(view,'Facebook (0)').props.onClick());assert.ok(facebookButton(view,'分享链接导入主页'));assert.match(facebookText(view),/分享导入任务/);assert.equal(requests.filter((r:any)=>r.path.includes('facebook-page-import-invitations')).length,1);
+  for(const label of ['Instagram (1)','全部 (1)']){await act(async()=>facebookButton(view,label).props.onClick());assert.ok(!facebookButton(view,'同步公共主页'));assert.ok(!facebookButton(view,'分享链接导入主页'));assert.doesNotMatch(facebookText(view),/分享导入任务/);}
+  assert.equal(requests.filter((r:any)=>r.path.includes('facebook-page-import-invitations')).length,1);
+  await act(async()=>facebookButton(view,'Facebook (0)').props.onClick());assert.equal(requests.filter((r:any)=>r.path.includes('facebook-page-import-invitations')).length,2);
   await act(async()=>facebookButton(view,'分享链接导入主页').props.onClick());assert.ok(facebookButton(view,'确认生成链接'));
+  assert.equal(requests.filter((r:any)=>r.method==='POST').length,0);
+ },url=>url.pathname.endsWith('/social-accounts')?Response.json([accounts[0]]):url.pathname.endsWith('/facebook-page-import-invitations')?Response.json({items:[],nextCursor:null}):undefined,providers.map(p=>({...p,configured:true})),true);
+});
+
+test('administrator choosing shared Page import from the Facebook binding dialog switches to Facebook first',async()=>{
+ await withAccountPage(async({view,requests}:any)=>{
+  await act(async()=>facebookButton(view,'添加账号').props.onClick());
+  const picker=view.root.findByProps({role:'dialog'});await act(async()=>picker.findAllByType('button').find((b:any)=>b.props.children.includes('Facebook')).props.onClick());
+  await act(async()=>facebookButton(view,'创建导入邀请').props.onClick());
+  assert.ok(facebookButton(view,'确认生成链接'));assert.equal(facebookButton(view,'Facebook (0)').props['aria-pressed'],true);
   assert.equal(requests.filter((r:any)=>r.method==='POST').length,0);
  },url=>url.pathname.endsWith('/social-accounts')?Response.json([accounts[0]]):url.pathname.endsWith('/facebook-page-import-invitations')?Response.json({items:[],nextCursor:null}):undefined,providers.map(p=>({...p,configured:true})),true);
 });
 
 test('real social account page opens a separate sync dialog without starting OAuth or changing bindings',async()=>{
  await withAccountPage(async({view,requests}:any)=>{
+  await act(async()=>facebookButton(view,'Facebook (0)').props.onClick());
   await act(async()=>facebookButton(view,'同步公共主页').props.onClick());
   assert.match(facebookText(view),/仅导入新增主页/);assert.ok(facebookButton(view,'前往 Facebook 授权'));
   assert.equal(requests.filter((r:any)=>r.method==='POST'||r.method==='DELETE').length,0);
