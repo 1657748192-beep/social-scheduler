@@ -31,8 +31,21 @@
 - 第一次完整回归1055项：1054通过、1失败，为上述新增插值回归；该失败已修复，不能把这次运行称作全绿。最终完整回归独立重跑 **1056/1056通过、0失败、0跳过**，退出码0，658309ms；包括新增预检用户权限边界用例，未把分次数字拼成全量结果。
 - API构建、网页类型检查和网页生产构建已通过；生产依赖审计0漏洞。原有Next多锁文件提示与React测试弃用提示未掩盖。
 
-当前尚未推送或部署。本文件将在实际验证后补充准确版本、执行结果和线上保护证据。
+实现及部署版本：`0122a60d30449bd9144f8003e6b6d46f9a9ba6b4`，已推送既有分支 `codex/tiktok-sandbox-metrics` 并部署 API／网页。
 
 最终完整日志：`C:/Users/Administrator/AppData/Local/SocialSchedulerTools/timezone-capacity-final-tests-20261020.log`。完整规则包生成器离线 `--check` 再次通过，2026e摘要及全部344地区／253别名保持不变。Worker和Prisma目录相对原线上API版本无差异。
 
 只读复查 `inv-ia56rfgbsa`（UTC09:39:43–09:39:47）成功：MemAvailable2354204KiB，磁盘可用9968616KiB，Redis used_memory7946608字节、maxmemory0、noeviction。API／网页仍为原版本，Worker容器ID及2026-10-13启动时间未变，健康接口数据库及Redis正常。此处未构建镜像或改变运行服务。
+
+## 腾讯云实际部署结果
+
+- 镜像准备 `inv-ja57120pj2`，UTC09:47:49–09:51:33，成功退出0。新 API 镜像以非特权UID、只读文件系统和只读探针运行，实际返回 `VERIFIED_IMAGE_CAPACITY_OK`，随后确认API／网页镜像准备就绪，所有运行容器尚未切换。
+- 激活 `inv-ha5757g2r3`，UTC09:52:16–09:52:26，成功退出0。只执行API／网页的 `up --no-deps --no-build`；没有运行默认镜像里的Prisma迁移命令。切换中的健康重试遇到一次短暂502，随后API／数据库／Redis健康恢复，非持续故障。
+- 实际新API内 `capacity=true`，内置规则 `2026e`，自动检查 `state=ok`、`activeVersion=2026e`、`upstreamVersion=2026e`，不是仅凭静态预检放行。
+- API和网页镜像revision均匹配完整目标SHA；公开网页构建清单与新容器文件逐字相同，定时编辑页HTTP200，未登录规则manifest返回401。
+- API／网页完整运行环境、原挂载、环境文件校验值相同；Worker／Postgres／Redis／代理容器ID、镜像、启动时间完全相同。Worker保持 `3cbc3bed81805673ee7a949da9fcefefecc3619761d68e5eb25da50344f97e5e`，自2026-10-13T06:01:58.401954871Z未重启。
+- 10类保护数据前后完整内容HMAC比较通过：用户、工作区、会员、社媒账号、OAuth发布凭据、TikTok沙盒凭据、帖子、变体、排程、发布任务。未创建测试帖子或排程，未调用真实发布接口。
+- 未调整Redis配置或重启Redis，未申请权限或变更凭据，未创建实例／存储桶／付费加速。构建及JSON检查使用已有主机、磁盘和网络额度；没有新增收费资源，不将此表述为账单逐项审计。
+- 最终只读复查 `inv-ga576hg7e8`（UTC09:53:39–09:53:43）再次成功。API／网页均为目标revision；Worker／Redis／Postgres／代理仍为原容器和启动时间。MemAvailable2372524KiB（约2.26GiB），磁盘可用9535664KiB（约9.09GiB）；Redis maxmemory仍0、noeviction，健康接口API／数据库／Redis正常。
+
+服务器release：`/opt/social-scheduler-releases/timezone-0122a60d30449bd9144f8003e6b6d46f9a9ba6b4`。其中`images.yml`为当前完整私有运行覆盖配置，后续部署须继续保留必要的只读探针，不应直接使用旧base compose覆盖掉这些挂载；Redis重启后需重新核验运行标识和cgroup路径。`rollback.yml`保留原镜像与原环境且不挂载探针，任何必要回滚仍仅操作API／网页，不恢复数据库或重启Worker。没有删除旧镜像、release、日志或本机用户已有文件。

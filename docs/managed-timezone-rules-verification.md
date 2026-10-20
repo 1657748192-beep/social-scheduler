@@ -1,6 +1,6 @@
 # 内置时区规则与自动更新验证
 
-状态：本地实现和验证完成，保留分支；未推送、未部署，没有重启 API 或 Worker，没有操作腾讯云或真实社媒发布。自动更新是否能在线启用仍需部署前只读核查既有 Redis 容量，不能用本地结果代替线上结论。
+后续状态（2026-10-20）：经用户额外批准修正只读余量检测后，已将 `0122a60d30449bd9144f8003e6b6d46f9a9ba6b4` 部署到腾讯云API／网页；实际余量检测和2026e上游检查正常，Worker／现有排程／权限／凭据未变。详见 `docs/timezone-capacity-deployment-verification.md`。下文保留原本地实施阶段的证据与当时限制，不以旧“未部署”记录覆盖后续实际结果。
 
 设计：`docs/superpowers/specs/2026-10-20-managed-timezone-rules-design.md`；计划：`docs/superpowers/plans/2026-10-20-managed-timezone-rules.md`。本功能替代旧浏览器偏移探针，不替换 UTC 排程执行机制。
 
