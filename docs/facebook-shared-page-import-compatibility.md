@@ -55,3 +55,15 @@ blockers：口令类型与当前发现策略未证明兼容；business_managemen
 - 浏览器软件会话过期后，使用浏览器已自动填入的信息完成一次普通登录（未读取／保存密码）；管理员社交账号页显示分享导入按钮与空任务列表，没有读取错误。仅打开说明弹窗，未点“确认生成链接”，未创建真实邀请、进行 Meta 授权、导入主页、发帖或排程。截图 `output/playwright/facebook-page-import-trial-deployed.png`，内置浏览器 tab 11 保留供后续操作。
 
 服务端留证及回退目录：`/opt/social-scheduler-releases/meta-inbox-5332ca69e8842e8a104a647cda2b75434904187c`。`images.yml`、`rollback.yml`、`api-environment-before.json` 包含同机已有环境，只保留在服务器权限受限目录，不复制到聊天或仓库。后续部署／回退应使用该目录的既有 override，不能运行一键部署或重写旧环境。真实 Facebook 外部账号授权及新增主页导入仍待用户亲自验证；`liveAuthorizationReady=false` 未改，普通客户入口保持关闭，不能将本次部署成功等同于真实非应用角色授权通过。
+
+### 空主页与读取失败状态修复部署（2026-10-20，北京时间）
+
+- 用户批准仅部署 API／网页，不重启 Worker，不新增费用。部署产品提交 `9b2c48e9f7cc409fa8fae4c5e007325f5e5ee0d4`，未包含工作区其他未提交文档改动。
+- 空目录通过原身份／权限校验后保存授权候选，显示暂无可新增主页；全部已绑定单独提示无需重复导入；Graph 发现失败仅保存固定失败标记，不暴露 provider 原始错误。不会推断旧失败邀请已经授权或直接改写其结果。
+- 新增回归测试先失败后修复，包括列表摘要遇到并发完成删除候选的 410。首次全量 995 项中该新增竞态测试失败，修复后针对性 15/15；最终完整 npm test 为 995/995、失败／取消／跳过为 0、497846 ms、退出码 0，日志 `page-import-empty-full-final.log`。API／网页生产构建通过；部署前再次针对性 15/15（`page-import-deploy-focused.log`）。
+- 只读预检 `inv-ga50cg0vp4` 退出 0。准备 `inv-ja50d7gb5n` 于 14:03:20 完成，确认目标全部迁移已执行，本次没有新迁移、环境改写或现有服务切换。
+- 激活 `inv-ja50f3grpi` 于 14:04:02 成功退出 0，只重建 API／网页。启动期间两次暂时 502 后健康检查恢复，无回退。API／网页 revision 均匹配产品提交；`COMPLETE_API_ENVIRONMENT_UNCHANGED`，实际完整 API 环境逐项相同，两个原环境文件摘要相同。
+- 激活短窗口内 SocialAccount、OauthCredential、TikTokSandboxCredential、Post、PostVariant、Schedule、PublishJob 完整 HMAC 摘要相同。Worker、Postgres、Redis、reverse-proxy 的容器 ID、镜像和启动时间相同；Worker 仍从 `2026-10-13T06:01:58.401954871Z` 运行。
+- 普通工作区管理者仍被独立导入访问校验拒绝，匿名私有接口 401，缺有效 Origin 的公开 exchange 403，公开页安全响应头及 manifest 验证通过。
+- 最终只读核验 `inv-ia50fm0fxb` 于 14:04:28 成功退出 0：含三种新状态的实际公网 JavaScript chunk 与容器字节一致，health 为 database ok／Redis PONG，保护容器未变化。未发起 Meta 授权、导入真实主页、发帖或改排程；真实空列表授权仍需对方下一次受控授权验证。
+- 新留证／回退目录 `/opt/social-scheduler-releases/meta-inbox-9b2c48e9f7cc409fa8fae4c5e007325f5e5ee0d4`，完整原环境及回退镜像只在同机私有目录保留；不恢复旧数据、不重启 Worker、不创建云资源或收费服务。普通客户入口仍关闭，`liveAuthorizationReady=false` 不变。
