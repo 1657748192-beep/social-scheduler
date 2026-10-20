@@ -52,10 +52,10 @@ function ScheduleDetailEditor({
     }
 
     setText(schedule.postVariant.text);
-    setTime(createScheduleTimeState(schedule.scheduledAt,schedule.timezone));
+    setTime(createScheduleTimeState(schedule.scheduledAt,schedule.timezone,ruleSession.rules));
     setFeedback(null);
     setFormError(null);
-  }, [schedule?.id, schedule?.postVariant.text, schedule?.scheduledAt, schedule?.timezone]);
+  }, [schedule?.id, schedule?.postVariant.text, schedule?.scheduledAt, schedule?.timezone,ruleSession.rules]);
 
   if (!schedule) {
     return null;

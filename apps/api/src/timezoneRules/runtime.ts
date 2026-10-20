@@ -10,10 +10,10 @@ export function knownRuleZone(id:string){return activeIds.canonicalZone(id)!==nu
 export function createRulesRuntime({store,source,close=async()=>{}}:{store:Store;source:(signal:AbortSignal)=>Promise<{ianaVersion:string;bundle:RuleBundle|null}>;close?:()=>Promise<void>}){
  let timer:ReturnType<typeof setTimeout>|undefined,running:Promise<void>|undefined,controller:AbortController|undefined,started=false,stopped=false,retries=0;
  let cached:RuleBundle=baselineBundle,lastRead=0;
- async function getBundle(version?:string):Promise<RuleBundle>{
+ async function getBundle(version?:string,force=false):Promise<RuleBundle>{
   if(version===baselineBundle.tzdbVersion)return baselineBundle;
   if(version){const b=await store.readVersion(version);if(!b)throw Error('rules-not-found');return b;}
-  if(Date.now()-lastRead<60000)return cached;
+  if(!force&&Date.now()-lastRead<60000)return cached;
   try{const b=await store.readActive();if(b){activeIds=createRuleSnapshot(b);cached=b;}else{cached=baselineBundle;activeIds=createRuleSnapshot(baselineBundle);}lastRead=Date.now();}catch{/* cached or bundled data remains usable */}
   return cached;
  }
@@ -27,9 +27,16 @@ export function createRulesRuntime({store,source,close=async()=>{}}:{store:Store
    if(status.state==='failed'&&retries<2)schedule([5*60000,30*60000][retries++]);else{retries=0;schedule(24*3600000);}
   })();
  }
- return {getBundle,getStatus:()=>store.status(),start(){if(!started&&!stopped){started=true;run();}},async stop(){stopped=true;clearTimeout(timer);controller?.abort();await running;await close();}};
+ return {getBundle,refreshBundle:()=>getBundle(undefined,true),getStatus:()=>store.status(),start(){if(!started&&!stopped){started=true;run();}},async stop(){stopped=true;clearTimeout(timer);controller?.abort();await running;await close();}};
 }
 export type RulesRuntime=ReturnType<typeof createRulesRuntime>;
+let refreshing:Promise<unknown>|undefined;
+export async function refreshUnknownRuleZone(value:unknown,runtime?:RulesRuntime){
+ if(typeof value!=='string'||value.length>80||!/^\w+(?:\/[A-Za-z0-9_+.-]+)+$/.test(value)||knownRuleZone(value))return;
+ // Coalesce unknown-ID checks; refresh only verified cache data, never fetch upstream on a write request.
+ refreshing??=(runtime??getRulesRuntime()).refreshBundle().finally(()=>{refreshing=undefined;});
+ await refreshing;
+}
 let defaultRuntime:RulesRuntime|undefined;
 export function getRulesRuntime():RulesRuntime{
  if(!defaultRuntime){

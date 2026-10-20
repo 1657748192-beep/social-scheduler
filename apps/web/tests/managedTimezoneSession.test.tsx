@@ -5,7 +5,9 @@ import {withFacebookUI,facebookWorkspaces,facebookButton} from './helpers/facebo
 import {ComposerForm} from '../components/composer/ComposerForm';
 import {getBaseline,baselineBundle} from '@social-scheduler/timezone-rules';
 import {useScheduleRuleSession} from '../components/scheduling/useScheduleRuleSession';
-import {resolveLocalTime,formatScheduleTimes} from '../lib/scheduleTimeZone';
+import {resolveLocalTime,formatScheduleTimes,createScheduleTimeState,editScheduleLocal,getScheduleSubmission} from '../lib/scheduleTimeZone';
+import {SchedulePicker} from '../components/composer/SchedulePicker';
+import {ScheduleDetailPanel} from '../components/calendar/ScheduleDetailPanel';
 import {detectComputerZone} from '../lib/timezoneRulesClient';
 test('computer zone detection uses identities only and falls back safely',()=>{
  const rules=getBaseline();assert.equal(detectComputerZone(rules,()=> 'America/New_York'),'America/New_York');assert.equal(detectComputerZone(rules,()=> 'Asia/Shanghai'),'Asia/Shanghai');assert.equal(detectComputerZone(rules,()=>{throw Error('no Intl');}),'Asia/Shanghai');
@@ -14,14 +16,27 @@ test('computer zone detection uses identities only and falls back safely',()=>{
 test('late rule updates freeze a touched form and are picked up by the next new session',async()=>{
  const b=structuredClone(baselineBundle);b.tzdbVersion=b.data.version='2026f';const raw=Buffer.from(JSON.stringify(b.data));b.sourceBytes=raw.toString('base64');b.sha256=createHash('sha256').update(raw).digest('hex');
  let release!:(r:Response)=>void;const pending=new Promise<Response>(r=>release=r);
- function Harness(){const [dirty,touch]=useState(false),[key,reopen]=useState(0);const s=useScheduleRuleSession({token:'late-version-test',workspaceId:'w',sessionKey:String(key),dirty});return <><output data-version={s.rules.version} data-ready={s.ready} data-notice={s.updateAvailable}/><button onClick={()=>touch(true)}>touch</button><button onClick={()=>{touch(false);reopen(n=>n+1);}}>reopen</button></>;}
+ function Harness(){const [dirty,touch]=useState(false),[key,reopen]=useState(0),[time,setTime]=useState(()=>editScheduleLocal(createScheduleTimeState(undefined,'America/New_York'),'2099-11-01T01:30'));const s=useScheduleRuleSession({token:'late-version-test',workspaceId:'w',sessionKey:String(key),dirty,existingZone:'America/New_York'});return <><output data-version={s.rules.version} data-ready={s.ready} data-notice={s.updateAvailable} data-instant={getScheduleSubmission(time,0,s.rules).kind==='scheduled'?time.instant:null}/><SchedulePicker token="late-version-test" workspaceId="w" value={time} rules={s.rules} onChange={v=>{touch(true);setTime(v);}}/><button onClick={()=>{touch(false);reopen(n=>n+1);}}>reopen</button></>;}
  await withFacebookUI(<Harness/>,async({view}:any)=>{
-  await act(async()=>view.root.findAllByType('button')[0].props.onClick());
+  await act(async()=>view.root.findAllByProps({type:'radio'})[1].props.onChange());
   await act(async()=>{release(Response.json({version:b.tzdbVersion,digest:b.sha256,schemaVersion:1,engineCompatibility:1}));await new Promise(r=>setImmediate(r));});
   assert.equal(view.root.findByType('output').props['data-version'],'2026e');assert.equal(view.root.findByType('output').props['data-notice'],true);
-  await act(async()=>view.root.findAllByType('button')[1].props.onClick());
+  assert.equal(view.root.findByType('output').props['data-instant'],'2099-11-01T06:30:00.000Z');
+  await act(async()=>facebookButton(view,'reopen').props.onClick());
   assert.equal(view.root.findByType('output').props['data-version'],'2026f');
  },url=>url.pathname.endsWith('/manifest')?pending:url.pathname.includes('/timezone-rules/data/')?Response.json(b):undefined);
+});
+
+test('text-save prop refresh retains the locked rules and exact original instant',async()=>{
+ const b=structuredClone(baselineBundle);b.tzdbVersion=b.data.version='2026f';b.data.zones.push('Test/Fixed|FIX|-20|0||');const bytes=Buffer.from(JSON.stringify(b.data));b.sourceBytes=bytes.toString('base64');b.sha256=createHash('sha256').update(bytes).digest('hex');
+ const original:any={id:'locked-schedule',workspaceId:'w1',postVariantId:'v1',scheduledAt:'2099-01-01T12:00:27.123Z',timezone:'Test/Fixed',status:'scheduled',postVariant:{id:'v1',platform:'facebook',text:'before',socialAccount:{id:'a1',displayName:'Page',platform:'facebook'},post:{id:'p1',baseText:'before'},media:[]},publishJobs:[]};
+ function Harness(){const [schedule,set]=useState(original);return <ScheduleDetailPanel schedule={schedule} onUpdated={set} token="locked-detail-test" workspaceId="w1" onClose={()=>{}} onDeleted={()=>{}}/>;}
+ await withFacebookUI(<Harness/>,async({view,requests}:any)=>{
+  await act(async()=>{await new Promise(r=>setImmediate(r));});
+  assert.equal(view.root.findByType(SchedulePicker).props.value.localValue,'2099-01-01T14:00');
+  await act(async()=>view.root.findByType('textarea').props.onChange({target:{value:'after'}}));await act(async()=>view.root.findByType('form').props.onSubmit({preventDefault(){}}));
+  assert.equal(view.root.findByType(SchedulePicker).props.value.localValue,'2099-01-01T14:00');assert.equal(view.root.findByType(SchedulePicker).props.value.instant,'2099-01-01T12:00:27.123Z');assert.equal(requests.find((r:any)=>r.method==='PATCH').body.timezone,undefined);
+ },(url,init)=>url.pathname.endsWith('/manifest')?Response.json({version:'2026f',digest:b.sha256,schemaVersion:1,engineCompatibility:1}):url.pathname.includes('/timezone-rules/data/')?Response.json(b):init?.method==='PATCH'?Response.json({...original,postVariant:{...original.postVariant,text:'after'}}):url.pathname.endsWith('/auth/me')?Response.json({id:'u1'}):undefined);
 });
 test('five formerly blocked zones now resolve through a supplied immutable snapshot',()=>{
  const result=resolveLocalTime('2099-11-05T20:00','America/Winnipeg',getBaseline());assert.equal(result.kind,'resolved');

@@ -1,5 +1,7 @@
 # 全球时区排程：本地实施与验证记录
 
+更新：用户随后批准统一内置规则和自动更新。原“浏览器旧规则导致5个地区不可用”的本地限制已由新实现解决；当前验证以 `docs/managed-timezone-rules-verification.md` 为准（完整回归1047/1047通过）。下文保留原阶段证据，不表示当前仍依赖浏览器偏移；仍未推送或部署。
+
 日期：2026-10-20。用户授权：当前会话逐项实施，验证后不部署。设计与计划分别见 `docs/superpowers/specs/2026-10-20-global-timezone-scheduling-design.md`、`docs/superpowers/plans/2026-10-20-global-timezone-scheduling.md`。
 
 ## 当前状态

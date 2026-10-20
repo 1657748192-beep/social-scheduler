@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {baselineBundle,type RuleBundle} from '@social-scheduler/timezone-rules';
 import {fetchCandidate} from '../src/timezoneRules/source';
-import {checkRulesOnce,type RuleStore,type RuleStatus} from '../src/timezoneRules/updater';
+import {checkRulesOnce,validateCandidate,type RuleStore,type RuleStatus} from '../src/timezoneRules/updater';
 function next(version='2026f'):RuleBundle{const b=structuredClone(baselineBundle);b.tzdbVersion=b.data.version=version;const bytes=Buffer.from(JSON.stringify(b.data));b.sourceBytes=bytes.toString('base64');b.sha256=createHash('sha256').update(bytes).digest('hex');return b;}
 function memory(){let active=baselineBundle,previous:RuleBundle|null=null,owner='',writes=0,status:RuleStatus={activeVersion:active.tzdbVersion,state:'baseline-only'};const store:RuleStore={readActive:async()=>active,tryLock:async key=>{if(owner)return false;owner=key;return true;},activate:async(key,b)=>{if(owner!==key)return false;previous=active;active=b;writes++;return true;},release:async key=>{if(owner===key)owner='';},record:async s=>{status=s;},status:async()=>status};return {store,get active(){return active;},get previous(){return previous;},get writes(){return writes;},expire:()=>{owner='another-owner';}};}
 test('validated upgrade is atomic, preserves previous, and never rewrites identical data',async()=>{
@@ -27,6 +27,21 @@ test('active version is reread under the owner lock before considering a downgra
  m.store.tryLock=async(owner,ttl)=>{const ok=await lock(owner,ttl);if(ok)await m.store.activate(owner,next('2026g'));return ok;};
  const result=await checkRulesOnce({store:m.store,source:async()=>({ianaVersion:'2026f',bundle:next('2026f')})});
  assert.equal(result.state,'failed');assert.equal(m.active.tzdbVersion,'2026g');
+});
+test('a valid digest cannot hide a truncated recurring table or a same-version conflict',()=>{
+ const b=next();const m=require('moment-timezone/moment-timezone-utils');
+ const index=b.data.zones.findIndex(z=>z.startsWith('America/New_York|')),zone=m.tz.unpack(b.data.zones[index]);
+ const end=zone.untils.findIndex((t:number)=>t>Date.parse('2027-03-15T00:00:00Z'));
+ zone.untils=zone.untils.slice(0,end+1);zone.untils[end]=Infinity;zone.offsets=zone.offsets.slice(0,end+1);zone.abbrs=zone.abbrs.slice(0,end+1);b.data.zones[index]=m.tz.pack(zone);
+ const bytes=Buffer.from(JSON.stringify(b.data));b.sourceBytes=bytes.toString('base64');b.sha256=createHash('sha256').update(bytes).digest('hex');
+ assert.throws(()=>validateCandidate(b,baselineBundle));
+ assert.throws(()=>validateCandidate(next('2026e'),baselineBundle));
+});
+test('historical anchors do not veto a complete future policy change in a permanent zone',()=>{
+ const b=next(),m=require('moment-timezone/moment-timezone-utils');
+ const index=b.data.zones.findIndex(z=>z.startsWith('America/Winnipeg|')),zone=m.tz.unpack(b.data.zones[index]);zone.offsets[zone.offsets.length-1]=360;b.data.zones[index]=m.tz.pack(zone);
+ const raw=Buffer.from(JSON.stringify(b.data));b.sourceBytes=raw.toString('base64');b.sha256=createHash('sha256').update(raw).digest('hex');
+ assert.doesNotThrow(()=>validateCandidate(b,baselineBundle));
 });
 test('fixed upstream source only reads bounded official JSON and refuses redirects or tag injection',async()=>{
  const seen:string[]=[];const sha='a'.repeat(40);

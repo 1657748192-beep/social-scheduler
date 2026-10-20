@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import {refreshUnknownRuleZone} from '../timezoneRules/runtime';
 import { z } from "zod";
 import { composerPlatformOrder } from "../config/platformLimits";
 import { prisma } from "../prisma";
@@ -25,6 +26,7 @@ const createDemoScheduleSchema = z.object({
 });
 
 export async function createScheduleController(req: Request, res: Response) {
+  await refreshUnknownRuleZone(req.body?.timezone);
   const body = createScheduleSchema.parse(req.body);
   const result = await createSchedule(req.user!.id, req.params.workspaceId, body);
   return res.status(201).json(result);
@@ -47,6 +49,7 @@ export async function getScheduleController(req: Request, res: Response) {
 }
 
 export async function rescheduleScheduleController(req: Request, res: Response) {
+  await refreshUnknownRuleZone(req.body?.timezone);
   const body = rescheduleSchema.parse(req.body);
   const schedule = await rescheduleSchedule(
     req.user!.id,

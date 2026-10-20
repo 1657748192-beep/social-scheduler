@@ -16,7 +16,9 @@ export async function cacheHeadroom(redis:Redis):Promise<boolean>{
 export function createRuleStore(redis:Redis,{prefix='timezone-rules:v1:',hasCapacity=()=>cacheHeadroom(redis)}:{prefix?:string;hasCapacity?:()=>Promise<boolean>}={}):RuleStore & {readVersion(version:string):Promise<RuleBundle|null>}{
  if(!/^timezone-rules:v1:(?:test-[a-z0-9-]+:)?$/.test(prefix))throw Error('Invalid rules namespace');
  const key=(part:string)=>prefix+part;
- async function read(part:string){try{const s=await redis.get(key(part));return s?validateBundle(JSON.parse(s)):null;}catch{return null;}}
+ let reconnect:Promise<unknown>|undefined;
+ async function ready(){if(redis.status==='end'){reconnect??=redis.connect().finally(()=>{reconnect=undefined;});await reconnect;}}
+ async function read(part:string){try{await ready();const s=await redis.get(key(part));return s?validateBundle(JSON.parse(s)):null;}catch{return null;}}
  return {
   readActive:()=>read('active'),
   async readVersion(version){for(const part of ['active','previous']){const bundle=await read(part);if(bundle?.tzdbVersion===version)return bundle;}return version===baselineBundle.tzdbVersion?baselineBundle:null;},

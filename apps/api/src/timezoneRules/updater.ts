@@ -1,15 +1,16 @@
 import {randomUUID} from 'node:crypto';
-import {baselineBundle,compareVersions,validateBundle,createRuleSnapshot,type RuleBundle} from '@social-scheduler/timezone-rules';
+import {baselineBundle,compareVersions,validateBundle,createRuleSnapshot,verifyCoverage,type RuleBundle} from '@social-scheduler/timezone-rules';
 export type RuleStatus={activeVersion:string;upstreamVersion?:string;lastCheckedAt?:number;state:'ok'|'pending-upstream'|'failed'|'baseline-only';errorCode?:string};
 export interface RuleStore{readActive():Promise<RuleBundle|null>;tryLock(owner:string,ttlMs:number):Promise<boolean>;activate(owner:string,bundle:RuleBundle):Promise<boolean>;release(owner:string):Promise<void>;record(status:RuleStatus):Promise<void>;status():Promise<RuleStatus>}
 export function validateCandidate(bundle:RuleBundle,active:RuleBundle){
  const b=validateBundle(bundle),rules=createRuleSnapshot(b),old=createRuleSnapshot(active);
+ verifyCoverage(b,active);
  if(compareVersions(b.tzdbVersion,active.tzdbVersion)<0||(b.tzdbVersion===active.tzdbVersion&&b.sha256!==active.sha256))throw Error('version-conflict');
  for(const packed of active.data.zones){if(!rules.canonicalZone(packed.split('|')[0]))throw Error('coverage');}
  for(const link of active.data.links){if(!rules.canonicalZone(link.split('|')[1]))throw Error('coverage');}
  // Stable historical anchors. Future policies may change; confirmed old instants must not silently drift.
  for(const id of ['Asia/Shanghai','America/New_York','Asia/Kathmandu','America/Winnipeg','America/Edmonton','America/Inuvik','Africa/Casablanca','Africa/El_Aaiun']){
-  for(const instant of ['2020-01-01T12:00:00Z','2026-11-06T12:00:00Z'])if(rules.offsetAt(id,Date.parse(instant))!==old.offsetAt(id,Date.parse(instant)))throw Error('anchor-changed');
+  for(const instant of ['2020-01-01T12:00:00Z','2026-10-01T12:00:00Z'])if(rules.offsetAt(id,Date.parse(instant))!==old.offsetAt(id,Date.parse(instant)))throw Error('anchor-changed');
  }
  return b;
 }

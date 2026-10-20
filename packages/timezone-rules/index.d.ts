@@ -9,3 +9,4 @@ export function validateBundle(input:unknown):RuleBundle;
 export function createRuleSnapshot(bundle:RuleBundle):RuleSnapshot;
 export function getBaseline():RuleSnapshot;
 export function compareVersions(a:string,b:string):number;
+export function verifyCoverage(candidate:RuleBundle,previous?:RuleBundle):void;

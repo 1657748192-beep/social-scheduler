@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import {refreshUnknownRuleZone} from '../timezoneRules/runtime';
 import {
   completeCosMediaUploadIntent,
   completeCosMediaUploadSchema,
@@ -48,6 +49,7 @@ export async function listWorkspaceMediaController(req: Request, res: Response) 
 }
 
 export async function createComposerPostController(req: Request, res: Response) {
+  await refreshUnknownRuleZone(req.body?.timezone);
   const body = createComposerPostSchema.parse(req.body);
   const post = await createComposerPost(req.user!.id, req.params.workspaceId, body);
   return res.status(201).json(post);

@@ -27,8 +27,8 @@ function indexData(data){
   if(z.offsets.some(n=>!Number.isFinite(n)||Math.abs(n)>1440))fail();
   for(let i=0;i<z.untils.length;i++)if(i===z.untils.length-1?z.untils[i]!==Infinity:!Number.isFinite(z.untils[i])||(i>0&&z.untils[i]<=z.untils[i-1]))fail();
   // An unexpanded recurring tail is not a permanent offset. Stop at its last finite transition.
-  const recurring=z.offsets.length>2&&new Date(z.untils.at(-2)).getUTCFullYear()>=2400;
-  zones.set(z.name,{...z,end:recurring?Math.min(MAX_TIME,z.untils.at(-2)):MAX_TIME});
+  const permanent=z.untils.length===1||baselinePermanent.has(z.name);
+  zones.set(z.name,{...z,end:permanent?MAX_TIME:Math.min(MAX_TIME,z.untils.at(-2))});
  }
  for(const link of data.links){
   if(typeof link!=='string')fail();const pair=link.split('|');
@@ -53,7 +53,9 @@ function validateBundle(input){
 }
 function parts(ms){const d=new Date(ms);return {year:d.getUTCFullYear(),month:d.getUTCMonth()+1,day:d.getUTCDate(),hour:d.getUTCHours(),minute:d.getUTCMinutes(),second:d.getUTCSeconds(),millisecond:d.getUTCMilliseconds()};}
 function createRuleSnapshot(input){
- const b=validateBundle(input),{zones,aliases,names}=indexData(b.data);
+ const b=validateBundle(input);
+ if(b.sha256!==baselineBundle.sha256)verifyCoverage(b,baselineBundle);
+ const {zones,aliases,names}=indexData(b.data);
  function canonicalZone(id){if(typeof id!=='string')return null;let name=names.get(id.toLowerCase());if(!name)return null;while(aliases.has(name))name=aliases.get(name);return name;}
  function offsetAt(id,ms){
   const name=canonicalZone(id),z=name&&zones.get(name);if(!z||!Number.isFinite(ms)||ms<MIN||ms>=z.end)throw Error('Unsupported timezone or date');
@@ -78,5 +80,16 @@ function createRuleSnapshot(input){
 }
 let baseline;
 const baselineBundle=require('./baseline.json');
+// Only the pinned baseline can establish a finite historical tail as permanent.
+const baselinePermanent=new Set(baselineBundle.data.zones.filter(p=>{const z=tz.unpack(p);return z.untils.length===1||new Date(z.untils.at(-2)).getUTCFullYear()<2400;}).map(p=>p.split('|')[0]));
+function verifyCoverage(candidate,previous=baselineBundle){
+ const next=indexData(candidate.data),old=indexData(previous.data);
+ for(const [id,z]of old.zones){
+  let name=next.names.get(id.toLowerCase());while(next.aliases.has(name))name=next.aliases.get(name);
+  const replacement=next.zones.get(name);if(!replacement)fail();
+  const last=z.untils.at(-2),newLast=replacement.untils.at(-2);
+  if(Number.isFinite(last)&&last>=Date.UTC(2400,0,1)&&(!Number.isFinite(newLast)||newLast<last))fail();
+ }
+}
 function getBaseline(){return baseline??=(createRuleSnapshot(baselineBundle));}
-module.exports={InvalidRulesError,compareVersions,validateBundle,createRuleSnapshot,getBaseline,baselineBundle};
+module.exports={InvalidRulesError,compareVersions,validateBundle,createRuleSnapshot,getBaseline,baselineBundle,verifyCoverage};

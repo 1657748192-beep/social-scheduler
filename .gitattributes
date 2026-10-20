@@ -6,3 +6,6 @@
 *.json text
 *.yml text
 *.yaml text
+packages/timezone-rules/baseline.json text eol=lf
+packages/timezone-rules/sources.json text eol=lf
+packages/timezone-rules/LICENSES.txt text eol=lf

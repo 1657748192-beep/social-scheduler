@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import jwt from 'jsonwebtoken';
 import {fork} from 'node:child_process';
-import {randomUUID} from 'node:crypto';
+import {randomUUID,createHash} from 'node:crypto';
+import {baselineBundle} from '@social-scheduler/timezone-rules';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {Queue} from 'bullmq';
@@ -30,6 +31,15 @@ test('real scheduling HTTP persists selected zones and protects old instants, cr
   const base=`http://127.0.0.1:${port}/api/v1/workspaces/${workspaceId}`;
   const call=(route:string,method='GET',body?:unknown)=>fetch(base+route,{method,headers,...(body?{body:JSON.stringify(body)}:{})});
   const input={baseText:'local test only',scheduledAt:'2099-10-21T00:00:00.000Z',variants:[f.accounts[0],second].map(a=>({socialAccountId:a.id,platform:'facebook',text:'local test only',mediaAssetIds:[],platformPayload:{}}))};
+  // Simulate instance B holding a cached old directory while instance A has activated a new alias.
+  const rulesKey='timezone-rules:v1:active',rulesRedis=await queue.client,previousRules=await rulesRedis.get(rulesKey);
+  await fetch(`http://127.0.0.1:${port}/api/v1/timezone-rules/manifest`,{headers});
+  try{
+   const b=structuredClone(baselineBundle);b.tzdbVersion=b.data.version='2026f';b.data.links.push('Asia/Shanghai|Test/New_Page_Zone');const raw=Buffer.from(JSON.stringify(b.data));b.sourceBytes=raw.toString('base64');b.sha256=createHash('sha256').update(raw).digest('hex');
+   await rulesRedis.set(rulesKey,JSON.stringify(b));
+   const aliasResponse=await call('/composer/posts','POST',{...input,timezone:'Test/New_Page_Zone'});assert.equal(aliasResponse.status,201);
+   const aliasPost:any=await aliasResponse.json();assert.equal(aliasPost.variants[0].schedules[0].timezone,'Test/New_Page_Zone');assert.equal(aliasPost.variants[0].schedules[0].scheduledAt,input.scheduledAt);
+  }finally{if(previousRules===null)await rulesRedis.del(rulesKey);else await rulesRedis.set(rulesKey,previousRules);}
   const created=await call('/composer/posts','POST',{...input,timezone:'America/New_York'});assert.equal(created.status,201);
   const post:any=await created.json();
   for(const variant of post.variants){assert.equal(variant.schedules[0].scheduledAt,input.scheduledAt);assert.equal(variant.schedules[0].timezone,'America/New_York');}
@@ -83,7 +93,7 @@ test('real scheduling HTTP persists selected zones and protects old instants, cr
     assert.equal(requests.find((r:any)=>r.method==='POST').body.scheduledAt,'2099-11-06T01:00:00.000Z');
   },transport);
   const e2e=await f.db.post.findFirstOrThrow({where:{workspaceId,baseText:text},include:{variants:{include:{schedules:{include:{publishJobs:true}}}}}});
-  assert.equal(e2e.variants.length,2);for(const v of e2e.variants){assert.equal(v.schedules[0].timezone,'America/Winnipeg');assert.equal(v.schedules[0].scheduledAt.toISOString(),'2099-11-06T01:00:00.000Z');assert.ok(await queue.getJob(v.schedules[0].publishJobs[0].id));}
+  assert.equal(e2e.variants.length,2);for(const v of e2e.variants){assert.equal(v.schedules[0].timezone,'America/Winnipeg');assert.equal(v.schedules[0].scheduledAt.toISOString(),'2099-11-06T01:00:00.000Z');const queued=await queue.getJob(v.schedules[0].publishJobs[0].id);assert.ok(queued);assert.ok(Math.abs(queued.timestamp+queued.delay-v.schedules[0].scheduledAt.getTime())<5000,'queue wake-up must match canonical UTC within enqueue latency');}
   const e2eScheduleId=e2e.variants[0].schedules[0].id, original=await f.db.schedule.findUniqueOrThrow({where:{id:e2eScheduleId}});
   const detail:any=await(await call('/schedules/'+e2eScheduleId)).json();
   await withFacebookUI(React.createElement(ScheduleDetailPanel,{schedule:detail,token:softwareToken,workspaceId,onClose(){},onDeleted(){},onUpdated(){}}),async({view,requests}:any)=>{
