@@ -76,3 +76,13 @@ blockers：口令类型与当前发现策略未证明兼容；business_managemen
 - 公网含折叠逻辑的 JavaScript chunk 与新镜像字节一致；网页 revision 为产品提交，API 仍为 `9b2c48e9f7cc409fa8fae4c5e007325f5e5ee0d4`。API、Worker、Postgres、Redis、reverse-proxy 的容器 ID／镜像／启动时间均未变，两个环境文件摘要相同，短部署窗口内七类受保护发布数据 HMAC 摘要相同。
 - 真实已登录管理员页面刷新后显示“暂无待处理任务”和默认收起的“历史记录（2）”。只点击展开／收起，核实已完成、已撤销记录以及“新增 0 个主页，跳过 0 个已有主页”摘要，最终恢复收起。未生成邀请、授权、导入、发帖或排程。截图 `output/playwright/facebook-page-history-collapsed-deployed.png`；浏览器现有 tab 11 保持该页面。
 - 私有留证／仅网页回退目录 `/opt/social-scheduler-releases/meta-inbox-fcc8b0ace9a9bb3b5ee9742e593c34ae5bc65d59`。未新增云资源／收费服务，不重启 API 或 Worker，不恢复旧数据。既有管理员限制及真实外部授权 readiness 判定均保持不变。
+
+### Facebook 筛选限定：仅网页部署（2026-10-20，北京时间）
+
+- 用户批准两个主页按钮与分享导入任务仅在 Facebook 筛选显示；全部及其他平台隐藏，保留原管理员限制。产品提交 `a0530a8dc69f773f05f9ee29d4ddbb1090bfff22` 仅改网页账号组件、页面接线及测试。
+- 任务组件由账号管理的同一筛选控制挂载，非 Facebook 时不加载邀请任务；原 platform-admin／workspace-manager／会话／配置条件不变。绑定弹窗原“创建导入邀请”路径会先选中 Facebook，再打开邀请窗口；不会自动生成链接或发起 OAuth。
+- 两个错误展示用例及绑定弹窗入口回归先失败后修复。针对性 26/26；完整 npm test 为 1000/1000、失败／取消／跳过为 0、615273 ms、退出码 0（`facebook-platform-visibility-full.log`）；网页生产构建退出 0。只读复核无重要问题；切换平台时卸载旧任务、返回 Facebook 重新读取为预期行为，原同步弹窗恢复机制保持不变。
+- 只读预检 `inv-ja51ctgs42` 退出 0；准备 `inv-ia51n1ggsv` 于 14:46:11 完成；激活 `inv-ga51p0gxkq` 于 14:46:33 退出 0，仅重建网页。一次短暂 502 后页面恢复，无回退。公网含新筛选接线的 JS chunk 与镜像字节相同，完整网页环境未变。
+- API 保持 `9b2c48e9f7cc409fa8fae4c5e007325f5e5ee0d4`。API、Worker、Postgres、Redis、reverse-proxy 容器 ID／镜像／启动时间未变；原两个环境文件摘要及切换短窗口内七类发布数据 HMAC 摘要相同。无迁移、授权、凭据、排程或收费资源修改。
+- 原 tab 11 已关闭，故在同一内置浏览器新建后台验收 tab 12，复用既有管理员登录。真实 UI 确认全部隐藏两个按钮／任务；选择 Facebook 后显示按钮与默认收起的历史；切换 Instagram 后全部隐藏而添加账号仍可用。只做筛选切换，不生成链接或改绑定。截图 `output/playwright/facebook-filter-selected-deployed.png` 与 `output/playwright/instagram-filter-facebook-tools-hidden-deployed.png`，tab 12 保留为交付页面。
+- 留证／仅网页回退目录 `/opt/social-scheduler-releases/meta-inbox-a0530a8dc69f773f05f9ee29d4ddbb1090bfff22`；不重启 API／Worker，不恢复旧数据，原权限与 readiness 判定均不变。
