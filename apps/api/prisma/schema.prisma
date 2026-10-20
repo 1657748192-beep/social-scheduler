@@ -1326,3 +1326,37 @@ model MetaInboxGrantFence {
   createdAt DateTime @default(now())
   @@unique([platform,appId,subjectHash],map:"meta_inbox_grant_fence_subject")
 }
+
+model FacebookPageImportInvitation {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @db.Uuid
+  createdById String @db.Uuid
+  note String @default("")
+  secretHash String @unique
+  status String @default("awaiting_authorization")
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  authorizedAt DateTime?
+  candidateExpiresAt DateTime?
+  terminalAt DateTime?
+  retentionExpiresAt DateTime?
+  appId String
+  authorizerSubjectHash String?
+  authorizationStartedAt DateTime?
+  selectionHash String?
+  selectedPageIds Json?
+  result Json?
+  diagnosticId String?
+  revokedAt DateTime?
+  candidate FacebookPageImportCandidate?
+  @@index([workspaceId,createdById,createdAt,id],map:"fb_import_owner_list")
+  @@index([status,expiresAt,candidateExpiresAt],map:"fb_import_expiry")
+  @@index([appId,authorizerSubjectHash],map:"fb_import_subject")
+}
+
+model FacebookPageImportCandidate {
+  invitationId String @id @db.Uuid
+  encryptedEnvelope String
+  invitation FacebookPageImportInvitation @relation(fields:[invitationId],references:[id],onDelete:Cascade)
+}
