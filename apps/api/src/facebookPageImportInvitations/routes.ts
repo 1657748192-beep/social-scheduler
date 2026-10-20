@@ -1,6 +1,7 @@
-import {Router,type Request,type RequestHandler,type ErrorRequestHandler} from 'express';import {z} from 'zod';
+import express,{Router,type Request,type RequestHandler,type ErrorRequestHandler} from 'express';import {z} from 'zod';
 import {requireAuth} from '../middleware/auth';import {HttpError} from '../utils/errors';
 import {digestSecret} from './repository';import {invitationFlowCookie} from './flows';import type {PageImportRuntime} from './runtime';import type {InvitationContext} from './types';
+export function publicInvitationBodyParser(){const router=Router();router.use(express.json({limit:'2kb'}));const sanitize:ErrorRequestHandler=(error,_req,res,_next)=>{res.setHeader('Cache-Control','no-store');res.setHeader('Referrer-Policy','no-referrer');res.status(error?.type==='entity.too.large'?413:400).json({message:'Authorization input unavailable'});};router.use(sanitize);return router;}
 export function createInvitationRouter(getRuntime:()=>PageImportRuntime,options:{webAppUrl:string;authenticate?:RequestHandler}){
  const router=Router(),auth=options.authenticate??requireAuth,origin=new URL(options.webAppUrl).origin,base='/workspaces/:workspaceId/facebook-page-import-invitations';
  const cookie=(req:Request)=>{const parts=(req.headers.cookie??'').split(';').map(p=>p.trim()).filter(p=>p.startsWith(invitationFlowCookie.name+'='));return parts.length===1?parts[0].slice(invitationFlowCookie.name.length+1):undefined;};
@@ -8,7 +9,9 @@ export function createInvitationRouter(getRuntime:()=>PageImportRuntime,options:
  const noStore:RequestHandler=(_req,res,next)=>{res.setHeader('Cache-Control','no-store');res.setHeader('Referrer-Policy','no-referrer');next();};
  router.use(base,noStore);router.use('/facebook-page-import-public',noStore);
  router.get('/integrations/:platform/oauth/callback',async(req,res,next)=>{
-  const state=typeof req.query.state==='string'?req.query.state:'';if(!state.startsWith('fbpi_'))return next();
+  const states=Array.isArray(req.query.state)?req.query.state:[req.query.state];
+  if(!states.some(value=>typeof value==='string'&&value.startsWith('fbpi_')))return next();
+  const state=typeof req.query.state==='string'?req.query.state:'';
   res.setHeader('Cache-Control','no-store');res.setHeader('Referrer-Policy','no-referrer');let result='unavailable';
   try{if(req.params.platform==='facebook')result=await getRuntime().oauth.completePublicFlow({state,code:typeof req.query.code==='string'?req.query.code:undefined,error:typeof req.query.error==='string'?req.query.error:undefined,flowCookie:cookie(req)});}catch{/* no provider parameters in response/log */}
   res.clearCookie(invitationFlowCookie.name,{path:invitationFlowCookie.path,httpOnly:true,secure:true,sameSite:'lax'});

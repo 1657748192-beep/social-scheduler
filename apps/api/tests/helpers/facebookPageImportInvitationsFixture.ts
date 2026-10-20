@@ -2,10 +2,13 @@ import {withFacebookManagementFixture} from './facebookManagementFixture';
 import {encryptToken,decryptToken} from '../../src/utils/tokenCrypto';
 import {createInvitationRepository} from '../../src/facebookPageImportInvitations/repository';
 import {createMetaGrantFence} from '../../src/interactionInbox/grantFence';
+import {randomUUID} from 'node:crypto';
 export const importTestPage=(id:string)=>({pageId:id,name:'Page '+id,avatarUrl:null,profileUrl:'https://www.facebook.com/'+id,pageToken:'synthetic-page-'+id,scopes:['pages_manage_posts','pages_read_engagement'],expiresAt:null});
 export async function withPageImportFixture(run:(f:any)=>Promise<void>){
  await withFacebookManagementFixture(async f=>{
   const ctx=f.contexts[0];
+  const post=await f.db.post.create({data:{workspaceId:ctx.workspaceId,authorId:f.userId,baseText:'Existing scheduled content',variants:{create:{platform:'facebook',socialAccountId:f.accounts[0].id,text:'Existing scheduled content'}}},include:{variants:true}});
+  await f.db.schedule.create({data:{workspaceId:ctx.workspaceId,postVariantId:post.variants[0].id,createdBy:f.userId,scheduledAt:new Date(Date.now()+86400000),publishJobs:{create:{postVariantId:post.variants[0].id,workspaceId:ctx.workspaceId,idempotencyKey:randomUUID(),status:'waiting'}}}});
   const oldIds=f.accounts.map((a:any)=>a.id);
   const snapshot=async()=>({
    accounts:await f.db.socialAccount.findMany({where:{id:{in:oldIds}},include:{credential:true},orderBy:{id:'asc'}}),

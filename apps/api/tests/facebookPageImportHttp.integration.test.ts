@@ -12,6 +12,16 @@ test('public holder cannot view or confirm invitations; malformed new state neve
  for(const origin of [undefined,'https://evil.test'])assert.equal((await fetch(url+'/api/v1/facebook-page-import-public/exchange',{method:'POST',headers:{'content-type':'application/json',...(origin?{origin}:{})},body:JSON.stringify({secret:'a'.repeat(43)})})).status,403);
  const started=await fetch(url+'/api/v1/facebook-page-import-public/exchange',{method:'POST',headers:{'content-type':'application/json',origin:'https://app.example.test'},body:JSON.stringify({secret:'a'.repeat(43)})});assert.equal(started.status,200);assert.match(started.headers.get('set-cookie')!,/HttpOnly/);assert.match(started.headers.get('set-cookie')!,/Secure/);assert.equal(starts,1);
  const bad=await fetch(url+'/api/v1/integrations/facebook/oauth/callback?state=fbpi_malformed&code=private-code',{redirect:'manual'});assert.equal(bad.status,302);assert.equal(fallback,0);assert.doesNotMatch(bad.headers.get('location')!,/private|fbpi/);
+ const duplicate=await fetch(url+'/api/v1/integrations/facebook/oauth/callback?state=fbpi_malformed&state=old-state&code=private-code',{redirect:'manual'});assert.equal(duplicate.status,302);assert.equal(fallback,0);
  const large=await fetch(url+'/api/v1/facebook-page-import-public/exchange',{method:'POST',headers:{'content-type':'application/json',origin:'https://app.example.test'},body:JSON.stringify({secret:'a'.repeat(3000)})});assert.equal(large.status,413);
+ }finally{server.closeAllConnections();await new Promise<void>(r=>server.close(()=>r()));}
+});
+test('malformed public JSON is sanitized before global error logging can see the share secret',async()=>{
+ const mod=await import('../src/facebookPageImportInvitations/routes');const app=express();let globalErrors=0;
+ app.use('/exchange',(mod as any).publicInvitationBodyParser?.()??express.json({limit:'2kb'}));app.post('/exchange',(_req,res)=>res.sendStatus(204));
+ app.use((e:any,_q:any,res:any,_n:any)=>{globalErrors++;res.status(e.status||500).json({error:'global'});});
+ const server=app.listen(0,'127.0.0.1');await new Promise<void>(r=>server.once('listening',r));try{
+ const url='http://127.0.0.1:'+(server.address() as any).port+'/exchange';const response=await fetch(url,{method:'POST',headers:{'content-type':'application/json'},body:'{"secret":"synthetic-confidential'});
+ assert.equal(response.status,400);assert.equal(globalErrors,0);assert.doesNotMatch(await response.text(),/synthetic-confidential/);
  }finally{server.closeAllConnections();await new Promise<void>(r=>server.close(()=>r()));}
 });

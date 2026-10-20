@@ -9,3 +9,8 @@ test('wrong cookie cannot consume state, and competing browser flows fail closed
  await assert.rejects(flows.consume(flow.state,flow.cookie.value));await flows.release(consumed);
  const next=await flows.begin({invitationId,version:1});await flows.release(await flows.consume(next.state,next.cookie.value));
 }));
+test('expired flows reject and rate limits fail closed after the allowed attempts',()=>fixture(async flows=>{
+ const {randomUUID}=await import('node:crypto'),invitationId=randomUUID(),flow=await flows.begin({invitationId,version:1},undefined,new Date(Date.now()-601000));
+ await assert.rejects(flows.consume(flow.state,flow.cookie.value));assert.equal(await flows.active(flow),false);await flows.release(flow);
+ const key='test-'+randomUUID();for(let i=0;i<5;i++)await flows.rateLimit(key,5);await assert.rejects(flows.rateLimit(key,5));
+}));
