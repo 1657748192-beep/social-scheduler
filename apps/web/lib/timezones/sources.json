@@ -1,0 +1,22 @@
+{
+  "iana": "2026e",
+  "cldr": "48.2.3",
+  "sources": {
+    "zones": "https://data.iana.org/time-zones/tzdb-2026e/zone.tab",
+    "aliases": "https://data.iana.org/time-zones/tzdb-2026e/backward",
+    "zhZones": "https://raw.githubusercontent.com/unicode-org/cldr-json/48.2.3/cldr-json/cldr-dates-full/main/zh/timeZoneNames.json",
+    "enZones": "https://raw.githubusercontent.com/unicode-org/cldr-json/48.2.3/cldr-json/cldr-dates-full/main/en/timeZoneNames.json",
+    "zhCountries": "https://raw.githubusercontent.com/unicode-org/cldr-json/48.2.3/cldr-json/cldr-localenames-full/main/zh/territories.json",
+    "enCountries": "https://raw.githubusercontent.com/unicode-org/cldr-json/48.2.3/cldr-json/cldr-localenames-full/main/en/territories.json",
+    "license": "https://raw.githubusercontent.com/unicode-org/cldr-json/48.2.3/LICENSE"
+  },
+  "sha256": {
+    "zones": "e2e8e31c4e10f44576c79345e76060591dbb3eef6ce14e006afc8a373caa9593",
+    "aliases": "b8296b9ef1ece72d813878132c0f17e2c52b26af6004eeb9c37d049b64cd9401",
+    "zhZones": "fb5b919f2468832636c2be991aa97a6ddb2f3ac481eb9cdba03e7f8e93dbb7dd",
+    "enZones": "db04305a4bac1389b965e71974adf174adc4130f38b86dfcf1f4e2eec343a174",
+    "zhCountries": "18f1426f1e8981a671517a4857a8d4e56060909906c4cfd9b9a43a8a18b9ab6f",
+    "enCountries": "158c1d575308f7e46912edbeda435c8fe2ef5dad280798231f3a432e406b1807",
+    "license": "220ba0e1c43b99530d2d5bdb892a99dca0989414f51ab695ecd90163eaa1ec3b"
+  }
+}

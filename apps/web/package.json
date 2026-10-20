@@ -10,11 +10,13 @@
   },
   "dependencies": {
     "cos-js-sdk-v5": "1.8.3",
+    "luxon": "3.7.2",
     "next": "^15.5.27",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@types/luxon": "3.7.6",
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
