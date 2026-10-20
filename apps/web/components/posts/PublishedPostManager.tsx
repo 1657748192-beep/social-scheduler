@@ -1,4 +1,5 @@
 "use client";
+import {ScheduledTimePreview} from '../scheduling/ScheduledTimePreview';
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -591,7 +592,7 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
                   </div>
                   <div>
                     <dt>{t("原计划时间", "Original scheduled time")}</dt>
-                    <dd>{formatChinaDateTime(new Date(post.scheduledAt))}</dd>
+                    <dd><ScheduledTimePreview instant={post.scheduledAt} zoneId={post.timezone}/></dd>
                   </div>
                   <div>
                     <dt>{t("素材复用", "Media reuse")}</dt>

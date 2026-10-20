@@ -42,6 +42,7 @@ export function CalendarToolbar({
       <div>
         <p className="section-kicker">{t("内容排期", "Content calendar")}</p>
         <h1>{title}</h1>
+        <p className="muted">{t('日历显示时区：北京时间','Calendar display time zone: Beijing time')}</p>
         <p className="muted">{t("拖动已排程内容，可以调整到新的日期或小时。", "Drag scheduled content to move it to a new date or hour.")}</p>
       </div>
 

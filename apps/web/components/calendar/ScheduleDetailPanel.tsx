@@ -1,15 +1,12 @@
 "use client";
 
-import { type FormEvent, useEffect, useState } from "react";
-import { BeijingDateTimePicker } from "../BeijingDateTimePicker";
+import { type FormEvent, useEffect, useRef, useState } from "react";
+import {SchedulePicker} from '../composer/SchedulePicker';
+import {ScheduledTimePreview} from '../scheduling/ScheduledTimePreview';
+import {createScheduleTimeState,getScheduleSubmission,type ScheduleTimeState} from '../../lib/scheduleTimeZone';
+import {buildScheduleEdit} from '../../lib/scheduleEdit';
 import { apiRequest, type CalendarSchedule } from "../../lib/api";
-import {
-  APP_TIME_ZONE_LABEL,
-  chinaLocalInputToISOString,
-  toChinaDatetimeLocalValue
-} from "../../lib/chinaTime";
 import { platformLabel, publishJobStatusLabel, scheduleStatusLabel } from "../../lib/labels";
-import { formatDateTime } from "./dateUtils";
 import { useLanguage } from "../LanguageProvider";
 
 type ScheduleDetailPanelProps = {
@@ -22,7 +19,11 @@ type ScheduleDetailPanelProps = {
   workspaceId: string;
 };
 
-export function ScheduleDetailPanel({
+export function ScheduleDetailPanel(props:ScheduleDetailPanelProps) {
+  return props.schedule ? <ScheduleDetailEditor key={`${props.token}:${props.workspaceId}:${props.schedule.id}`} {...props} /> : null;
+}
+
+function ScheduleDetailEditor({
   schedule,
   onClose,
   onDeleted,
@@ -33,7 +34,9 @@ export function ScheduleDetailPanel({
 }: ScheduleDetailPanelProps) {
   const { locale, t } = useLanguage();
   const [text, setText] = useState("");
-  const [scheduledAtValue, setScheduledAtValue] = useState("");
+  const [time, setTime] = useState<ScheduleTimeState>(() => createScheduleTimeState(schedule?.scheduledAt,schedule?.timezone));
+  const active=useRef(true);
+  useEffect(()=>{active.current=true;return()=>{active.current=false;};},[]);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -45,21 +48,19 @@ export function ScheduleDetailPanel({
     }
 
     setText(schedule.postVariant.text);
-    setScheduledAtValue(toChinaDatetimeLocalValue(new Date(schedule.scheduledAt)));
+    setTime(createScheduleTimeState(schedule.scheduledAt,schedule.timezone));
     setFeedback(null);
     setFormError(null);
-  }, [schedule?.id, schedule?.postVariant.text, schedule?.scheduledAt]);
+  }, [schedule?.id, schedule?.postVariant.text, schedule?.scheduledAt, schedule?.timezone]);
 
   if (!schedule) {
     return null;
   }
 
-  const scheduledAt = new Date(schedule.scheduledAt);
   const latestJob = schedule.publishJobs[0];
   const canEditSchedule = schedule.status === "scheduled";
   const canModifySchedule = canEditSchedule && !publishingLocked;
   const canDeleteSchedule = schedule.status === "scheduled" || schedule.status === "failed";
-  const minDateTime = toChinaDatetimeLocalValue(new Date(Date.now() + 60 * 1000));
 
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -75,19 +76,12 @@ export function ScheduleDetailPanel({
       return;
     }
 
-    if (!scheduledAtValue) {
-      setFormError(t("请选择发布时间", "Choose a publishing time"));
-      return;
-    }
-
-    let scheduledAtIso = "";
-
+    let body:ReturnType<typeof buildScheduleEdit>;
     try {
-      scheduledAtIso = chinaLocalInputToISOString(scheduledAtValue);
-    } catch {
-      setFormError(t("发布时间格式不正确", "Invalid publishing time"));
-      return;
-    }
+      body=buildScheduleEdit({scheduledAt:schedule.scheduledAt,timezone:schedule.timezone,text:schedule.postVariant.text},{time,text:trimmedText});
+      if (!body) {setFormError(null);setFeedback(t('实际发布时间和内容未变，无需保存。','The instant and content are unchanged. Nothing to save.'));return;}
+      if (Date.parse(body.scheduledAt)!==Date.parse(schedule.scheduledAt) && getScheduleSubmission(time,Date.now()).kind!=='scheduled') throw Error('Invalid time');
+    } catch {setFormError(t('请确认有效的未来发布时间。','Confirm a valid future publishing time.'));return;}
 
     setFormError(null);
     setFeedback(null);
@@ -99,20 +93,17 @@ export function ScheduleDetailPanel({
         {
           method: "PATCH",
           token,
-          body: {
-            scheduledAt: scheduledAtIso,
-            timezone: "Asia/Shanghai",
-            text: trimmedText
-          }
+          body
         }
       );
 
+      if(!active.current)return;
       onUpdated(updated);
       setFeedback(t("修改已保存", "Changes saved"));
     } catch (requestError) {
-      setFormError(requestError instanceof Error ? requestError.message : t("保存失败", "Unable to save"));
+      if(active.current)setFormError(requestError instanceof Error ? requestError.message : t("保存失败", "Unable to save"));
     } finally {
-      setIsSaving(false);
+      if(active.current)setIsSaving(false);
     }
   }
 
@@ -143,11 +134,11 @@ export function ScheduleDetailPanel({
           token
         }
       );
-      onDeleted(schedule.id);
+      if(active.current)onDeleted(schedule.id);
     } catch (requestError) {
-      setFormError(requestError instanceof Error ? requestError.message : t("删除失败", "Unable to delete"));
+      if(active.current)setFormError(requestError instanceof Error ? requestError.message : t("删除失败", "Unable to delete"));
     } finally {
-      setIsDeleting(false);
+      if(active.current)setIsDeleting(false);
     }
   }
 
@@ -166,7 +157,7 @@ export function ScheduleDetailPanel({
         <dt>{t("发布账号", "Publishing account")}</dt>
         <dd>{schedule.postVariant.socialAccount?.displayName ?? t("未指定（旧任务）", "Unspecified (legacy task)")}</dd>
         <dt>{t("发布时间", "Publishing time")}</dt>
-        <dd>{formatDateTime(scheduledAt)}</dd>
+        <dd><ScheduledTimePreview instant={schedule.scheduledAt} zoneId={schedule.timezone}/></dd>
         <dt>{t("状态", "Status")}</dt>
         <dd>{scheduleStatusLabel(schedule.status, locale)}</dd>
         <dt>{t("发布任务", "Publishing task")}</dt>
@@ -187,16 +178,7 @@ export function ScheduleDetailPanel({
             />
           </label>
 
-          <label className="field">
-            <span>{t("发布时间", "Publishing time")}</span>
-            <BeijingDateTimePicker
-              min={minDateTime}
-              onChange={setScheduledAtValue}
-              required
-              value={scheduledAtValue}
-            />
-          </label>
-          <p className="muted">{t(`按 ${APP_TIME_ZONE_LABEL} 保存。`, `Saved in ${APP_TIME_ZONE_LABEL}.`)}</p>
+          <SchedulePicker value={time} onChange={setTime} token={token} workspaceId={workspaceId} editing/>
 
           <div className="schedule-edit-actions">
             <button className="button" disabled={isSaving || isDeleting} type="submit">

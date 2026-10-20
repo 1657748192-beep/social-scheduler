@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   apiRequest,
   type CalendarSchedule,
@@ -34,12 +34,16 @@ export function ContentCalendar({ token, workspaces }: ContentCalendarProps) {
   const [schedules, setSchedules] = useState<CalendarSchedule[]>([]);
   const [selectedSchedule, setSelectedSchedule] = useState<CalendarSchedule | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const scope=`${token}:${workspaceId}`,scopeRef=useRef(scope);
+  scopeRef.current=scope;
   useEffect(() => {
     const nextWorkspaceId = getActiveWorkspaceId(workspaces, workspaceId);
     setWorkspaceId(nextWorkspaceId);
   }, [workspaces]);
 
   function selectWorkspace(nextWorkspaceId: string) {
+    setSelectedSchedule(null);
+    setSchedules([]);
     setActiveWorkspaceId(nextWorkspaceId);
     setWorkspaceId(nextWorkspaceId);
   }
@@ -66,31 +70,19 @@ export function ContentCalendar({ token, workspaces }: ContentCalendarProps) {
   }, [cursor, view]);
   const rangeKey = `${range.from.toISOString()}:${range.to.toISOString()}`;
 
-  async function loadSchedules() {
-    if (!workspaceId) {
-      return;
-    }
-
-    setError(null);
-    const query = new URLSearchParams({
-      from: range.from.toISOString(),
-      to: range.to.toISOString()
-    });
-
-    try {
-      const response = await apiRequest<CalendarSchedule[]>(
-        `/workspaces/${workspaceId}/schedules?${query.toString()}`,
-        { token }
-      );
-      setSchedules(response);
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : t("无法加载日历", "Unable to load calendar"));
-    }
-  }
-
   useEffect(() => {
-    loadSchedules();
-  }, [workspaceId, rangeKey]);
+    let canceled=false;
+    setSelectedSchedule(null);
+    setSchedules([]);
+    if(!workspaceId)return;
+    const controller=new AbortController();
+    const query=new URLSearchParams({from:range.from.toISOString(),to:range.to.toISOString()});
+    setError(null);
+    void apiRequest<CalendarSchedule[]>(`/workspaces/${workspaceId}/schedules?${query}`,{token,signal:controller.signal})
+      .then(response=>{if(!canceled)setSchedules(response);})
+      .catch(requestError=>{if(!canceled)setError(requestError instanceof Error?requestError.message:t('无法加载日历','Unable to load calendar'));});
+    return()=>{canceled=true;controller.abort();};
+  }, [workspaceId, rangeKey, token]);
 
   async function reschedule(scheduleId: string, targetDate: Date, mode: "day" | "hour") {
     if (publishingLocked) {
@@ -131,6 +123,8 @@ export function ContentCalendar({ token, workspaces }: ContentCalendarProps) {
         }
       );
 
+      if(scopeRef.current!==scope)return;
+
       setSchedules((current) =>
         current.map((item) => (item.id === scheduleId ? updated : item))
       );
@@ -139,6 +133,7 @@ export function ContentCalendar({ token, workspaces }: ContentCalendarProps) {
         setSelectedSchedule(updated);
       }
     } catch (requestError) {
+      if(scopeRef.current!==scope)return;
       setError(requestError instanceof Error ? requestError.message : t("无法修改发布时间", "Unable to change publishing time"));
     }
   }

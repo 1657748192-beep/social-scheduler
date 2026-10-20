@@ -426,6 +426,7 @@ export type PublishedPost = {
   title?: string | null;
   baseText: string;
   scheduledAt: string;
+  timezone?: string;
   publishedAt: string;
   mediaReuseExpiresAt?: string | null;
   platform: ComposerPlatform;
