@@ -1,5 +1,13 @@
 import test from 'node:test';import assert from 'node:assert/strict';import React from 'react';import {act} from 'react-test-renderer';import {withInboxUI,inboxCase} from './helpers/interactionInboxUI';import {facebookButton,facebookText} from './helpers/facebookManagementUI';
 
+test('successful reply reloads same-case detail and displays confirmed reply with replied badge',async()=>{
+ const {InteractionDetail}=await import('../components/inbox/unified/InteractionDetail');let sent=false,reads=0;
+ await withInboxUI(<InteractionDetail token="test" workspaceId="w1" item={inboxCase as any} accountName="Page" canWrite canManage onClose={()=>{}} onDirtyChange={()=>{}} onUpdated={()=>{}} onAccessDenied={()=>{}}/>,async({view}:any)=>{
+  await act(async()=>view.root.findByProps({'aria-label':'回复正文'}).props.onChange({target:{value:'Confirmed page reply'}}));
+  await act(async()=>facebookButton(view,'发送公开回复').props.onClick());assert.ok(reads>=2);assert.match(facebookText(view),/Confirmed page reply/);assert.match(facebookText(view),/已回复/);
+ },url=>{if(url.pathname.endsWith('/replies')){sent=true;return Response.json({status:'sent',providerId:'r1'});}if(url.pathname.endsWith('/cases/'+inboxCase.id)){reads++;return Response.json({...inboxCase,replied:sent,items:[{id:'c1',text:'Question',inbound:true,occurredAt:new Date().toISOString()},...(sent?[{id:'r1',text:'Confirmed page reply',inbound:false,occurredAt:new Date().toISOString()}]:[])],nextCursor:null,replyTarget:'c1',capabilities:[{capability:'comments.reply',available:true}]});}});
+});
+
 test('same-case reload preserves unfinished internal input while customer data loads',async()=>{
  const {InteractionDetail}=await import('../components/inbox/unified/InteractionDetail');let reads=0,finish!:(r:Response)=>void;
  await withInboxUI(<InteractionDetail token="test" workspaceId="w1" item={inboxCase as any} accountName="Page" canWrite canManage onClose={()=>{}} onDirtyChange={()=>{}} onUpdated={()=>{}} onAccessDenied={()=>{}}/>,async({view}:any)=>{

@@ -3,6 +3,8 @@ import type {FacebookManagementRuntime} from '../../facebookManagement/runtime';
 import {HttpError} from '../../utils/errors';import {capabilities,type InboxAdapter,type ResolvedAsset,type VerifiedItem,type SourceRef} from '../types';
 import {sourceSchema} from '../access';import {encodeInboxCursor,decodeInboxCursor} from '../cursor';
 import {createLiveInboxPolicy,type LiveInboxPolicy} from '../livePolicy';
+import {isMetaInboxSourceDeleted} from '../deletion';
+import {createHash} from 'node:crypto';
 export function createFacebookInboxAdapter({db,engagement,policy=createLiveInboxPolicy([])}:{db:PrismaClient;engagement:FacebookManagementRuntime['engagement'];policy?:LiveInboxPolicy}):InboxAdapter{
  const context=(a:ResolvedAsset)=>{if(a.platform!=='facebook')throw new HttpError(409,'Platform not integrated');return{...a.ctx,managedPageId:sourceSchema.parse(a.sourceRef).managedPageId};};
  async function caps(a:ResolvedAsset){const raw=await engagement.capabilities(context(a));return capabilities.map(capability=>{const key=({'comments.read':'readComments','comments.reply':'replyComments','messages.read':'readMessages','messages.reply':'replyMessages'} as const)[capability as Exclude<typeof capability,'mentions.read'>];const available=!!key&&raw[key]?.status==='available';return{capability,available,reason:capability==='mentions.read'?'not_integrated':available?'available':'authorization_required',verifiedAt:new Date().toISOString()};});}
@@ -37,11 +39,13 @@ export function createFacebookInboxAdapter({db,engagement,policy=createLiveInbox
   async detail(a,ref,cursor){
    const s=source(a,ref),ctx=context(a);let page:any;
    if(s.conversationId)page=await engagement.messages(ctx,s.conversationId,cursor);
-   else if(s.scheduleId)page=await engagement.comments(ctx,s.scheduleId,cursor);
+   else if(s.scheduleId&&s.commentId){const thread=await engagement.commentReplies(ctx,s.scheduleId,s.commentId,cursor);page={...thread,items:thread.parent?[thread.parent,...thread.items]:[]};}
    else throw new HttpError(404,'Source unavailable');
-   const selected=s.conversationId?page.items:page.items.filter((v:any)=>v.id===s.commentId);
+   let selected=page.items;
+   if(!s.conversationId){const visible=[];for(const v of selected){if(v.id!==s.commentId&&(v.parentId!==s.commentId||v.postId!==page.parent?.postId))throw new HttpError(502,'Inconsistent reply identity');if(!await isMetaInboxSourceDeleted(db,{workspaceId:a.ctx.workspaceId,platform:'facebook',appId:a.appNamespace,providerAssetId:a.providerAssetId,connectionId:s.connectionId,connectionVersion:a.connectionVersion,actorId:v.senderId,providerEventId:v.id,eventKind:'comments',occurredAt:new Date(v.timestamp)}))visible.push(v);}selected=visible;}
+   const outgoing=new Set<string>();if(!s.conversationId&&s.commentId){const unknown=selected.filter((v:any)=>v.id!==s.commentId&&!v.senderId).map((v:any)=>v.id);if(unknown.length){const receipts=await db.facebookInteractionSendAttempt.findMany({where:{managedPageId:s.managedPageId,connectionVersion:a.connectionVersion,status:'sent',providerId:{in:unknown},targetHash:createHash('sha256').update(JSON.stringify(['comment',s.commentId])).digest('hex'),page:{connectionId:s.connectionId,connection:{workspaceId:a.ctx.workspaceId,appId:a.appNamespace}}},select:{providerId:true}});for(const r of receipts)if(r.providerId)outgoing.add(r.providerId);}}
    const current=Date.now(),cutoff=current-policy.retentionForAsset({workspaceId:a.ctx.workspaceId,platform:'facebook',appId:a.appNamespace,providerAssetId:a.providerAssetId}).contentRetentionDays*86400000;
-   const items=selected.filter((v:any)=>{const at=Date.parse(v.timestamp);return Number.isFinite(at)&&at>0&&at>=cutoff&&at<=current;}).map((v:any)=>({id:v.id,text:typeof v.text==='string'?v.text:null,occurredAt:v.timestamp,inbound:s.conversationId?!!v.inbound:true,senderName:v.senderName??null,deleted:!!v.deleted}));
+   const items=selected.filter((v:any)=>{const at=Date.parse(v.timestamp);return Number.isFinite(at)&&at>0&&at>=cutoff&&at<=current;}).map((v:any)=>({id:v.id,text:typeof v.text==='string'?v.text:null,occurredAt:v.timestamp,inbound:s.conversationId?!!v.inbound:v.senderId!==a.providerAssetId&&!outgoing.has(v.id),senderName:v.senderName??null,deleted:!!v.deleted}));
    return{items,nextCursor:page.nextCursor,officialUrl:s.postId?'https://www.facebook.com/'+encodeURIComponent(s.postId):'https://www.facebook.com/'+encodeURIComponent(a.providerAssetId),replyTarget:s.conversationId??(items.some((i:any)=>i.id===s.commentId&&!i.deleted)?s.commentId!:null),capabilities:await caps(a)};
   },
   async reply(a,ref,text,requestKey){const s=source(a,ref);return s.conversationId?engagement.replyMessage(context(a),{conversationId:s.conversationId,text,requestKey}):s.scheduleId&&s.commentId?engagement.replyComment(context(a),{scheduleId:s.scheduleId,commentId:s.commentId,text,requestKey}):Promise.reject(new HttpError(404,'Reply target unavailable'));},

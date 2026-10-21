@@ -22,7 +22,7 @@ test('retention maintenance runs without any visiting administrator',async()=>{
 test('comment detail cannot display another customer as the selected reply target',async()=>{
  const {createFacebookInboxAdapter}=await import('../src/interactionInbox/adapters/facebook');
  const source={managedPageId:'11111111-1111-4111-8111-111111111111',connectionId:'22222222-2222-4222-8222-222222222222',connectionVersion:1,scheduleId:'33333333-3333-4333-8333-333333333333',commentId:'selected'};
- const adapter=createFacebookInboxAdapter({db:{} as any,engagement:{comments:async()=>({items:[{id:'other',text:'Other customer',timestamp:new Date().toISOString()}],nextCursor:'next'}),capabilities:async()=>({})} as any});
+ const adapter=createFacebookInboxAdapter({db:{} as any,engagement:{commentReplies:async()=>({parent:null,items:[{id:'other',text:'Other customer',timestamp:new Date().toISOString()}],nextCursor:'next'}),capabilities:async()=>({})} as any});
  const result=await adapter.detail({platform:'facebook',sourceRef:source,connectionVersion:1,ctx:{},providerAssetId:'100'} as any,source);
  assert.deepEqual(result.items,[]);assert.equal(result.replyTarget,null);
 });

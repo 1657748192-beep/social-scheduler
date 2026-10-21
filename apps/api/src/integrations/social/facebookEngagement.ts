@@ -140,6 +140,10 @@ export function createFacebookEngagementClient(input: {
       }
       return result;
     },
+    async listCommentReplies(commentId:string,postId:string,after?:string):Promise<FacebookPage<FacebookComment>> {
+      id(postId);const result=await this.listComments(commentId,after);
+      return {...result,items:result.items.map(item=>({...item,postId,parentId:commentId}))};
+    },
     async getComment(commentId: string): Promise<FacebookComment> {
       const raw=await request(id(commentId),{fields:'id,message,created_time,from,object{id}'});
       if (raw.id !== commentId) throw new FacebookEngagementError('invalid_response');

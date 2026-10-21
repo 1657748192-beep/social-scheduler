@@ -10,7 +10,7 @@ import type {createFacebookSendExecutor} from './sendAttempts';
 import {copyReplyTestRestriction,assertReplyTestContext,assertReplyTestGrant,assertReplyTestInput,type FacebookReplyTestRestriction} from './replyTestRestriction';
 
 type Access=Awaited<ReturnType<ReturnType<typeof createFacebookPageAccess>['resolvePageAccess']>>;
-type Client=Pick<FacebookEngagementClient,'getPostIdentity'|'listConversations'|'getConversation'|'listMessages'|'listComments'|'replyComment'|'sendMessage'>;
+type Client=Pick<FacebookEngagementClient,'getPostIdentity'|'listConversations'|'getConversation'|'listMessages'|'listComments'|'listCommentReplies'|'replyComment'|'sendMessage'>;
 type Dependencies={db:PrismaClient;testRestriction?:FacebookReplyTestRestriction|null;resolvePageAccess:ReturnType<typeof createFacebookPageAccess>['resolvePageAccess'];executeFacebookSend:ReturnType<typeof createFacebookSendExecutor>['executeFacebookSend'];
   createClient:(input:{pageId:string;accessToken:string})=>Client;now?:()=>Date;latestInbound?:(managedPageId:string,participantId:string)=>Promise<Date|null>;
   receivedMessages?:(managedPageId:string,participantId:string,conversationId:string)=>Promise<FacebookMessage[]>;
@@ -134,6 +134,25 @@ export function createFacebookManagementEngagement(deps:Dependencies){
         for(const comment of local){if(comment.deleted)merged.delete(comment.id);else if(!merged.has(comment.id))merged.set(comment.id,comment);}
         const items=[...merged.values()].filter(c=>!rule||rule.kind==='comment'&&c.id===rule.commentId).sort((a,b)=>Date.parse(b.timestamp)-Date.parse(a.timestamp));
         return{...remote,items,nextCursor:rule?null:remote.nextCursor,source:local.length?'mixed' as const:remote.source};
+      });
+    },
+    async commentReplies(ctx:PageContext,scheduleId:string,commentId:string,after?:string){
+      if(rule&&(rule.kind!=='comment'||scheduleId!==rule.scheduleId||commentId!==rule.commentId))throw new HttpError(403,'Comment is outside the controlled test');
+      validateAfter(after);const {access,api}=await authorized(ctx,'readComments'),storedId=await published(ctx,access,scheduleId,true);
+      const postId=storedId.includes('_')?storedId:await provider(access,()=>verifiedHistorical(api,access,storedId));
+      if(!postId||rule&&rule.kind==='comment'&&postId!==rule.postId)throw new HttpError(409,'Verified Facebook post identity is unavailable');
+      return provider(access,async()=>{
+        let cursor:string|undefined,parent:FacebookComment|undefined;const seen=new Set<string>(),deadline=Date.now()+20000;
+        for(let scan=0;scan<100;scan++){
+          if(Date.now()>deadline)throw new HttpError(503,'Comment verification budget exhausted');
+          const page=wrap(await api.listComments(postId,cursor));parent=page.items.find(v=>v.id===commentId&&v.postId===postId&&!v.deleted);
+          if(parent||!page.nextCursor){cursor=undefined;break;}if(seen.has(page.nextCursor))throw new HttpError(502,'Inconsistent comment pagination');seen.add(page.nextCursor);cursor=page.nextCursor;
+        }
+        if(!parent&&cursor)throw new HttpError(503,'Comment verification incomplete');
+        if(!parent)throw new HttpError(404,'Comment unavailable on this published post');
+        const replies=wrap(await api.listCommentReplies(commentId,postId,after));
+        if(replies.items.some(v=>v.parentId!==commentId||v.postId!==postId||v.id===commentId))throw new HttpError(502,'Inconsistent comment reply identity');
+        return{...replies,parent};
       });
     },
     async replyMessage(ctx:PageContext,input:{conversationId:string;text:string;requestKey:string}){

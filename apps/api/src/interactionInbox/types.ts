@@ -26,6 +26,6 @@ export interface InboxAdapter {
  normalizeVerifiedEvent(sourceIds:string[],asset:ResolvedAsset):Promise<VerifiedItem[]>;
 }
 export type TagDto={id:string;kind:string;name:string;color:string;version:number};
-export type CaseDto={id:string;kind:Kind;accountId:string;customerId:string|null;customerName:string|null;sourceLabel:string;status:string;version:number;lastInboundAt:string|null;unread:boolean;tags:TagDto[];assigneeId:string|null;sentiment:string|null};
+export type CaseDto={id:string;kind:Kind;accountId:string;customerId:string|null;customerName:string|null;sourceLabel:string;status:string;replied?:boolean;version:number;lastInboundAt:string|null;unread:boolean;tags:TagDto[];assigneeId:string|null;sentiment:string|null};
 export type DetailDto=CaseDto&AdapterDetail&{readPosition?:{eventAt:string;eventKey:string}|null;pendingSend?:{requestKey:string;status:string;diagnosticId:string|null;createdAt:string}|null};
 export type CustomerDto={id:string;version:number;name:string|null;identities:Array<{platform:string;name:string|null;username:string|null;avatarUrl:string|null;profileUrl:string|null;accountId:string}>;tags:TagDto[];notes:Array<{id:string;text:string;authorId:string;createdAt:string}>;cases:CaseDto[]};
