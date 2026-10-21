@@ -27,9 +27,9 @@ const platformLabels: Record<string, string> = {
   x: "Twitter / X"
 };
 
-function getDraftTitle(draft: DraftPost) {
+function getDraftTitle(draft: DraftPost, fallback:string) {
   const value = draft.title?.trim() || draft.baseText.trim();
-  return value.length > 80 ? `${value.slice(0, 80)}…` : value || "未命名草稿";
+  return value.length > 80 ? `${value.slice(0, 80)}…` : value || fallback;
 }
 
 function getDraftExcerpt(draft: DraftPost) {
@@ -37,11 +37,11 @@ function getDraftExcerpt(draft: DraftPost) {
   return value.length > 180 ? `${value.slice(0, 180)}…` : value;
 }
 
-function getTimeRemaining(expiresAt: string, now: number) {
+function getTimeRemaining(expiresAt: string, now: number,t:(chinese:string,english:string)=>string) {
   const remainingMs = new Date(expiresAt).getTime() - now;
 
   if (!Number.isFinite(remainingMs) || remainingMs <= 0) {
-    return "即将清理";
+    return t("即将清理","Clearing soon");
   }
 
   const totalMinutes = Math.ceil(remainingMs / (60 * 1000));
@@ -49,16 +49,16 @@ function getTimeRemaining(expiresAt: string, now: number) {
   const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
   const minutes = totalMinutes % 60;
 
-  return days ? `${days} 天 ${hours} 小时后清理` : `${hours} 小时 ${minutes} 分后清理`;
+  return days ? t(`${days} 天 ${hours} 小时后清理`,`Clears in ${days}d ${hours}h`) : t(`${hours} 小时 ${minutes} 分后清理`,`Clears in ${hours}h ${minutes}m`);
 }
 
 export function DraftManager({ token, workspaces }: DraftManagerProps) {
   const { t } = useLanguage();
   const [workspaceId, setWorkspaceId] = useState("");
   const [drafts, setDrafts] = useState<DraftPost[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<'load'|'delete'|null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -91,8 +91,8 @@ export function DraftManager({ token, workspaces }: DraftManagerProps) {
         { token }
       );
       setDrafts(response);
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : t("无法读取草稿箱", "Unable to load drafts"));
+    } catch {
+      setError('load');
     } finally {
       setIsLoading(false);
     }
@@ -113,7 +113,8 @@ export function DraftManager({ token, workspaces }: DraftManagerProps) {
   }, [drafts]);
 
   async function deleteDraft(draft: DraftPost) {
-    if (!window.confirm(t(`确定删除草稿“${getDraftTitle(draft)}”吗？删除后无法恢复。`, `Delete draft “${getDraftTitle(draft)}”? This cannot be undone.`))) {
+    const title=getDraftTitle(draft,t('未命名草稿','Untitled draft'));
+    if (!window.confirm(t(`确定删除草稿“${title}”吗？删除后无法恢复。`, `Delete draft “${title}”? This cannot be undone.`))) {
       return;
     }
 
@@ -126,8 +127,8 @@ export function DraftManager({ token, workspaces }: DraftManagerProps) {
         token
       });
       setDrafts((current) => current.filter((item) => item.id !== draft.id));
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : t("删除草稿失败", "Unable to delete draft"));
+    } catch {
+      setError('delete');
     } finally {
       setDeletingId(null);
     }
@@ -176,10 +177,10 @@ export function DraftManager({ token, workspaces }: DraftManagerProps) {
         </article>
       </section>
 
-      {error ? <p className="error">{error}</p> : null}
+      {error ? <p className="error" role="alert">{error==='load'?t('无法读取草稿箱，请刷新重试。','Unable to load drafts. Refresh to retry.'):t('删除草稿失败，请刷新后核查。','Unable to delete draft. Refresh to check its status.')}</p> : null}
       {isLoading && !drafts.length ? <p className="muted">{t("正在读取草稿…", "Loading drafts...")}</p> : null}
 
-      {!isLoading && !drafts.length ? (
+      {!isLoading && !error && !drafts.length ? (
         <section className="draft-empty">
           <h2>{t("草稿箱为空", "No drafts yet")}</h2>
           <p>{t("在内容编辑页选择“保存草稿”后，内容会显示在这里。", "Choose Save draft in the content editor and it will appear here.")}</p>
@@ -214,9 +215,9 @@ export function DraftManager({ token, workspaces }: DraftManagerProps) {
                 <div className="draft-heading">
                   <div>
                     <p>{platforms.map((platform) => platformLabels[platform]).join(" · ") || t("未选择平台", "No platform selected")}</p>
-                    <h2>{getDraftTitle(draft)}</h2>
+                    <h2>{getDraftTitle(draft,t('未命名草稿','Untitled draft'))}</h2>
                   </div>
-                  <span className="draft-expiry">{getTimeRemaining(draft.expiresAt, now)}</span>
+                  <span className="draft-expiry">{getTimeRemaining(draft.expiresAt, now,t)}</span>
                 </div>
                 <p className="draft-excerpt">{getDraftExcerpt(draft) || t("未填写文案", "No copy entered")}</p>
                 <dl className="draft-meta">

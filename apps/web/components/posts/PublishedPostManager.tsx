@@ -388,8 +388,8 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
   const [accountsError, setAccountsError] = useState<string | null>(null);
   const requestSequence = useRef(0);
   const [posts, setPosts] = useState<PublishedPost[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const facebookEnabled=useFacebookEnabled(token,workspaceId);
   const [facebookPages,setFacebookPages]=useState<{key:string;items:FacebookManagedPage[]}>({key:'',items:[]});
@@ -426,7 +426,7 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
     }
 
     setIsLoading(true);
-    setError(null);
+    setError(false);
     setAccountsError(null);
 
     try {
@@ -445,8 +445,8 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
       }
       if (postResult.status === "rejected") throw postResult.reason;
       setPosts(postResult.value);
-    } catch (requestError) {
-      if (sequence === requestSequence.current) setError(requestError instanceof Error ? requestError.message : t("无法读取已发布帖子", "Unable to load published posts"));
+    } catch {
+      if (sequence === requestSequence.current) setError(true);
     } finally {
       if (sequence === requestSequence.current) setIsLoading(false);
     }
@@ -529,12 +529,12 @@ export function PublishedPostManager({ token, workspaces }: PublishedPostManager
         </article>
       </section>
 
-      {error ? <p className="error">{error}</p> : null}
+      {error ? <p className="error" role="alert">{t('无法读取已发布帖子，请刷新重试。','Unable to load published posts. Refresh to retry.')}</p> : null}
       {accountsError ? <p className="error">{accountsError}</p> : null}
 
       {isLoading && !posts.length ? <p className="muted">{t("正在读取已发布帖子…", "Loading published posts...")}</p> : null}
 
-      {!isLoading && !filteredPosts.length ? (
+      {!isLoading && !error && !filteredPosts.length ? (
         <section className="published-post-empty">
           <h2>{posts.length || platform !== "all" || accountId !== "all" ? t("当前筛选下暂无帖子", "No posts match these filters") : t("还没有已发布的帖子", "No published posts yet")}</h2>
           <p>{platform !== "all" || accountId !== "all" ? t("可以切换平台或选择全部账号查看其他发布记录。", "Change the platform or select all accounts to view other records.") : t("完成一次立即发布或定时发布后，记录会自动显示在这里。", "Records appear here after publishing now or scheduling a post.")}</p>
