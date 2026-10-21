@@ -23,4 +23,13 @@ Fix Factory Wholesale's inbox list failing on protected historical records. Pres
 - User personally sent `SS-FB-C-1021` to the original Factory test photo. Initial exact full-description matching correctly stopped without mutation because only the marker was posted. Read-only shape probe confirmed exactly one marker; accepting either the requested unique marker alone or its full description avoids duplicate human comments.
 - `inv-ia6d9w0fsq` succeeded: correct owned canonical post, fresh comment after deletion cutoff, no matching prior reply/attempt, can_comment=true, existing admin/session/association valid. No send, OAuth, refresh or restart.
 - `inv-ga6dck0krx` confirmed an existing Webhook raw comment with correct current epoch and canonical post ID, distinct from historical bare publication ID; this is the real evidence for the reference fix.
-- Prepared operational scripts preserve actual current API env/mounts, retain rollback, allow only the new comment ID to change in the pinned rule, retain the prior fixed reply-text digest and expiry, and prohibit Worker/web changes or migrations. No production deployment for this code yet.
+- Operational scripts preserve actual current API env/mounts, retain rollback, allow only the new comment ID to change in the pinned rule, retain the prior fixed reply-text digest and expiry, and prohibit Worker/web changes or migrations.
+
+## API-only production deployment and verification
+
+- Tested source revision: `5eb539efc2531b84de36cf714ffbd131f2aa5fe9`.
+- Prepare invocation `inv-ia6duc0gv7` succeeded, exit0, 2026-10-21 15:54:01–15:54:41 Beijing: API image built without service restart or database writes.
+- Activate invocation `inv-ha6dvf090d` succeeded, exit0, 15:55:11–15:55:31 Beijing: only API updated/restarted, direct server command without migrations. One initial502 during replacement recovered in the health retry loop.
+- Actual existing administrator context: refresh succeeded; list count1; new `SS-FB-C-1021` case detail and exact reply target verified. Old direct case remains denied by deletion protection. Other users/workspaces/Pages denied; messages remain closed under the comment-only gate. No reply sent or matching send attempt created.
+- Scoped existing account credentials, independent connection/Page, selected publication Schedule/variant/jobs and deletion markers had identical before/after HMAC. API environment changed only the pinned comment ID, retaining text digest and expiry; environment files and other API settings/mounts preserved. Worker, web and infrastructure identities/start times unchanged. Derived inbox/sync rows were refreshed intentionally; no global no-database-write claim.
+- Entry expiry remains 2026-10-22 15:14:19 Beijing. Browser visual acceptance and the single human reply remain pending; do not claim private-message readiness or completed recording. No review submitted.
