@@ -21,7 +21,10 @@ Improve existing public website, unify the displayed application name to Social 
 - Final focused tests 4/4; final production web build passed. Production-build browser QA repeated at both widths/languages, 5 public routes, zero page errors.
 - Full `npm test`: 1083 total, 1078 passed, 5 failed. Four upload cases returned 507 because C: had only ~700MB available versus the existing 2GiB safety threshold; the scheduling UI integration also lacked its expected POST in this run. No application logic was changed to suppress these failures.
 - Rechecked all three affected integration files with test-only TEMP/TMP redirected to a fresh D: directory (4GiB+ free): 11/11 passed, including all five previously failing cases. Scheduling failure did not reproduce; its original cause is not proven. All other cases passed in the full run. Existing react-test-renderer deprecation warnings and local Next.js multiple-lockfile warning remain.
-- Deployment evidence to be appended after completion.
+- Web image revision `1ac00e691e66633ce4c7c0715fa85ba7b1ddfbeb`. Tencent existing-instance build `inv-ga6avc0j5d`: success, 14:12:40–14:13:32 Beijing time. Web-only activation `inv-ja6awj04kw`: success, 14:13:58–14:14:07. One startup HTTP 502 recovered within the bounded health loop; subsequent checks passed.
+- Activation verified captured web environment/mounts, all protected publishing model HMACs, environment-file hashes and API/Worker/Postgres/Redis/proxy container identities/images/start times unchanged. API health OK; public static build manifest and both PNGs exactly match deployed image/archive. English locale SSR/loading regression checks also passed. No API build/restart, migration, Redis change, new cloud resource or permission/review submission.
+- Fresh external HTTP request: `/en` 200, product tour and profile disclosure present, Social Scheduler name unchanged.
+- Final external browser QA repeated on deployed `/en` and `/` at 1440/360px: no horizontal overflow, both images decoded, correct name. All five public legal/login routes returned 200; zero page errors. No authenticated session or write action used.
 
 ## Constraints
 
