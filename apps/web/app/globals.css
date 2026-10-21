@@ -192,6 +192,7 @@ textarea {
 }
 
 .public-nav {
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 22px;
   color: #41516a;
@@ -357,6 +358,18 @@ textarea {
   font-size: 13px;
   line-height: 1.45;
 }
+
+.public-product-tour, .public-profile-explainer { margin: 64px 0; scroll-margin-top: 24px; }
+.public-product-tour .public-section-heading > p:last-child, .public-profile-explainer > p { color: #526b69; line-height: 1.8; max-width: 850px; }
+.public-tour-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.public-tour-grid figure { margin: 0; min-width: 0; border: 1px solid #dce8e4; border-radius: 18px; overflow: hidden; background: #fff; }
+.public-tour-grid img { display: block; width: 100%; height: auto; border-bottom: 1px solid #dce8e4; }
+.public-tour-grid figcaption { padding: 24px; }
+.public-tour-grid figcaption h3 { margin: 0 0 12px; }
+.public-tour-grid figcaption p { color: #526b69; line-height: 1.75; margin: 0; }
+.public-profile-explainer { padding: 32px; border: 1px solid #c8e4da; border-radius: 18px; background: #f2faf6; }
+.public-profile-explainer a { color: #007f5b; text-decoration: underline; }
+@media (max-width: 760px) { .public-tour-grid { grid-template-columns: 1fr; } .public-profile-explainer { padding: 22px; } .public-brand strong { font-size: 15px; } }
 
 .public-feature-section {
   margin-top: 78px;

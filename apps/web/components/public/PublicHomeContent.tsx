@@ -107,6 +107,32 @@ export function PublicHomeContent({ locale }: { locale: PublicLocale }) {
         </div>
       </section>
 
+      <section className="public-product-tour" id="product-tour" aria-labelledby="product-tour-title">
+        <div className="public-section-heading">
+          <p className="public-kicker">{locale === 'en' ? 'INSIDE THE WORKSPACE' : '走进真实工作台'}</p>
+          <h2 id="product-tour-title">{locale === 'en' ? 'See the tools before you sign in.' : '登录之前，先了解实际操作界面。'}</h2>
+          <p>{locale === 'en' ? 'Screenshots of the actual application with Demo data. No customer information is shown; these are not proof of a live post or platform approval.' : '以下为实际软件界面截图，使用演示数据，不展示客户信息；不代表真实发布结果或平台审核通过。'}</p>
+        </div>
+        <div className="public-tour-grid">
+          <figure>
+            <a href="/product/accounts-en.png" target="_blank" rel="noopener noreferrer"><img src="/product/accounts-en.png" width="1440" height="1000" loading="lazy" alt={locale === 'en' ? 'Actual social account manager with demo accounts; filter accounts by platform.' : '真实社交账号管理界面，使用演示账号，可按平台筛选。'}/></a>
+            <figcaption><h3>{locale === 'en' ? '1. Choose the right account' : '1. 选择正确的发布账号'}</h3><p>{locale === 'en' ? 'Open Social accounts to connect through official authorization, filter by platform, and review each account before publishing.' : '进入社交账号，通过官方页面授权，按平台筛选，并在发布前核对目标账号。'}</p></figcaption>
+          </figure>
+          <figure>
+            <a href="/product/composer-en.png" target="_blank" rel="noopener noreferrer"><img src="/product/composer-en.png" width="1440" height="1000" loading="lazy" alt={locale === 'en' ? 'Actual content editor with demo data, account selection and publishing controls.' : '真实内容编辑界面，使用演示数据，展示账号选择及发布设置。'}/></a>
+            <figcaption><h3>{locale === 'en' ? '2. Prepare, review and confirm' : '2. 编辑、检查并确认发布'}</h3><p>{locale === 'en' ? 'Use Content editor to prepare original media and captions. Choose publish now or a schedule, review platform-specific options, and confirm. Follow task status in Content calendar and Post manager.' : '在内容编辑中准备原创素材和文案，选择立即发布或定时发布，检查平台专属设置并确认；随后在排程日历和帖子管理中查看任务状态。'}</p></figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section className="public-profile-explainer" aria-labelledby="public-profile-title">
+        <p className="public-kicker">TIKTOK · <code>user.info.profile</code></p>
+        <h2 id="public-profile-title">{locale === 'en' ? 'Recognize the account you authorized.' : '清楚识别你已授权的账号。'}</h2>
+        <p>{locale === 'en' ? 'Optional profile access reads the authorized TikTok account’s username and profile link, helping users identify the account and open its official profile. Avatar and display-name access belongs to user.info.basic, not this additional permission.' : '可选的资料权限用于读取已授权 TikTok 账号的用户名和主页链接，帮助用户识别账号并打开其官方主页。头像和显示名称属于 user.info.basic，不属于这项新增权限。'}</p>
+        <p>{locale === 'en' ? 'This read-only access does not grant publishing, comment or direct-message access. Availability requires TikTok approval and user consent; additional profile access is not yet approved for general availability.' : '这只是资料读取权限，不授予发布、评论或私信权限。使用需平台审核通过并获得用户同意；新增资料权限尚待审核通过，未向全部用户开放。'}</p>
+        <Link href={locale === 'en' ? '/en/privacy' : '/privacy'}>{locale === 'en' ? 'Read how authorized data is used and deleted →' : '查看授权数据的用途与删除方式 →'}</Link>
+      </section>
+
       <section aria-label={text.platformTitle} className="public-platform-section">
         <p>{text.platformTitle}</p>
         <div>{platforms.map((platform) => <span key={platform}>{platform}</span>)}</div>

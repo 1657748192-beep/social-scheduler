@@ -16,7 +16,7 @@ export default function EnglishPrivacyPage() {
         <section className="legal-card">
           <p className="legal-kicker">Social Scheduler</p>
           <h1>Privacy Policy</h1>
-          <p>Effective and last updated: August 5, 2026</p>
+          <p>Effective: August 5, 2026. Last updated: October 21, 2026.</p>
           <p>
             Social Scheduler (the “Service”) helps users connect authorized social media accounts, create content,
             schedule publishing, and publish content that a user confirms to a selected platform. This policy explains
@@ -43,6 +43,7 @@ export default function EnglishPrivacyPage() {
             <li><strong>TikTok account statistics:</strong> optional <code>user.info.stats</code> access displays the connected account&apos;s follower count, following count, total likes and public video count when requested by the user. These are account-wide totals, including videos published outside this service. We do not persist these counts in our database or poll them in the background.</li>
             <li><strong>LinkedIn, Pinterest, and X:</strong> authorized account identifiers, public display names, profile images where available, and necessary tokens are used for account connection, account display, and user-initiated actions that the applicable platform allows.</li>
           </ul>
+          <p><strong>Optional TikTok profile access — <code>user.info.profile</code>:</strong> after user authorization, this feature reads the connected account&apos;s username and profile link to identify the account and open its official TikTok profile. The current implementation does not request biography or verification-status fields and does not persist the additional profile response in our database. It does not provide comment, direct-message or publishing permissions. The additional scope is not yet approved for general availability. Access tokens remain encrypted; users may revoke access in TikTok or disconnect their account, and may request associated-data deletion using the contact details below.</p>
           <p>We do not read unapproved direct messages, private content, or unrelated data, and we do not publish to a third-party platform without a user&apos;s active confirmation.</p>
 
           <h2>3. How we use information</h2>

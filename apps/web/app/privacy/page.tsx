@@ -16,7 +16,7 @@ export default function PrivacyPage() {
         <section className="legal-card">
         <p className="legal-kicker">Social Scheduler</p>
         <h1>隐私政策</h1>
-        <p>生效及最后更新日期：2026 年 8 月 5 日</p>
+        <p>生效日期：2026 年 8 月 5 日；最后更新：2026 年 10 月 21 日。</p>
         <p>
           Social Scheduler（下称“本服务”）帮助用户连接已授权的社交媒体账号、创建内容、安排发布时间并将用户确认的内容发布到所选平台。
           本政策说明我们处理哪些信息、处理目的、保存时间，以及用户如何行使数据权利。
@@ -50,6 +50,7 @@ export default function PrivacyPage() {
           <li><strong>TikTok 账号统计：</strong>可选的 <code>user.info.stats</code> 权限用于用户主动查看已连接账号的粉丝数、关注数、累计获赞数和公开视频数。这些是账号整体数据，包含在本软件之外发布的视频；我们不将统计计数长期保存到数据库，也不后台轮询。</li>
           <li><strong>LinkedIn、Pinterest 与 X：</strong>读取用户授权返回的账号标识、公开显示名称、头像（如平台提供）及必要令牌，用于账号连接、账号展示以及用户明确发起且平台允许的操作。</li>
         </ul>
+        <p><strong>可选 TikTok 资料权限 — <code>user.info.profile</code>：</strong>在用户授权后，用于读取已连接账号的用户名和主页链接，以识别账号并打开其官方 TikTok 主页。当前实现不请求简介或认证状态字段，也不将新增资料查询响应存入数据库；该权限不提供评论、私信或发布权限。新增权限尚待审核通过，未向全部用户开放。访问令牌保持加密保存；用户可在 TikTok 撤销授权或在软件中解绑账号，并通过下方联系方式申请删除关联数据。</p>
         <p>我们不会读取未获授权的私信、私人内容或其他无关数据，也不会在没有用户主动操作的情况下向任何第三方平台发布内容。</p>
 
         <h2>3. 我们如何使用信息</h2>

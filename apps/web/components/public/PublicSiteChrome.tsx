@@ -57,6 +57,7 @@ export function PublicHeader({ locale, page }: { locale: PublicLocale; page: Pub
 
       <nav aria-label="Public site navigation" className="public-nav">
         <Link href={`${paths.home}#features`}>{copy.features}</Link>
+        <Link href={`${paths.home}#product-tour`}>{locale === 'en' ? 'Product tour' : '界面展示'}</Link>
         <Link href={paths.privacy}>{copy.privacy}</Link>
         <Link href={paths.terms}>{copy.terms}</Link>
         <PublicLanguageLinks locale={locale} page={page} />
