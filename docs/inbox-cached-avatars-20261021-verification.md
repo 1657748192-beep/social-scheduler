@@ -22,3 +22,11 @@ User approved existing Facebook customer/author/Page avatars in the inbox list, 
 ## State
 
 Local changes only. No production commands, Meta requests, sends, OAuth changes, deployment or service restarts were performed for this task. Full regression completed in the isolated local test database; existing unrelated workspace edits remain untouched. Missing cached avatars intentionally remain initials; no profile enrichment was attempted.
+
+## Subsequently approved deployment
+
+- User explicitly approved API/web deployment only, Worker unchanged, no additional Meta requests or fees. Deployed source `c087f7c4ce28928b32c8d88d5790831f82a444b8`.
+- Preparation `inv-ja6gk7gr7m` built both images; server started with 9,936,868 KiB free. It stopped before any service switch because the protection snapshot incorrectly ordered FacebookPageSubscriptionState by id instead of pageId. Only the external operational check was corrected; application source was unchanged.
+- Activation `inv-ga6gn00egq` SUCCESS/exit 0, 2026-10-21 09:29:36–09:29:46 UTC (17:29 Beijing). Only API/web recreated, with original environment, commands, mounts and resource settings preserved. API ran node directly: no migration. Health and inbox HTML checks passed; unauthenticated inbox API remained 401.
+- Publishing/user/account/credential/post/schedule/job snapshots and Facebook/Instagram management credentials, scopes and subscriptions compared equal before/after. Worker/postgres/Redis/reverse-proxy container ID, image and start time compared equal. No new cloud resource, storage bucket or paid service was created.
+- Read-only cached case presentation smoke prohibited fetch and checked five Facebook cases. Five had a safe cached Page image, zero had a safe cached customer image; customer initials therefore remain expected, not a failed deployment. Avatar DTO fields and unsafe Graph URL rejection passed. No send, provider read, authorization or review submission was performed by deployment verification.
