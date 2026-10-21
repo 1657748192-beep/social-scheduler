@@ -10,7 +10,7 @@ const supportEmail = "1657748192@qq.com";
 
 export default function EnglishTermsPage() {
   return (
-    <main className="public-site">
+    <main className="public-site" lang="en">
       <PublicHeader locale="en" page="terms" />
       <section className="legal-page public-legal-page">
         <section className="legal-card">

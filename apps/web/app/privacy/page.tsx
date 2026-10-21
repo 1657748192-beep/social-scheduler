@@ -10,7 +10,7 @@ const supportEmail = "1657748192@qq.com";
 
 export default function PrivacyPage() {
   return (
-    <main className="public-site">
+    <main className="public-site" lang="zh-CN">
       <PublicHeader locale="zh-CN" page="privacy" />
       <section className="legal-page public-legal-page">
         <section className="legal-card">

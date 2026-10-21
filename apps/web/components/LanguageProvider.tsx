@@ -1,8 +1,9 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import {localeKey,validLocale,type AppLocale} from '../lib/locale';
 
-export type AppLocale = "zh-CN" | "en";
+export type {AppLocale} from '../lib/locale';
 
 type LanguageContextValue = {
   locale: AppLocale;
@@ -10,31 +11,36 @@ type LanguageContextValue = {
   t: (chinese: string, english: string) => string;
 };
 
-const storageKey = "social_scheduler_locale";
-
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 
-export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocale] = useState<AppLocale>("zh-CN");
+function persistLocale(locale:AppLocale){
+  try{window.localStorage.setItem(localeKey,locale);}catch{/* A blocked storage must not prevent switching. */}
+  try{document.cookie=`${localeKey}=${locale}; Path=/; Max-Age=31536000; SameSite=Lax${window.location?.protocol==='https:'?'; Secure':''}`;}catch{/* localStorage remains the fallback when cookies are blocked. */}
+}
+
+export function LanguageProvider({ children,initialLocale='zh-CN' }: { children: ReactNode; initialLocale?:AppLocale }) {
+  const [locale, setLocaleState] = useState<AppLocale>(initialLocale);
+  const [ready,setReady]=useState(false);
 
   useEffect(() => {
-    let savedLocale:string|null=null;
-    try{savedLocale=window.localStorage.getItem(storageKey);}catch{/* Keep the page usable when browser storage is blocked. */}
-
-    if (savedLocale === "en" || savedLocale === "zh-CN") {
-      setLocale(savedLocale);
-    }
+    let savedLocale:AppLocale|undefined;
+    try{const cookie=(document.cookie??'').split(';').map(v=>v.trim()).find(v=>v.startsWith(localeKey+'='));savedLocale=validLocale(cookie?.slice(localeKey.length+1));}catch{/* Cookie access can be blocked independently of storage. */}
+    if(!savedLocale){try{savedLocale=validLocale(window.localStorage.getItem(localeKey));}catch{/* Keep usable with storage blocked. */}}
+    const chosen=savedLocale??initialLocale;
+    setLocaleState(chosen);
+    persistLocale(chosen);
+    setReady(true);
   }, []);
 
   useEffect(() => {
     document.documentElement.lang = locale;
-    try{window.localStorage.setItem(storageKey, locale);}catch{/* This-page locale still works if persistence is unavailable. */}
-  }, [locale]);
+    if(ready)document.documentElement.removeAttribute?.('data-locale-pending');
+  }, [locale,ready]);
 
   const value = useMemo<LanguageContextValue>(
     () => ({
       locale,
-      setLocale,
+      setLocale:(next)=>{persistLocale(next);setLocaleState(next);},
       t: (chinese, english) => (locale === "en" ? english : chinese)
     }),
     [locale]

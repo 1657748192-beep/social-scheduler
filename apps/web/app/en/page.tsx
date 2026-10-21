@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function EnglishHomePage() {
   return (
-    <main className="public-site">
+    <main className="public-site" lang="en">
       <PublicHeader locale="en" page="home" />
       <PublicHomeContent locale="en" />
       <PublicFooter locale="en" />

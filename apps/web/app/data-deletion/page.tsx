@@ -1,6 +1,6 @@
 export default function DataDeletionPage() {
   return (
-    <main className="legal-page">
+    <main className="legal-page" lang="zh-CN">
       <section className="legal-card">
         <h1>数据删除说明</h1>
         <p>最后更新：2026-06-27</p>

@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./workspace-theme.css";
 import { LanguageProvider } from "../components/LanguageProvider";
+import {cookies} from 'next/headers';
+import {localeBootstrap,localeKey,validLocale} from '../lib/locale';
 
 export const metadata: Metadata = {
   title: "Social Scheduler",
@@ -14,11 +16,13 @@ export const metadata: Metadata = {
   }
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const locale=validLocale((await cookies()).get(localeKey)?.value)??'zh-CN';
   return (
-    <html lang="zh-CN">
+    <html lang={locale} suppressHydrationWarning>
+      <head><script dangerouslySetInnerHTML={{__html:localeBootstrap}}/></head>
       <body>
-        <LanguageProvider>{children}</LanguageProvider>
+        <LanguageProvider initialLocale={locale}>{children}</LanguageProvider>
       </body>
     </html>
   );

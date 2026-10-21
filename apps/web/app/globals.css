@@ -5450,3 +5450,5 @@ textarea {
 .facebook-page-action-hint { position:fixed; z-index:1100; display:grid; gap:8px; box-sizing:border-box; padding:14px 16px; max-height:calc(100dvh - 24px); overflow:auto; border:1px solid #d3e3dd; border-radius:12px; background:#fff; box-shadow:0 8px 28px #143c2b20; color:#38594c; font-size:13px; line-height:1.65; white-space:normal; overflow-wrap:anywhere; text-align:left; }
 .facebook-page-action-hint strong { color:#164b38; font-size:14px; }
 .facebook-page-action-hint small { padding-top:8px; border-top:1px solid #e5eee9; color:#607c70; font-size:12px; }
+/* Only the first migration from a legacy localStorage preference needs this gate. */
+html[data-locale-pending] body { visibility: hidden; }
