@@ -21,7 +21,16 @@ Repair only andypeng97's independent sandbox account mapping; add the profile-li
 - Independent read-only review found no blocker. Requested additional asynchronous and successful-redirect/error-clearing tests were added and passed.
 - Production read-only identity probe `inv-ia6bi30x59` succeeded: TikTok creator username and publishing-token account identity matched andypeng97's current binding; old configured binding was absent; current independent sandbox credential absent. No token refresh, database write or restart.
 - Full regression: 1089/1090 passed; the remaining Facebook HTTP fixture timed out during startup. Its isolated retry passed all 5 tests. Final focused UI/manager tests passed 27/27. API and final production web builds passed.
-- Final browser fixture repeated successfully: one manual profile read, designated row only, zero external writes. Deployment pending.
+- Final browser fixture repeated successfully: one manual profile read, designated row only, zero external writes.
+
+## Deployment
+
+- Code revision `2cf0bd230efad9bbba1dae6dfd742eadd59a8b20`; prepare `inv-ha6bx6g9c4` succeeded, activation `inv-ja6c11gb6v` succeeded on 2026-10-21 14:50:43–14:50:53 Beijing time.
+- API + web updated; API started directly with `node dist/server.js`, no migrations. Initial health retry saw a transient 502 during replacement, then health/login checks passed. Public build manifest matched the deployed web image; public English product tour retained.
+- Only API runtime `TIKTOK_SANDBOX_SOCIAL_ACCOUNT_ID` changed to the verified current binding. All other API environment, all web environment, mounts and protected service settings matched. Environment files remained unchanged. Retained overlay: `/opt/social-scheduler-releases/tiktok-profile-2cf0bd230efad9bbba1dae6dfd742eadd59a8b20/images.yml`.
+- Live service check: designated account eligible, independent authorization absent; other users/workspaces denied. Unauthenticated status returned 401.
+- Publishing snapshot HMACs/counts matched before and after activation, including credentials, schedules and publishing jobs. Worker, PostgreSQL, Redis and reverse proxy IDs/images/start timestamps unchanged. Worker remains started at `2026-10-13T06:01:58.401954871Z`.
+- No permission review submission, token refresh, database mutation, new cloud resources or paid services performed by this deployment.
 
 ## User action required
 
