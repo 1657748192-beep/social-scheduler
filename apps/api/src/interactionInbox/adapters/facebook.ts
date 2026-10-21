@@ -27,7 +27,7 @@ export function createFacebookInboxAdapter({db,engagement,policy=createLiveInbox
     for(let i=0;i<rows.length;i++){
      budget();const s=rows[i],postId=s.publishJobs[0]?.providerPostId;if(!postId)continue;
      const page=await engagement.comments(ctx,s.id,scheduleId===s.id?after:undefined);
-     for(const v of page.items)items.push({providerEventId:v.id,threadId:s.id+':'+v.id,actorId:v.senderId??null,actorName:v.senderName??null,kind:'comments',occurredAt:v.timestamp,inbound:true,deleted:!!v.deleted,sourceRef:{...sourceSchema.parse(a.sourceRef),scheduleId:s.id,postId,commentId:v.id}});
+     for(const v of page.items)items.push({providerEventId:v.id,threadId:s.id+':'+v.id,actorId:v.senderId??null,actorName:v.senderName??null,kind:'comments',occurredAt:v.timestamp,inbound:true,deleted:!!v.deleted,sourceRef:{...sourceSchema.parse(a.sourceRef),scheduleId:s.id,postId:v.postId,commentId:v.id}});
      if(page.nextCursor){nextCursor=encodeInboxCursor(scope,{scheduleId:s.id,after:page.nextCursor});break;}
      if(!restricted&&(scheduleId||i===rows.length-1&&rows.length===25))nextCursor=encodeInboxCursor(scope,{offset:s.id});
     }

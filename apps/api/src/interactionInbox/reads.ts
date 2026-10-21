@@ -5,6 +5,7 @@ import {pendingInboxSend} from './sends';
 import {liveInboxCaseSql} from './sourceLifetime';
 import {parseInboxSource} from './source';
 import {createLiveInboxPolicy,type LiveInboxPolicy} from './livePolicy';
+import {sourceDeletionBoundarySql} from './sourceDeletionBoundary';
 const rateScript="local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],60) end; return n";
 export function createInboxReads({db,access,registry,redis,policy=createLiveInboxPolicy([])}:{db:PrismaClient;access:InboxAccess;registry:InboxRegistry;redis:Pick<Redis,'eval'>;policy?:LiveInboxPolicy}){
  async function listCases(ctx:Scope,input:unknown):Promise<PageResult<CaseDto>>{
@@ -22,7 +23,7 @@ export function createInboxReads({db,access,registry,redis,policy=createLiveInbo
   }
   await access.require(ctx);if(!allowed.length)return{items:[],nextCursor:null,accountsStatus:statuses,partial:statuses.some(s=>s.status!=='ok'),observedAt:new Date().toISOString(),lastSuccessfulSyncAt:lastSuccess};
   const queryTime=new Date();
-  const assetClause=Prisma.join(allowed.map(({a,id})=>{if(a.platform!=='facebook'&&a.platform!=='instagram')throw new HttpError(409,'Interaction platform unavailable');const days=policy.retentionForAsset({workspaceId:ctx.workspaceId,platform:a.platform,appId:a.appNamespace,providerAssetId:a.providerAssetId}).contentRetentionDays;return Prisma.sql`(c."assetId"=${id}::uuid AND ${a.platform==='facebook'?Prisma.sql`c."sourceRef"->>'managedPageId'=${parseInboxSource(a.sourceRef,'facebook').managedPageId}`:Prisma.sql`c."sourceRef"->>'instagramAccountId'=${a.accountId}`} AND c."sourceRef"->>'connectionId'=${a.sourceRef!.connectionId} AND c."sourceRef"->>'connectionVersion'=${String(a.connectionVersion)} AND ${liveInboxCaseSql(queryTime,days)})`;}),' OR ');
+  const assetClause=Prisma.join(await Promise.all(allowed.map(async({a,id})=>{if(a.platform!=='facebook'&&a.platform!=='instagram')throw new HttpError(409,'Interaction platform unavailable');const days=policy.retentionForAsset({workspaceId:ctx.workspaceId,platform:a.platform,appId:a.appNamespace,providerAssetId:a.providerAssetId}).contentRetentionDays;const deletion=await sourceDeletionBoundarySql(db,a);return Prisma.sql`(c."assetId"=${id}::uuid AND ${a.platform==='facebook'?Prisma.sql`c."sourceRef"->>'managedPageId'=${parseInboxSource(a.sourceRef,'facebook').managedPageId}`:Prisma.sql`c."sourceRef"->>'instagramAccountId'=${a.accountId}`} AND c."sourceRef"->>'connectionId'=${a.sourceRef!.connectionId} AND c."sourceRef"->>'connectionVersion'=${String(a.connectionVersion)} AND ${liveInboxCaseSql(queryTime,days)} AND ${deletion})`;})),' OR ');
   const clauses=[Prisma.sql`c."workspaceId"=${ctx.workspaceId}::uuid`,Prisma.sql`(${assetClause})`,Prisma.sql`c.kind=${q.kind}`,liveInboxCaseSql()];
   if(q.status)clauses.push(Prisma.sql`c.status=${q.status}`);
   if(q.from)clauses.push(Prisma.sql`COALESCE(c."lastInboundAt",c."createdAt")>=${new Date(q.from)}`);
