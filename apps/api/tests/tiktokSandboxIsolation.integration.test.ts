@@ -78,6 +78,14 @@ test("Sandbox database isolation, replay protection and identity gating", async 
     });
     assert.deepEqual(await db.socialAccount.findUnique({ where: { id: accountId }, include: { credential: true } }), before);
     const credentials = createSandboxCredentialService({ db, settings, api });
+    await t.test("status binds the profile entry to its exact account and never exposes another user's binding", async () => {
+      const status = await credentials.status(userId, workspaceId);
+      assert.equal((status as any).accountId, accountId);
+      assert.deepEqual(await credentials.status(randomUUID(), workspaceId), {eligible:false,connected:false});
+      await db.workspaceMember.updateMany({where:{userId,workspaceId},data:{role:'viewer'}});
+      assert.deepEqual(await credentials.status(userId, workspaceId), {eligible:false,connected:false});
+      await db.workspaceMember.updateMany({where:{userId,workspaceId},data:{role:'owner'}});
+    });
     await t.test("parallel refresh rotates sandbox tokens only once", async () => {
       await db.tikTokSandboxCredential.update({ where: { socialAccountId: accountId }, data: { expiresAt: new Date(0) } });
       const tokens = await Promise.all([credentials.token(userId, workspaceId), credentials.token(userId, workspaceId)]);

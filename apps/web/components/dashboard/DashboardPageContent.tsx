@@ -482,7 +482,7 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
         </DashboardActivity>
         )}
 
-        {accountsOnly ? <SocialAccountManager
+        {accountsOnly ? <SocialAccountManager profileTestEnabled={user?.isPlatformAdmin===true}
           accounts={accountsWorkspaceId === selectedWorkspaceId ? socialAccounts : []}
           providers={accountsWorkspaceId === selectedWorkspaceId ? supportedOAuthStatuses : []}
           workspaceId={selectedWorkspaceId} token={token ?? ''} canManage={canManageMembers}
@@ -633,7 +633,7 @@ export default function DashboardPageContent({ accountsOnly = false }: { account
             {socialAccounts.map((account) => (
               <div className="connected-table-row" key={account.id}>
                 <span>{platformLabel(account.platform)}</span>
-                <div className="connected-account-identity"><strong>{account.displayName}</strong><SocialAccountProfileLink platform={account.platform} profileUrl={account.profileUrl}/></div>
+                <div className="connected-account-identity"><strong>{account.displayName}</strong><SocialAccountProfileLink platform={account.platform} profileUrl={account.profileUrl} accountId={user?.isPlatformAdmin?account.id:undefined} accountStatus={account.status} token={token??undefined} workspaceId={selectedWorkspace?.id}/></div>
                 <span>
                   {accountStatusLabel(account.status, locale)}
                   {authorizationWarning(account) ? (

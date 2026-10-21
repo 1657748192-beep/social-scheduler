@@ -12,7 +12,7 @@ export function createSandboxCredentialService({ db, settings, api }: SandboxDep
           await assertSandboxContext(tx, settings, userId, workspaceId);
           const row = await tx.tikTokSandboxCredential.findUnique({ where: { socialAccountId: settings.allowedAccountId } });
           const connected = !!row && row.userId === userId && row.workspaceId === workspaceId && row.clientKey === settings.clientId;
-          return { eligible: true, connected, profileGranted: connected && row.scopes.includes("user.info.profile"), accountName: "andypeng97" };
+          return { eligible: true, connected, profileGranted: connected && row.scopes.includes("user.info.profile"), accountName: "andypeng97", accountId: settings.allowedAccountId };
         });
       } catch (error) {
         if (error instanceof HttpError && error.statusCode === 403) return { eligible: false, connected: false };

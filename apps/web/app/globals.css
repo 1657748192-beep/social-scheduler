@@ -371,6 +371,9 @@ textarea {
 .public-profile-explainer a { color: #007f5b; text-decoration: underline; }
 @media (max-width: 760px) { .public-tour-grid { grid-template-columns: 1fr; } .public-profile-explainer { padding: 22px; } .public-brand strong { font-size: 15px; } }
 
+.tiktok-profile-entry { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 100%; }
+.tiktok-profile-entry > small { flex-basis: 100%; line-height: 1.5; }
+
 .public-feature-section {
   margin-top: 78px;
 }
