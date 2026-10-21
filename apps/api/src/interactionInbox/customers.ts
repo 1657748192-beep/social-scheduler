@@ -1,5 +1,5 @@
 import type {PrismaClient} from '@prisma/client';import {z} from 'zod';import {HttpError} from '../utils/errors';
-import type {InboxAccess,InboxDb} from './access';import type {CustomerDto,Scope} from './types';import {safeInboxUrl} from './directory';import {presentInboxCase} from './cases';
+import type {InboxAccess,InboxDb} from './access';import type {CustomerDto,Scope} from './types';import {safeInboxUrl,safeInboxAvatarUrl} from './directory';import {presentInboxCase} from './cases';
 export async function resolveInboxCustomer(db:InboxDb,access:InboxAccess,ctx:Scope,id:string,write=false){
  await access.require(ctx,write?'write':'read');const row=await db.interactionCustomer.findFirst({where:{id,workspaceId:ctx.workspaceId,deletedAt:null},include:{identities:{include:{asset:true},take:50},cases:{select:{id:true},orderBy:{createdAt:'desc'},take:50}}});
  if(!row||!row.identities.length||!row.cases.length)throw new HttpError(404,'Customer unavailable');
@@ -9,7 +9,7 @@ export async function resolveInboxCustomer(db:InboxDb,access:InboxAccess,ctx:Sco
 export function createInboxCustomers({db,access}:{db:PrismaClient;access:InboxAccess}){
  async function getCustomer(ctx:Scope,id:string):Promise<CustomerDto>{
   const row=await resolveInboxCustomer(db,access,ctx,id),tags=await db.interactionCustomerTag.findMany({where:{customerId:id,workspaceId:ctx.workspaceId,tag:{deletedAt:null}},include:{tag:true}}),notes=await db.customerNote.findMany({where:{customerId:id,workspaceId:ctx.workspaceId,deletedAt:null},orderBy:{createdAt:'desc'},take:100});
-  const identities=[];for(const i of row.identities){const account=await db.socialAccount.findFirst({where:{workspaceId:ctx.workspaceId,platform:i.platform as any,providerAccountId:i.asset.providerAssetId},select:{id:true}});if(!account)continue;identities.push({platform:i.platform,name:i.displayName,username:i.username,avatarUrl:safeInboxUrl(i.avatarUrl),profileUrl:safeInboxUrl(i.profileUrl),accountId:account.id});}
+  const identities=[];for(const i of row.identities){const account=await db.socialAccount.findFirst({where:{workspaceId:ctx.workspaceId,platform:i.platform as any,providerAccountId:i.asset.providerAssetId},select:{id:true}});if(!account)continue;identities.push({platform:i.platform,name:i.displayName,username:i.username,avatarUrl:safeInboxAvatarUrl(i.avatarUrl),profileUrl:safeInboxUrl(i.profileUrl),accountId:account.id});}
   const cases=[];for(const c of row.cases.slice(0,50)){const {asset}=await access.resolveCase(ctx,c.id);cases.push(await presentInboxCase(db,ctx,c.id,asset.accountId));}
   await access.require(ctx);return{id,version:row.version,name:identities[0]?.name??null,identities,tags:tags.map(({tag})=>({id:tag.id,kind:tag.kind,name:tag.name,color:tag.color,version:tag.version})),notes:notes.map(n=>({id:n.id,text:n.text,authorId:n.authorId,own:n.authorId===ctx.userId,createdAt:n.createdAt.toISOString()})),cases};
  }

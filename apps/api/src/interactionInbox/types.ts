@@ -12,7 +12,7 @@ export type PageResult<T>={items:T[];nextCursor:string|null;accountsStatus:Accou
 export type AccountDto={id:string;platform:InboxPlatform;name:string;avatarUrl:string|null;publishingStatus:string;capabilities:CapabilityDto[]};
 export type SourceRef=import('./source').MetaInboxSource;
 export type ResolvedAsset={ctx:Scope;accountId:string;platform:InboxPlatform;canonicalKey:string;appNamespace:string;providerAssetId:string;sourceRef:SourceRef|null;connectionVersion:number};
-export type BodyItem={id:string;text:string|null;occurredAt:string;inbound:boolean;senderName?:string|null;deleted?:boolean};
+export type BodyItem={id:string;text:string|null;occurredAt:string;inbound:boolean;senderName?:string|null;senderAvatarUrl?:string|null;deleted?:boolean};
 export type VerifiedItem={providerEventId:string;threadId:string;actorId:string|null;actorName:string|null;kind:Kind;occurredAt:string;inbound:boolean;deleted:boolean;sourceRef:SourceRef;text?:string|null};
 export type AdapterPage={items:VerifiedItem[];nextCursor:string|null;coverage:string;warnings:string[]};
 export type AdapterDetail={items:BodyItem[];nextCursor:string|null;officialUrl:string|null;replyTarget:string|null;capabilities:CapabilityDto[]};
@@ -26,6 +26,6 @@ export interface InboxAdapter {
  normalizeVerifiedEvent(sourceIds:string[],asset:ResolvedAsset):Promise<VerifiedItem[]>;
 }
 export type TagDto={id:string;kind:string;name:string;color:string;version:number};
-export type CaseDto={id:string;kind:Kind;accountId:string;customerId:string|null;customerName:string|null;sourceLabel:string;status:string;replied?:boolean;version:number;lastInboundAt:string|null;unread:boolean;tags:TagDto[];assigneeId:string|null;sentiment:string|null};
+export type CaseDto={id:string;kind:Kind;accountId:string;customerId:string|null;customerName:string|null;sourceLabel:string;status:string;replied?:boolean;customerAvatarUrl?:string|null;accountAvatarUrl?:string|null;version:number;lastInboundAt:string|null;unread:boolean;tags:TagDto[];assigneeId:string|null;sentiment:string|null};
 export type DetailDto=CaseDto&AdapterDetail&{readPosition?:{eventAt:string;eventKey:string}|null;pendingSend?:{requestKey:string;status:string;diagnosticId:string|null;createdAt:string}|null};
 export type CustomerDto={id:string;version:number;name:string|null;identities:Array<{platform:string;name:string|null;username:string|null;avatarUrl:string|null;profileUrl:string|null;accountId:string}>;tags:TagDto[];notes:Array<{id:string;text:string;authorId:string;createdAt:string}>;cases:CaseDto[]};
