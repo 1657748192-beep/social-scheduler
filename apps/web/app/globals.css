@@ -5320,6 +5320,8 @@ textarea {
 .unified-inbox .inbox-compose-tabs [aria-selected=true] { color:var(--inbox-green); border-bottom-color:var(--inbox-green); }
 .unified-inbox .inbox-compose-identity { font-size:11px; color:var(--inbox-sub); padding:11px 12px 0; margin:0; }
 .unified-inbox .inbox-reply textarea { border:0; border-radius:0; background:transparent; padding:12px; min-height:104px; resize:vertical; font-size:13px; }
+.unified-inbox .inbox-reply textarea:not([hidden]) { display:block; box-sizing:border-box; width:calc(100% - 24px); margin:8px 12px 12px; padding:10px 12px; min-height:120px; border:1px solid var(--inbox-line); border-radius:7px; background:#fff; line-height:1.6; }
+.unified-inbox .inbox-reply textarea:focus-visible { outline:2px solid var(--inbox-green); outline-offset:-3px; border-color:var(--inbox-green); }
 .unified-inbox .inbox-compose-footer { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:0 11px 11px; }
 .unified-inbox .inbox-compose-footer small { color:var(--inbox-sub); font-size:11px; }
 .unified-inbox .inbox-compose-hint, .unified-inbox .inbox-reply>p[role] { margin:0; padding:9px 12px; font-size:11px; border-top:1px solid var(--inbox-line); color:#7e8f98; }
