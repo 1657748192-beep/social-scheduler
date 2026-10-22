@@ -2,7 +2,7 @@ import {apiRequest} from './api';
 export type FacebookManagedPage={id:string;connectionId:string;pageId:string;name:string;profileUrl:string|null;avatarUrl:string|null;businesses:Array<{id:string;name:string;relation:'owned'|'client'}>;publishingAccountId:string|null;authorization:'available'|'missing'|'expired'|'unknown';lastReadAt:string|null;selectedManagedPageId?:string|null;connectionChoices?:Array<{managedPageId:string;connectionId:string;available:boolean}>};
 export type FacebookConnection={id:string;authorizedBy:string;ownConnection:boolean;status:string;createdAt:string;lastReadAt:string|null};
 export type FacebookReadPage<T>={items:T[];nextCursor:string|null;readAt:string;source:'graph'|'received'|'mixed';stale:boolean;warnings:Array<{code:string;diagnosticId:string}>};
-export type FacebookSendOutcome={status:'sent';providerId:string}|{status:'failed';code:string;diagnosticId:string}|{status:'unknown';diagnosticId:string};
+export type FacebookSendOutcome={status:'sent';providerId:string;replayed?:true}|{status:'failed';code:string;diagnosticId:string}|{status:'unknown';diagnosticId:string};
 export type FacebookCapabilityState={status:'available'|'missing'|'unknown';reason?:string};
 export type FacebookCapabilities=Record<'readComments'|'replyComments'|'readMessages'|'replyMessages'|'subscription',FacebookCapabilityState>;
 export type FacebookNotificationStatus={enabled:boolean;subscription:'available'|'missing'|'unknown';lastReceivedAt:string|null;source:'signed_webhook'};
@@ -13,6 +13,7 @@ export function facebookPageRequest<T>(token:string,ctx:FacebookInteractionConte
 }
 export function newFacebookRequestKey(){if(!globalThis.crypto?.randomUUID)throw Error('Secure request identity is unavailable');return globalThis.crypto.randomUUID();}
 export function facebookManagementSendNotice(result:FacebookSendOutcome,english:boolean){
+  if(result.status==='sent'&&result.replayed)return english?'Previously sent. Nothing was resent this time.':'此前已发送，本次未重发。';
   if(result.status==='sent')return english?'Reply sent.':'回复已发送。';
   if(result.status==='failed')return english?'Reply was not sent. Check permissions and the reply window.':'回复未发送，请检查权限和回复窗口。';
   return english?'Send result unknown. Verify in Meta Business Suite before starting a new reply. This request will not be retried automatically.':'发送结果未知，请先在 Meta Business Suite 核对，再决定是否开始新的回复。此请求不会自动重发。';

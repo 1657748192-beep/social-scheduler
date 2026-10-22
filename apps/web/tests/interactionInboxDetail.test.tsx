@@ -17,6 +17,23 @@ test('same-case reload preserves unfinished internal input while customer data l
  },url=>url.pathname.includes('/customers/')&&++reads>1?new Promise(resolve=>{finish=resolve;}):undefined);
 });
 
+test('a reused historical send receipt is not presented as a freshly sent reply',async()=>{
+ const {InteractionDetail}=await import('../components/inbox/unified/InteractionDetail');let sends=0;
+ await withInboxUI(<InteractionDetail token="test" workspaceId="w1" item={inboxCase as any} accountName="Page" canWrite canManage onClose={()=>{}} onDirtyChange={()=>{}} onUpdated={()=>{}} onAccessDenied={()=>{}}/>,async({view}:any)=>{
+  await act(async()=>view.root.findByProps({'aria-label':'回复正文'}).props.onChange({target:{value:'same approved reply'}}));await act(async()=>facebookButton(view,'发送公开回复').props.onClick());
+  assert.match(facebookText(view),/此前已发送，本次未重发/);assert.doesNotMatch(facebookText(view),/平台已确认发送成功/);assert.equal(sends,1);assert.equal(facebookButton(view,'发送公开回复').props.disabled,true);
+  await act(async()=>facebookButton(view,'刷新详情').props.onClick());assert.equal(sends,1);assert.match(facebookText(view),/此前已发送，本次未重发/);
+ },url=>url.pathname.endsWith('/replies')?(sends++,Response.json({status:'sent',providerId:'old-receipt',replayed:true})):undefined);
+});
+
+test('English Messenger composer labels a reused receipt without claiming a fresh send',async()=>{
+ const {ReplyComposer}=await import('../components/inbox/unified/ReplyComposer'),{LanguageProvider}=await import('../components/LanguageProvider');let sends=0;
+ await withInboxUI(<LanguageProvider initialLocale="en"><ReplyComposer detail={{...inboxCase,kind:'messages',items:[],nextCursor:null,officialUrl:null,replyTarget:'conversation',capabilities:[{capability:'messages.reply',available:true,reason:'available',verifiedAt:null}]}} accountName="Page" canWrite onSend={async()=>{sends++;return{status:'sent',providerId:'prior-receipt',replayed:true};}} onDirtyChange={()=>{}} onAcknowledge={async()=>{}}/></LanguageProvider>,async({view}:any)=>{
+  await act(async()=>view.root.findByProps({'aria-label':'Reply text'}).props.onChange({target:{value:'approved demo'}}));await act(async()=>facebookButton(view,'Send message').props.onClick());
+  assert.match(facebookText(view),/Previously sent\. Nothing was resent this time\./);assert.doesNotMatch(facebookText(view),/The platform confirmed the reply was sent/);assert.equal(sends,1);assert.equal(facebookButton(view,'Send message').props.disabled,true);
+ });
+});
+
 test('late successful send cannot restore the previous platform list',async()=>{
  const {UnifiedInbox}=await import('../components/inbox/unified/UnifiedInbox');let finish!:(r:Response)=>void;
  await withInboxUI(<UnifiedInbox token="test" workspaces={[{id:'w1',name:'Workspace',role:'owner'}] as any}/>,async({view}:any)=>{

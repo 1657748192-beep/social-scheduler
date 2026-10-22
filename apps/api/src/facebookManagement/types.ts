@@ -16,7 +16,7 @@ export type ReadPage<T> = {
   warnings:Array<{code:string;diagnosticId:string}>;
 };
 export type SendOutcome =
-  | {status:'sent';providerId:string}
+  | {status:'sent';providerId:string;replayed?:true}
   | {status:'unknown';diagnosticId:string}
   | {status:'failed';code:string;diagnosticId:string};
 

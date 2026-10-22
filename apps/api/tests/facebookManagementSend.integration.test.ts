@@ -25,7 +25,7 @@ async function fixture(run:(f:any)=>Promise<void>){
 test('concurrentSameKeySendsOnce',async()=>fixture(async({db,ctx,execute,input}:any)=>{
   let calls=0;const send=async()=>{calls++;return{status:'sent',providerId:'m1'};};
   const results=await Promise.all([execute(ctx,input,send),execute(ctx,input,send)]);
-  assert.equal(calls,1);assert.ok(results.some(r=>r.status==='sent'));
+  assert.equal(calls,1);assert.ok(results.some(r=>r.status==='sent'));assert.ok(results.every(r=>r.replayed===undefined));
   assert.deepEqual(await execute(ctx,input,send),{status:'sent',providerId:'m1'});assert.equal(calls,1);
   assert.equal(JSON.stringify(await db.facebookInteractionSendAttempt.findMany({where:{managedPageId:ctx.managedPageId}})).includes(input.text),false);
 }));

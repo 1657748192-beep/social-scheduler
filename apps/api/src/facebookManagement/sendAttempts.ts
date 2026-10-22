@@ -8,8 +8,8 @@ type Input={requestKey:string;targetId:string;kind:'message'|'comment';text:stri
 export class FacebookSendInputError extends Error{
   constructor(readonly statusCode:400|409){super(statusCode===409?'Request key was already used with different input':'Invalid Facebook reply request');}
 }
-function outcome(row:FacebookInteractionSendAttempt):SendOutcome{
-  if(row.status==='sent'&&row.providerId)return {status:'sent',providerId:row.providerId};
+function outcome(row:FacebookInteractionSendAttempt,replayed=false):SendOutcome{
+  if(row.status==='sent'&&row.providerId)return {status:'sent',providerId:row.providerId,...(replayed?{replayed:true as const}:{})};
   if(row.status==='failed')return {status:'failed',code:row.errorCode??'reply_failed',diagnosticId:row.diagnosticId!};
   return {status:'unknown',diagnosticId:row.diagnosticId!};
 }
@@ -39,7 +39,7 @@ export function createFacebookSendExecutor({db,testRestriction}:{db:PrismaClient
           const row=await tx.facebookInteractionSendAttempt.create({data:previous?{...data,status:previous.status==='pending'?'unknown':previous.status,providerId:previous.providerId,errorCode:previous.errorCode}:data});
           return {row,fresh:!previous};
         });
-        if(!admitted.fresh)return outcome(admitted.row);
+        if(!admitted.fresh)return outcome(admitted.row,true);
         attempt=admitted.row;
       }else attempt=await db.facebookInteractionSendAttempt.create({data});
     }
@@ -51,9 +51,9 @@ export function createFacebookSendExecutor({db,testRestriction}:{db:PrismaClient
       if(existing.status==='pending'&&Date.now()-existing.createdAt.getTime()>=30000){
         await db.facebookInteractionSendAttempt.updateMany({where:{id:existing.id,status:'pending',createdAt:existing.createdAt},data:{status:'unknown'}});
         const current=await db.facebookInteractionSendAttempt.findUnique({where:{id:existing.id}});
-        return current?outcome(current):{status:'unknown',diagnosticId:existing.diagnosticId!};
+        return current?outcome(current,!!rule):{status:'unknown',diagnosticId:existing.diagnosticId!};
       }
-      return outcome(existing);
+      return outcome(existing,!!rule);
     }
     // Never hold a database transaction open over the external send. Only this
     // freshly inserted attempt may call it; uncertainty is terminal, not retried.

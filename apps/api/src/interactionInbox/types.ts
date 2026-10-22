@@ -16,7 +16,7 @@ export type BodyItem={id:string;text:string|null;occurredAt:string;inbound:boole
 export type VerifiedItem={providerEventId:string;threadId:string;actorId:string|null;actorName:string|null;kind:Kind;occurredAt:string;inbound:boolean;deleted:boolean;sourceRef:SourceRef;text?:string|null};
 export type AdapterPage={items:VerifiedItem[];nextCursor:string|null;coverage:string;warnings:string[]};
 export type AdapterDetail={items:BodyItem[];nextCursor:string|null;officialUrl:string|null;replyTarget:string|null;capabilities:CapabilityDto[]};
-export type SendOutcome={status:'sent';providerId:string}|{status:'failed';code:string;diagnosticId:string}|{status:'unknown';diagnosticId:string};
+export type SendOutcome={status:'sent';providerId:string;replayed?:true}|{status:'failed';code:string;diagnosticId:string}|{status:'unknown';diagnosticId:string};
 export interface InboxAdapter {
  pendingSend?(asset:ResolvedAsset,source:SourceRef,requestKey:string,db:import('./access').InboxDb):Promise<{requestKey:string;status:string;diagnosticId:string|null;createdAt:string}|null>;
  capabilities(asset:ResolvedAsset):Promise<CapabilityDto[]>;

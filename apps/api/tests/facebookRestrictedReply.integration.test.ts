@@ -37,7 +37,9 @@ test('restrictedReplyRejectsOtherTextRecipientAndCommentBeforeDispatch',async()=
 test('restrictedReplyConcurrentDifferentKeysDispatchOnlyOnceAndKeepReceipts',async()=>fixture(async({db,ctx,input,executor}:any)=>{
  let dispatches=0;const send=async()=>{dispatches++;return{status:'sent',providerId:'one-message'};};
  const execute=executor();const keys=[randomUUID(),randomUUID()];
- await Promise.all(keys.map(requestKey=>execute(ctx,{...input,requestKey},send)));
+ const results=await Promise.all(keys.map(requestKey=>execute(ctx,{...input,requestKey},send)));
+ assert.equal(results.filter(r=>r.status==='sent'&&!r.replayed).length,1);
+ for(const result of results)if(result.status!=='sent')assert.equal(result.replayed,undefined);
  assert.equal(dispatches,1);
  const retry=await executor()(ctx,{...input,requestKey:randomUUID()},send);assert.equal(retry.status,'sent');assert.equal(retry.providerId,'one-message');assert.equal(dispatches,1);
  const rows=await db.facebookInteractionSendAttempt.findMany({where:{managedPageId:ctx.managedPageId}});assert.equal(rows.length,3);assert.equal(JSON.stringify(rows).includes(input.text),false);
@@ -45,8 +47,33 @@ test('restrictedReplyConcurrentDifferentKeysDispatchOnlyOnceAndKeepReceipts',asy
 
 test('restrictedReplyUnknownCannotResendWithNewKeyOrNewExecutor',async()=>fixture(async({ctx,input,executor}:any)=>{
  let dispatches=0;const send=async()=>{dispatches++;throw Error('network result unknown');};
- assert.equal((await executor()(ctx,input,send)).status,'unknown');
- assert.equal((await executor()(ctx,{...input,requestKey:randomUUID()},send)).status,'unknown');assert.equal(dispatches,1);
+ const first=await executor()(ctx,input,send),retry=await executor()(ctx,{...input,requestKey:randomUUID()},send);
+ assert.equal(first.status,'unknown');assert.equal(first.replayed,undefined);assert.equal(retry.status,'unknown');assert.equal(retry.replayed,undefined);assert.equal(dispatches,1);
+}));
+
+test('restricted prior rejection remains failed without a historical-success label or redispatch',async()=>fixture(async({ctx,input,executor}:any)=>{
+ let dispatches=0;const send=async()=>{dispatches++;return{status:'failed',code:'reply_denied',diagnosticId:randomUUID()};};
+ const first=await executor()(ctx,input,send),retry=await executor()(ctx,{...input,requestKey:randomUUID()},send);
+ assert.equal(first.status,'failed');assert.equal(first.replayed,undefined);assert.equal(retry.status,'failed');assert.equal(retry.code,'reply_denied');assert.equal(retry.replayed,undefined);assert.equal(dispatches,1);
+}));
+
+test('restricted historical success is explicitly replayed without another dispatch',async()=>fixture(async({ctx,input,executor}:any)=>{
+ let dispatches=0;const send=async()=>{dispatches++;return{status:'sent',providerId:'original-receipt'};};
+ const first=await executor()(ctx,input,send);assert.equal(first.replayed,undefined);
+ const repeated=await executor()(ctx,{...input,requestKey:randomUUID()},send);
+ assert.equal(repeated.status,'sent');assert.equal(repeated.providerId,'original-receipt');assert.equal(repeated.replayed,true);assert.equal(dispatches,1);
+ const sameKey=await executor()(ctx,input,send);assert.equal(sameKey.replayed,true);assert.equal(dispatches,1);
+}));
+
+test('a distinct fixed recording text remains single-dispatch without deleting previous attempts',async()=>fixture(async({db,ctx,input,executor,restriction}:any)=>{
+ let dispatches=0;const send=async()=>({status:'sent',providerId:'receipt-'+(++dispatches)});
+ await executor()(ctx,input,send);
+ const text='Social Scheduler Messenger reply test REC2. This reply is for app review demonstration only.';
+ const rule={...restriction,textSha256:createHash('sha256').update(text).digest('hex')},next={...input,requestKey:randomUUID(),text};
+ await assert.rejects(executor(rule)(ctx,{...input,requestKey:randomUUID()},send));assert.equal(dispatches,1);
+ const first=await executor(rule)(ctx,next,send);assert.equal(first.status,'sent');assert.equal(first.replayed,undefined);assert.equal(dispatches,2);
+ const retry=await executor(rule)(ctx,{...next,requestKey:randomUUID()},send);assert.equal(retry.replayed,true);assert.equal(retry.providerId,first.providerId);assert.equal(dispatches,2);
+ assert.equal(await db.facebookInteractionSendAttempt.count({where:{managedPageId:ctx.managedPageId}}),3);
 }));
 
 test('restrictedReplyExpiredOrChangedGrantNeverDispatches',async()=>fixture(async({ctx,input,executor,restriction}:any)=>{
