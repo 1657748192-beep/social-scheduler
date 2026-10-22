@@ -41,3 +41,19 @@ Release operation: `/opt/social-scheduler-releases/inbox-read-125ea9d34fa0d096fe
 Refresh the software after deployment. Entry: `https://app.bufferhelp.com/inbox` → Facebook → Private messages → Factory Wholesale.
 
 For a fresh receiving-and-replying recording, the user must send a new test private message from the personal test account. Suggested marker: `SS-FB-DM-1022-REC2 Messenger review demo`. Do not send the Page reply on the user’s behalf. Verify the new message and its target before handing over the single manual reply action. If the current controlled rule expires first, renewed entry authorization/preparation is required; never silently extend it.
+
+## Fresh REC2 message verified after user confirmation
+
+The user confirmed sending the new message. Read-only `inv-ia7evb0f5s`, SUCCESS/0, at 02:41:26–02:41:31 UTC (10:41 Beijing), verified:
+
+- Exactly one inbound `SS-FB-DM-1022-REC2 Messenger review demo` in the pinned Factory Wholesale conversation, timestamp 02:40:35 UTC (10:40:35 Beijing).
+- No outgoing message and no send attempt at or after that new inbound timestamp. The one existing successful attempt predates this new case; it was retained and not resent.
+- `pendingSend=false`, `messages.reply` available, original restricted rule and session current; rule expiry remains 15:14:19 Beijing.
+- List 827 ms / 2 provider GETs, detail 1539 ms / 4 provider GETs, 10 messages. All six bounded GETs returned HTTP 200, no Meta rate limit. No refresh or provider-write operation was run.
+- Publishing snapshot, send-state fingerprint, environment-file hashes and protected service fingerprints equal before/after. No restart, send or review submission.
+
+Server-side receiving/manual-reply prerequisites are now verified for the fresh marker. UI screenshot verification remains unperformed because of the previously reported browser-control timeout. The user should refresh the inbox, select Facebook → Private messages → Factory Wholesale, confirm the new marker is visible, then record and manually send the approved reply once:
+
+`Social Scheduler Messenger reply test. This reply is for app review demonstration only.`
+
+Keep the reply unsent until recording begins. Verify receipt on the personal test account’s Messenger side. Stop further provider probing after this successful bounded check.
