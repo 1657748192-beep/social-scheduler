@@ -52,7 +52,14 @@ export function createInboxReads({db,access,registry,redis,policy=createLiveInbo
  }
  async function getCase(ctx:Scope,id:string,input:unknown):Promise<DetailDto>{const q=parseQuery(input),{row,asset,source}=await access.resolveCase(ctx,id);if(!q.accountIds.includes(asset.accountId)||q.kind!==row.kind)throw new HttpError(404,'Interaction unavailable');
   const cursorScope={ctx,id,connectionVersion:asset.connectionVersion,source};const position=q.cursor?z.object({after:z.string().max(2048)}).strict().parse(decodeInboxCursor(cursorScope,q.cursor)).after:undefined;
-  const detail=await registry.getInboxAdapter(asset.platform).detail(asset,source,position);await access.resolveCase(ctx,id);const presented=await presentInboxCase(db,ctx,id,asset.accountId);const items=detail.items.map(v=>({...v,senderAvatarUrl:v.deleted?null:v.inbound?v.senderAvatarUrl??((source.conversationId||v.id===source.commentId)?presented.customerAvatarUrl??null:null):presented.accountAvatarUrl??null}));return{...presented,...detail,items,nextCursor:detail.nextCursor?encodeInboxCursor(cursorScope,{after:detail.nextCursor}):null,readPosition:row.lastInboundAt&&row.lastInboundKey?{eventAt:row.lastInboundAt.toISOString(),eventKey:row.lastInboundKey}:null,pendingSend:await pendingInboxSend(db,ctx,id,source,asset,registry)};
+  const detail=await registry.getInboxAdapter(asset.platform).detail(asset,source,position);await access.resolveCase(ctx,id);
+  // Detail may already contain a newer inbound than the synchronized case row.
+  // Reuse that trusted response rather than fetching Meta again or writing state.
+  const latestInbound=detail.items.reduce<Date|undefined>((latest,item)=>{
+   if(!item.inbound||item.deleted)return latest;
+   const date=new Date(item.occurredAt);return Number.isFinite(date.getTime())&&date.getTime()<=Date.now()&&(!latest||date>latest)?date:latest;
+  },undefined);
+  const presented=await presentInboxCase(db,ctx,id,asset.accountId,latestInbound);const items=detail.items.map(v=>({...v,senderAvatarUrl:v.deleted?null:v.inbound?v.senderAvatarUrl??((source.conversationId||v.id===source.commentId)?presented.customerAvatarUrl??null:null):presented.accountAvatarUrl??null}));return{...presented,...detail,items,nextCursor:detail.nextCursor?encodeInboxCursor(cursorScope,{after:detail.nextCursor}):null,readPosition:row.lastInboundAt&&row.lastInboundKey?{eventAt:row.lastInboundAt.toISOString(),eventKey:row.lastInboundKey}:null,pendingSend:await pendingInboxSend(db,ctx,id,source,asset,registry)};
  }
  return{listCases:(...args:Parameters<typeof listCases>)=>withFacebookReadInspection(()=>listCases(...args)),getCase:(...args:Parameters<typeof getCase>)=>withFacebookReadInspection(()=>getCase(...args))};
 }

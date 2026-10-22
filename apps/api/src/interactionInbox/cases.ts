@@ -1,8 +1,8 @@
-import type {PrismaClient} from '@prisma/client';import {z} from 'zod';
+import {Prisma,type PrismaClient} from '@prisma/client';import {z} from 'zod';
 import {HttpError} from '../utils/errors';import {isPlatformAdmin} from '../utils/platformAdmin';
 import type {InboxAccess,InboxDb} from './access';import type {Scope,CaseDto} from './types';import {createHash} from 'node:crypto';
 import {safeInboxAvatarUrl} from './directory';
-export async function presentInboxCase(db:InboxDb,ctx:Scope,id:string,accountId:string):Promise<CaseDto>{
+export async function presentInboxCase(db:InboxDb,ctx:Scope,id:string,accountId:string,observedInboundAt?:Date):Promise<CaseDto>{
  const c=await db.interactionCase.findFirstOrThrow({where:{id,workspaceId:ctx.workspaceId},include:{asset:true,customer:{include:{identities:true}},tags:{where:{tag:{deletedAt:null}},include:{tag:true}},receipts:{where:{userId:ctx.userId}}}}),r=c.receipts[0];
  const account=await db.socialAccount.findFirst({where:{id:accountId,workspaceId:ctx.workspaceId,platform:c.asset.platform as any,providerAccountId:c.asset.providerAssetId},select:{displayName:true,avatarUrl:true}});
  const source=c.sourceRef as Record<string,unknown>;let replied=false;
@@ -10,6 +10,27 @@ export async function presentInboxCase(db:InboxDb,ctx:Scope,id:string,accountId:
  const customerAvatarUrl=safeInboxAvatarUrl(identity?.avatarUrl);let accountAvatarUrl=safeInboxAvatarUrl(account?.avatarUrl);
  if(!accountAvatarUrl&&c.asset.platform==='facebook'&&typeof source.managedPageId==='string'){const page=await db.facebookManagedPage.findFirst({where:{id:source.managedPageId,pageId:c.asset.providerAssetId,connectionId:typeof source.connectionId==='string'?source.connectionId:undefined,connection:{workspaceId:ctx.workspaceId,appId:c.asset.appNamespace,version:c.asset.connectionVersion,status:'active'}},select:{avatarUrl:true}});accountAvatarUrl=safeInboxAvatarUrl(page?.avatarUrl);}
  if(c.kind==='comments'&&c.asset.platform==='facebook'&&typeof source.commentId==='string'&&typeof source.managedPageId==='string'&&typeof source.connectionId==='string'&&typeof source.connectionVersion==='number')replied=!!await db.facebookInteractionSendAttempt.findFirst({where:{managedPageId:source.managedPageId,connectionVersion:source.connectionVersion,status:'sent',providerId:{not:null},targetHash:createHash('sha256').update(JSON.stringify(['comment',source.commentId])).digest('hex'),...(c.lastInboundAt?{createdAt:{gte:c.lastInboundAt}}:{}),page:{connectionId:source.connectionId,connection:{workspaceId:ctx.workspaceId,appId:c.asset.appNamespace}}},select:{id:true}});
+ if(c.kind==='messages'&&c.asset.platform==='facebook'&&typeof source.participantId==='string'&&source.participantId.length>0&&typeof source.conversationId==='string'&&source.conversationId.length>0&&typeof source.managedPageId==='string'&&source.managedPageId===c.asset.facebookManagedPageId&&typeof source.connectionId==='string'&&source.connectionVersion===c.asset.connectionVersion){
+  const cutoff=observedInboundAt&&Number.isFinite(observedInboundAt.getTime())&&observedInboundAt.getTime()<=Date.now()&&(!c.lastInboundAt||observedInboundAt>c.lastInboundAt)?observedInboundAt:c.lastInboundAt;
+  if(cutoff){
+   const targetHash=createHash('sha256').update(JSON.stringify(['message',source.participantId])).digest('hex');
+   // Controlled retries copy the old receipt into a newer row. Only its first
+   // occurrence can establish a reply; never let a replay answer a newer inbound.
+   const rows=await db.$queryRaw<Array<{id:string}>>(Prisma.sql`
+    SELECT s.id FROM facebook_interaction_send_attempts s
+    JOIN facebook_managed_pages p ON p.id=s."managedPageId"
+    JOIN facebook_management_connections g ON g.id=p."connectionId"
+    WHERE s."managedPageId"::text=${source.managedPageId} AND p."connectionId"::text=${source.connectionId}
+     AND p."pageId"=${c.asset.providerAssetId} AND p.active AND g."workspaceId"=${ctx.workspaceId}::uuid
+     AND g."appId"=${c.asset.appNamespace} AND g.status='active' AND g.version=${c.asset.connectionVersion}
+     AND s."connectionVersion"=${c.asset.connectionVersion} AND s."targetHash"=${targetHash}
+     AND s.status='sent' AND s."providerId" IS NOT NULL AND s."providerId"<>'' AND s."createdAt">${cutoff}
+     AND NOT EXISTS(SELECT 1 FROM facebook_interaction_send_attempts original
+      WHERE original."managedPageId"=s."managedPageId" AND original."providerId"=s."providerId"
+       AND (original."createdAt",original.id)<(s."createdAt",s.id)) LIMIT 1`);
+   replied=rows.length>0;
+  }
+ }
  return{id:c.id,kind:c.kind as CaseDto['kind'],accountId,customerId:c.customerId,customerName:c.customer?.identities.find(i=>i.assetId===c.assetId)?.displayName??null,sourceLabel:c.asset.platform+' · '+(account?.displayName??accountId),status:c.status,replied,customerAvatarUrl,accountAvatarUrl,version:c.version,lastInboundAt:c.lastInboundAt?.toISOString()??null,unread:!!c.lastInboundAt&&(!r||r.lastReadAt<c.lastInboundAt||r.lastReadKey!==c.lastInboundKey),tags:c.tags.map(({tag})=>({id:tag.id,kind:tag.kind,name:tag.name,color:tag.color,version:tag.version})),assigneeId:c.assigneeId,sentiment:c.sentiment};
 }
 export function createInboxCases({db,access,setCaseTags}:{db:PrismaClient;access:InboxAccess;setCaseTags?:(ctx:Scope,id:string,ids:string[],version:number)=>Promise<void>}){
