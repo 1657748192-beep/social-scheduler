@@ -7,6 +7,7 @@ import type {PrismaClient} from '@prisma/client';
 import {createMetaInboxDeletion} from '../interactionInbox/deletion';
 import {getMetaInboxLifecycleConfig} from '../interactionInbox/lifecycleConfig';
 import {createInstagramGrantInspector} from './grantInspection';
+import {parseInstagramReplyRecording} from './replyRecording';
 let runtime:InstagramManagementRuntime|undefined;
 export function getInstagramManagementRuntime(){
  if(runtime)return runtime;
@@ -27,7 +28,7 @@ export function createConfiguredInstagramManagementRuntime({db,env,encrypt,decry
   }else if(mode!==undefined||!lifecycle.enabled||!lifecycle.bindings.some(v=>v.namespace.platform==='instagram'&&v.namespace.appId===config.appId))throw fail();
  }
  const deletion=createMetaInboxDeletion({db,encrypt,decrypt});
- return createInstagramManagementRuntime({db,config,policy:createLiveInboxPolicy(parseLiveAssetRules(env.META_INBOX_LIVE_ASSETS_JSON)),encrypt,decrypt,fetchImpl,inspect:createInstagramGrantInspector({config,fetchImpl}),reception:{enabled:flag==='true',verifyToken},isDeleted:deletion.isDeleted,
+ return createInstagramManagementRuntime({db,config,policy:createLiveInboxPolicy(parseLiveAssetRules(env.META_INBOX_LIVE_ASSETS_JSON)),testRestriction:parseInstagramReplyRecording(env.INSTAGRAM_MANAGEMENT_REPLY_TEST_JSON),encrypt,decrypt,fetchImpl,inspect:createInstagramGrantInspector({config,fetchImpl}),reception:{enabled:flag==='true',verifyToken},isDeleted:deletion.isDeleted,
   onDeleted:(tx,s)=>deletion.markItemInTransaction(tx,s,s.eventKind,s.providerEventId),
   onDisconnect:async(tx,c)=>{await deletion.recordDisconnectInTransaction(tx,{workspaceId:c.workspaceId,platform:'instagram',appId:c.appId,providerAssetId:c.providerAccountId,connectionId:c.id,connectionVersion:c.version});}
  });

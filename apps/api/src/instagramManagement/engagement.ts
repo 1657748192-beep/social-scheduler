@@ -10,10 +10,18 @@ import type {InstagramSourceSubject} from './types';
 import {createInstagramSendExecutor} from './sendAttempts';
 import {encodeInboxCursor,decodeInboxCursor} from '../interactionInbox/cursor';
 import {instagramConversationIdentity} from './conversationIdentity';
+import {copyInstagramReplyRecording,requireInstagramRecordingTarget,recordingTargetHash,recordingTexts,type InstagramReplyRecording} from './replyRecording';
 type Access=ReturnType<typeof createInstagramManagementAccess>;
-type Deps={db:PrismaClient;access:Access;policy:LiveInboxPolicy;graph:(asset:ResolvedAsset,token:string)=>InstagramManagementGraph;isDeleted:(tx:Prisma.TransactionClient,subject:InstagramSourceSubject)=>Promise<boolean>;verifiedCommentLimit:number;now?:()=>Date};
-export function createInstagramManagementEngagement({db,access,policy,graph,isDeleted,verifiedCommentLimit,now=()=>new Date()}:Deps){
- const executor=createInstagramSendExecutor({db});
+type Deps={db:PrismaClient;access:Access;policy:LiveInboxPolicy;graph:(asset:ResolvedAsset,token:string)=>InstagramManagementGraph;isDeleted:(tx:Prisma.TransactionClient,subject:InstagramSourceSubject)=>Promise<boolean>;verifiedCommentLimit:number;now?:()=>Date;testRestriction?:InstagramReplyRecording|null};
+export function createInstagramManagementEngagement({db,access,policy,graph,isDeleted,verifiedCommentLimit,now=()=>new Date(),testRestriction}:Deps){
+ const rule=copyInstagramReplyRecording(testRestriction),executor=createInstagramSendExecutor({db,testRestriction:rule,now});
+ async function restrict(tx:PrismaClient|Prisma.TransactionClient,a:ResolvedAsset,s:SourceRef,text:string){if(rule)await requireInstagramRecordingTarget(tx,rule,a,s,text,now());}
+ async function recording(a:ResolvedAsset,s:SourceRef):Promise<AdapterDetail['recordingReply']>{
+  if(!rule)return undefined;
+  let target;try{target=await requireInstagramRecordingTarget(db,rule,a,s,undefined,now(),true);}catch{return undefined;}
+  const used=await db.instagramInteractionSendAttempt.findFirst({where:{workspaceId:rule.workspaceId,connectionId:rule.connectionId,targetHash:recordingTargetHash(target.kind,target.targetId)},select:{id:true}});
+  return{text:recordingTexts[target.kind],expiresAt:rule.expiresAt,state:used?'used':now().getTime()>=Date.parse(rule.expiresAt)?'expired':'available'};
+ }
  function source(a:ResolvedAsset,value:SourceRef){
   if(a.platform!=='instagram')throw new HttpError(409,'Instagram platform required');
   const s=parseInboxSource(value,'instagram'),own=parseInboxSource(a.sourceRef,'instagram');
@@ -139,17 +147,19 @@ export function createInstagramManagementEngagement({db,access,policy,graph,isDe
     const items:AdapterDetail['items']=[];for(const r of rows.slice(0,25)){try{await target(tx,a,{...s,...('conversationId' in r?{conversationId:r.conversationId}:{}),sourceRecordId:r.id});items.push({id:r.providerId,text:r.text,occurredAt:r.occurredAt.toISOString(),inbound:r.inbound,deleted:r.deleted});}catch(e){if(!(e instanceof HttpError)||e.statusCode!==404)throw e;}}
     const last=rows[24];return{items,nextCursor:rows.length>25&&last?encodeInboxCursor(scope,{at:last.occurredAt.toISOString(),id:last.id}):null};
    });
-   return{...result,officialUrl:null,replyTarget:s.conversationId??s.commentId??null,capabilities:await caps(a)};
+   const recordingReply=await recording(a,s),resolvedCaps=await caps(a);
+   return{...result,officialUrl:null,replyTarget:s.conversationId??s.commentId??null,capabilities:resolvedCaps.map(c=>rule&&c.capability.endsWith('.reply')&&(!recordingReply||recordingReply.state!=='available'||c.capability!==cap.replace('.read','.reply'))?{...c,available:false,reason:'recording_restricted'}:c),...(recordingReply?{recordingReply}:{})};
   },
   async reply(a:ResolvedAsset,value:SourceRef,text:string,requestKey:string):Promise<SendOutcome>{
    const s=source(a,value),cap=s.conversationId?'messages.reply':'comments.reply';
    if(typeof text!=='string'||!text.trim()||text.length>(s.conversationId?2000:Math.min(8000,verifiedCommentLimit))||!Number.isSafeInteger(verifiedCommentLimit)||verifiedCommentLimit<1)throw new HttpError(400,'Invalid Instagram reply');
-   await fresh(a,cap);await db.$transaction(async tx=>{await fence(tx,a,cap);await target(tx,a,s);});
+   await restrict(db,a,s,text);
+   await fresh(a,cap);await db.$transaction(async tx=>{await fence(tx,a,cap);await target(tx,a,s);await restrict(tx,a,s,text);});
    return access.withAccess(a.ctx,a.accountId,cap,async(current,token)=>{
     if(current.connectionVersion!==a.connectionVersion||current.appNamespace!==a.appNamespace||current.sourceRef?.connectionId!==s.connectionId)throw new HttpError(409,'Instagram connection changed');
     const g=graph(a,token);await remoteTarget(a,s,g);await fresh(a,cap);
     const row=await db.$transaction(async tx=>{
-     await fence(tx,a,cap);const r=await target(tx,a,s);
+     await fence(tx,a,cap);const r=await target(tx,a,s);await restrict(tx,a,s,text);
      if(s.conversationId){
       const last=await tx.instagramInteractionMessage.findFirst({where:{workspaceId:a.ctx.workspaceId,connectionId:s.connectionId,connectionVersion:a.connectionVersion,actorId:s.participantId,inbound:true,deleted:false},orderBy:{occurredAt:'desc'}});
       const age=last?now().getTime()-last.occurredAt.getTime():NaN;
@@ -157,9 +167,9 @@ export function createInstagramManagementEngagement({db,access,policy,graph,isDe
       await target(tx,a,{...s,conversationId:last!.conversationId,sourceRecordId:last!.id});
      }return r;
     });
-    return executor.execute({asset:a,requestKey,kind:s.conversationId?'message':'comment',targetId:s.conversationId?s.participantId!:row.providerId,text},async()=>{
+    return executor.execute({asset:a,source:s,requestKey,kind:s.conversationId?'message':'comment',targetId:s.conversationId?s.participantId!:row.providerId,text},async()=>{
      // Final local policy/window/connection check immediately precedes the one provider operation.
-     await fresh(a,cap);await db.$transaction(async tx=>{await fence(tx,a,cap);await target(tx,a,s);
+     await fresh(a,cap);await db.$transaction(async tx=>{await fence(tx,a,cap);await target(tx,a,s);await restrict(tx,a,s,text);
       if(s.conversationId){const last=await tx.instagramInteractionMessage.findFirst({where:{connectionId:s.connectionId,connectionVersion:a.connectionVersion,workspaceId:a.ctx.workspaceId,actorId:s.participantId,inbound:true,deleted:false},orderBy:{occurredAt:'desc'}});const age=last?now().getTime()-last.occurredAt.getTime():NaN;if(!Number.isFinite(age)||age<0||age>evidence(a,'send').replyWindowMs)throw new HttpError(409,'Instagram reply window unavailable');await target(tx,a,{...s,conversationId:last!.conversationId,sourceRecordId:last!.id});}
      });
      return s.conversationId?g.sendMessage(s.participantId!,text):g.replyComment(row.providerId,text);

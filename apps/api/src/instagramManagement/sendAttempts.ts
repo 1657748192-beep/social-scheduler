@@ -3,16 +3,23 @@ import {Prisma,type PrismaClient,type InstagramInteractionSendAttempt} from '@pr
 import {HttpError} from '../utils/errors';
 import {isPlatformAdmin} from '../utils/platformAdmin';
 import {requireInstagramAccount} from './store';
-import type {ResolvedAsset,SendOutcome} from '../interactionInbox/types';
+import type {ResolvedAsset,SendOutcome,SourceRef} from '../interactionInbox/types';
 import {parseInboxSource} from '../interactionInbox/source';
-type Input={asset:ResolvedAsset;requestKey:string;kind:'message'|'comment';targetId:string;text:string};
+import {copyInstagramReplyRecording,requireInstagramRecordingTarget,type InstagramReplyRecording} from './replyRecording';
+type Input={asset:ResolvedAsset;source?:SourceRef;requestKey:string;kind:'message'|'comment';targetId:string;text:string};
 const hash=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
-function outcome(row:InstagramInteractionSendAttempt):SendOutcome{
- if(row.status==='sent'&&row.providerId)return{status:'sent',providerId:row.providerId};
+function outcome(row:InstagramInteractionSendAttempt,replayed=false):SendOutcome{
+ if(row.status==='sent'&&row.providerId)return{status:'sent',providerId:row.providerId,...(replayed?{replayed:true as const}:{})};
  if(row.status==='failed')return{status:'failed',code:'reply_failed',diagnosticId:row.diagnosticId!};
  return{status:'unknown',diagnosticId:row.diagnosticId!};
 }
-export function createInstagramSendExecutor({db}:{db:PrismaClient}){
+export function createInstagramSendExecutor({db,testRestriction,now=()=>new Date()}:{db:PrismaClient;testRestriction?:InstagramReplyRecording|null;now?:()=>Date}){
+ const rule=copyInstagramReplyRecording(testRestriction);
+ async function restricted(store:PrismaClient|Prisma.TransactionClient,input:Input){
+  if(!rule)return;
+  const target=await requireInstagramRecordingTarget(store,rule,input.asset,input.source,input.text,now());
+  if(target.kind!==input.kind||target.targetId!==input.targetId)throw new HttpError(403,'Controlled Instagram reply target unavailable');
+ }
  async function current(input:Input){
   const {asset}=input,source=parseInboxSource(asset.sourceRef,'instagram');
   if(asset.ctx.accountIds&&!asset.ctx.accountIds.includes(asset.accountId))throw new HttpError(403,'Instagram account selection denied');
@@ -28,18 +35,37 @@ export function createInstagramSendExecutor({db}:{db:PrismaClient}){
  }
  return{async execute(input:Input,send:()=>Promise<SendOutcome>):Promise<SendOutcome>{
   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.requestKey)||!['message','comment'].includes(input.kind)||typeof input.text!=='string'||!input.text.trim()||input.text.length>(input.kind==='message'?2000:8000)||!/^[-a-zA-Z0-9_:.]{1,256}$/.test(input.targetId)||input.targetId===input.asset.providerAssetId)throw new HttpError(400,'Invalid Instagram reply');
+  await restricted(db,input);
   const c=await current(input),key={connectionId:c.id,connectionVersion:c.version,requestKey:input.requestKey},targetHash=hash([input.kind,input.targetId]),payloadHash=hash(input.text);
   let attempt:InstagramInteractionSendAttempt;
-  try{attempt=await db.instagramInteractionSendAttempt.create({data:{...key,workspaceId:c.workspaceId,targetHash,payloadHash,diagnosticId:randomUUID()}});}
+  const data={...key,workspaceId:c.workspaceId,targetHash,payloadHash,diagnosticId:randomUUID()};
+  try{
+   if(rule){
+    const admitted=await db.$transaction(async tx=>{
+     // Durable admission is serialized across request keys and executor instances.
+     // Never hold this lock over a provider request. Every prior status consumes the slot.
+     await tx.$queryRaw`SELECT id FROM "InstagramManagementConnection" WHERE id=${c.id}::uuid FOR UPDATE`;
+     await restricted(tx,input);
+     const previous=await tx.instagramInteractionSendAttempt.findFirst({where:{workspaceId:c.workspaceId,connectionId:c.id,targetHash},orderBy:[{createdAt:'asc'},{id:'asc'}]});
+     // Any previous payload consumes the slot, but only the exact payload may
+     // reuse its receipt. Never relabel an older different reply as this demo.
+     const samePayload=previous?.payloadHash===payloadHash;
+     const row=await tx.instagramInteractionSendAttempt.create({data:previous?{...data,status:!samePayload||previous.status==='pending'?'unknown':previous.status,providerId:samePayload?previous.providerId:null}:data});
+     return{row,fresh:!previous};
+    });
+    if(!admitted.fresh)return outcome(admitted.row,true);
+    attempt=admitted.row;
+   }else attempt=await db.instagramInteractionSendAttempt.create({data});
+  }
   catch(error){
    if(!(error instanceof Prisma.PrismaClientKnownRequestError)||error.code!=='P2002')throw error;
    const row=await db.instagramInteractionSendAttempt.findUnique({where:{connectionId_connectionVersion_requestKey:key}});
    if(!row||row.workspaceId!==c.workspaceId)throw new HttpError(409,'Instagram send unavailable');
    if(row.targetHash!==targetHash||row.payloadHash!==payloadHash)throw new HttpError(409,'Request key already used with different input');
-   return outcome(row);
+   return outcome(row,!!rule);
   }
   // Persist the claim before dispatch; uncertainty is terminal, never an automatic retry.
-  try{await current(input);}catch(error){await db.instagramInteractionSendAttempt.updateMany({where:{id:attempt.id,status:'pending'},data:{status:'failed'}});throw error;}
+  try{await current(input);await restricted(db,input);}catch(error){await db.instagramInteractionSendAttempt.updateMany({where:{id:attempt.id,status:'pending'},data:{status:'failed'}});throw error;}
   let result:SendOutcome;
   try{
    result=await send();
