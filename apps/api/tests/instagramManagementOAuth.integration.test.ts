@@ -13,7 +13,7 @@ function service(f:MetaInboxFixture,exchange?:any,providerAccountId='100'){
  const store=createInstagramManagementStore({db:f.db,encrypt:v=>'sealed:'+v,policy});
  return{config,store,grant,oauth:createInstagramManagementOAuth({db:f.db,config,policy,store,exchange:exchange??(async()=>grant)})};
 }
-async function start(f:MetaInboxFixture,s:ReturnType<typeof service>){const r=await s.oauth.start(f.adminCtx,f.instagramAccountIds[0]);return new URL(r.authorizationUrl).searchParams.get('state')!;}
+async function start(f:MetaInboxFixture,s:ReturnType<typeof service>,forceReauth=false){const r=await s.oauth.start(f.adminCtx,f.instagramAccountIds[0],forceReauth);return new URL(r.authorizationUrl).searchParams.get('state')!;}
 
 test('actualGatewayStoresExactLargeIndependentIdentityWithoutChangingPublishing',async()=>withMetaInboxFixture(async f=>{
  const exact='17841414555024979';await f.db.socialAccount.update({where:{id:f.instagramAccountIds[0]},data:{providerAccountId:exact}});
@@ -31,13 +31,13 @@ test('actualGatewayStoresExactLargeIndependentIdentityWithoutChangingPublishing'
 }));
 test('wrongAccountNoGrantSaved',async()=>withMetaInboxFixture(async f=>{
  const s=service(f,async()=>({...service(f).grant,providerAccountId:'999'})),before=await f.publishingSnapshot(),c=await f.db.instagramManagementConnection.findUniqueOrThrow({where:{id:f.instagramConnectionIds[0]}});
- const state=await start(f,s);await assert.rejects(s.oauth.callback({state,code:'code'}));
+ for(const mode of [false,true]){const state=await start(f,s,mode);await assert.rejects(s.oauth.callback({state,code:'code'}));}
  assert.deepEqual(await f.db.instagramManagementConnection.findUniqueOrThrow({where:{id:c.id}}),c);assert.deepEqual(await f.publishingSnapshot(),before);
 }));
 test('cancelConsumesState',async()=>withMetaInboxFixture(async f=>{
- let exchanges=0;const s=service(f,async()=>{exchanges++;return service(f).grant;}),state=await start(f,s);
- await assert.rejects(s.oauth.callback({state,error:'access_denied'}));await assert.rejects(s.oauth.callback({state,code:'late-code'}));assert.equal(exchanges,0);
- assert.equal(await f.db.instagramManagementOAuthState.count({where:{workspaceId:f.adminCtx.workspaceId,consumedAt:{not:null}}}),1);
+ let exchanges=0;const s=service(f,async()=>{exchanges++;return service(f).grant;}),before=await f.publishingSnapshot();
+ for(const mode of [false,true]){const state=await start(f,s,mode);await assert.rejects(s.oauth.callback({state,error:'access_denied'}));await assert.rejects(s.oauth.callback({state,code:'late-code'}));}assert.equal(exchanges,0);
+ assert.equal(await f.db.instagramManagementOAuthState.count({where:{workspaceId:f.adminCtx.workspaceId,consumedAt:{not:null}}}),2);assert.deepEqual(await f.publishingSnapshot(),before);
 }));
 test('callbackAfterSessionRevokedDenied',async()=>withMetaInboxFixture(async f=>{
  let exchanges=0;const s=service(f,async()=>{exchanges++;return service(f).grant;}),state=await start(f,s),before=await f.publishingSnapshot();

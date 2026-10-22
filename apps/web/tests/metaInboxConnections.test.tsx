@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';import React from 'react';import {act} from 'react-test-renderer';
 import {withInboxUI,inboxAccount} from './helpers/interactionInboxUI';import {facebookText,facebookButton} from './helpers/facebookManagementUI';
-import {LanguageProvider} from '../components/LanguageProvider';
+import {LanguageProvider,LanguageToggle} from '../components/LanguageProvider';
 const ig={...inboxAccount,id:'44444444-4444-4444-8444-444444444444',platform:'instagram',name:'Instagram test',capabilities:[{capability:'messages.read',available:true,reason:'available',verifiedAt:null},{capability:'messages.reply',available:false,reason:'authorization_required',verifiedAt:null}]};
 const status={enabled:true,connected:false,status:'authorization_required',connectionId:null,providerAccountId:'100',displayName:'Instagram test',expiresAt:null};
 async function panel(){const m=await import('../components/inbox/unified/InteractionConnectionPanel').catch(()=>null);assert.ok(m,'independent connection panel required');return m.InteractionConnectionPanel;}
@@ -8,8 +8,33 @@ async function panel(){const m=await import('../components/inbox/unified/Interac
 test('newConnectionNotPublishingRebind',async()=>{
  const Panel=await panel();let navigated='';await withInboxUI(<Panel token="test" workspaceId="w1" account={ig} onChanged={()=>{}}/>,async({view,requests,storage}:any)=>{
   (globalThis as any).window.location.assign=(url:string)=>{navigated=url;};assert.match(facebookText(view),/独立互动授权/);assert.match(facebookText(view),/发布授权保持不变/);assert.ok(requests.every((r:any)=>r.method==='GET'));
-  await act(async()=>facebookButton(view,'连接独立互动授权').props.onClick());assert.match(navigated,/^https:\/\/www.instagram.com\/oauth\/authorize/);assert.deepEqual(requests.filter((r:any)=>r.method==='POST').map((r:any)=>({path:r.path,body:r.body})),[{path:'/api/v1/workspaces/w1/instagram-management/oauth/start',body:{accountId:ig.id}}]);assert.ok(storage.every((v:any)=>!String(v[1]).includes('test')));
+  await act(async()=>facebookButton(view,'连接独立互动授权').props.onClick());assert.match(navigated,/^https:\/\/www.instagram.com\/oauth\/authorize/);assert.deepEqual(requests.filter((r:any)=>r.method==='POST').map((r:any)=>({path:r.path,body:r.body})),[{path:'/api/v1/workspaces/w1/instagram-management/oauth/start',body:{accountId:ig.id,forceReauth:false}}]);assert.ok(storage.every((v:any)=>!String(v[1]).includes('test')));
  },url=>url.pathname.endsWith('/oauth/start')?Response.json({authorizationUrl:'https://www.instagram.com/oauth/authorize?client_id=456&state=synthetic'}):url.pathname.includes('/instagram-management/status')?Response.json(status):undefined);
+});
+
+test('explicit login switch targets the same selected account and is localized without automatic mutation',async()=>{
+ const Panel=await panel();let navigated='';await withInboxUI(<><LanguageToggle/><Panel token="test" workspaceId="w1" account={ig} onChanged={()=>{}}/></>,async({view,requests}:any)=>{
+  (globalThis as any).window.location.assign=(url:string)=>{navigated=url;};assert.equal(requests.filter((r:any)=>r.method!=='GET').length,0);
+  assert.ok(facebookButton(view,'当前 Instagram 登录账号不对？重新登录'));
+  await act(async()=>facebookButton(view,'English').props.onClick());const switchButton=facebookButton(view,'Wrong Instagram login? Sign in again');assert.ok(switchButton);assert.match(facebookText(view),/selected account/);
+  await act(async()=>switchButton.props.onClick());assert.match(navigated,/^https:\/\/www.instagram.com\/oauth\/authorize/);assert.deepEqual(requests.filter((r:any)=>r.method!=='GET').map((r:any)=>r.body),[{accountId:ig.id,forceReauth:true}]);
+ },url=>url.pathname.endsWith('/oauth/start')?Response.json({authorizationUrl:'https://www.instagram.com/oauth/authorize?client_id=456&state=synthetic'}):url.pathname.includes('/instagram-management/status')?Response.json(status):undefined);
+});
+
+test('login switch respects unsent draft cancellation and viewer restrictions',async()=>{
+ const Panel=await panel();await withInboxUI(<Panel token="test" workspaceId="w1" account={ig} onChanged={()=>{}} onBeforeNavigate={()=>false}/>,async({view,requests}:any)=>{
+  const switchButton=facebookButton(view,'当前 Instagram 登录账号不对？重新登录');assert.ok(switchButton);await act(async()=>switchButton.props.onClick());assert.equal(requests.filter((r:any)=>r.method!=='GET').length,0);
+  await act(async()=>view.update(<LanguageProvider><Panel token="test" workspaceId="w1" account={ig} onChanged={()=>{}} canManage={false}/></LanguageProvider>));assert.equal(facebookButton(view,'当前 Instagram 登录账号不对？重新登录').props.disabled,true);
+ },url=>url.pathname.includes('/instagram-management/status')?Response.json(status):undefined);
+});
+
+test('pending authorization blocks a second login-mode request and never sends interactions',async()=>{
+ const Panel=await panel();let finish!:(r:Response)=>void;
+ await withInboxUI(<Panel token="test" workspaceId="w1" account={ig} onChanged={()=>{}}/>,async({view,requests}:any)=>{
+  await act(async()=>{void facebookButton(view,'连接独立互动授权').props.onClick();});assert.equal(facebookButton(view,'当前 Instagram 登录账号不对？重新登录').props.disabled,true);
+  await act(async()=>{void facebookButton(view,'当前 Instagram 登录账号不对？重新登录').props.onClick();});assert.equal(requests.filter((r:any)=>r.method==='POST').length,1);
+  await act(async()=>finish(Response.json({message:'fixture failure'},{status:503})));assert.equal(facebookButton(view,'当前 Instagram 登录账号不对？重新登录').props.disabled,false);assert.ok(requests.every((r:any)=>!r.path.endsWith('/replies')));
+ },url=>url.pathname.endsWith('/oauth/start')?new Promise(resolve=>{finish=resolve;}):url.pathname.includes('/instagram-management/status')?Response.json(status):undefined);
 });
 
 test('cancelOAuthKeepsPublishingAndDraft',async()=>{

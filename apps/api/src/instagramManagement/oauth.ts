@@ -10,11 +10,12 @@ const grantSchema=z.object({appId:z.string().regex(/^\d{1,256}$/),providerAccoun
 export function createInstagramManagementOAuth({db,config,policy,store,exchange}:{db:PrismaClient;config:InstagramManagementConfig;policy:LiveInboxPolicy;store:ReturnType<typeof createInstagramManagementStore>;exchange:(code:string,callbackUrl:string)=>Promise<InstagramManagementGrant>}){
  const fail=()=>new HttpError(400,'Independent Instagram authorization failed');
  return{
-  async start(ctx:Scope,accountId:string){
+  async start(ctx:Scope,accountId:string,forceReauth=false){
    if(!config.enabled)throw new HttpError(409,'Independent Instagram authorization is disabled');
    z.string().uuid().parse(accountId);
+   z.boolean().parse(forceReauth);
    const state=randomBytes(32).toString('base64url');await store.createState(ctx,accountId,config.appId,state,config.callbackUrl);
-   const url=new URL('https://www.instagram.com/oauth/authorize');url.search=new URLSearchParams({client_id:config.appId,redirect_uri:config.callbackUrl,response_type:'code',scope:config.requiredScopes.join(','),state,force_reauth:'true'}).toString();
+   const url=new URL('https://www.instagram.com/oauth/authorize');url.search=new URLSearchParams({client_id:config.appId,redirect_uri:config.callbackUrl,response_type:'code',scope:config.requiredScopes.join(','),state,force_reauth:forceReauth?'true':'false'}).toString();
    return{authorizationUrl:url.href};
   },
   async callback(input:{state:string;code?:string;error?:string}){
