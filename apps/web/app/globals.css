@@ -5293,6 +5293,21 @@ textarea {
 .unified-inbox .inbox-message-meta time, .unified-inbox .inbox-message-meta small { color:var(--inbox-sub); font-size:10px; }
 .unified-inbox .inbox-message-body>p { background:var(--inbox-soft); padding:11px 13px; border-radius:0 9px 9px 9px; margin:0; white-space:pre-wrap; font-size:13px; line-height:1.7; }
 .unified-inbox .inbox-message[data-inbound=false] .inbox-message-body>p { background:var(--inbox-tint); }
+.unified-inbox .inbox-chat { position:relative; min-width:0; }
+.unified-inbox .inbox-chat-toolbar { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px; }
+.unified-inbox .inbox-chat-toolbar>small { color:var(--inbox-sub); font-size:11px; }
+.unified-inbox .inbox-chat-timeline { height:clamp(280px,48vh,580px); overflow-y:auto; overscroll-behavior:contain; overflow-anchor:none; scrollbar-gutter:stable; padding:0 8px 8px 0; }
+.unified-inbox .inbox-chat-timeline:focus-visible { outline:2px solid var(--inbox-green); outline-offset:3px; }
+.unified-inbox .inbox-chat-date { text-align:center; color:var(--inbox-sub); font-size:11px; margin:14px 0 20px; }
+.unified-inbox .inbox-chat .inbox-message { width:100%; align-items:flex-end; gap:9px; }
+.unified-inbox .inbox-chat .inbox-message[data-inbound=false] { flex-direction:row-reverse; padding-left:0; }
+.unified-inbox .inbox-chat .inbox-message-body { flex:0 1 auto; max-width:78%; }
+.unified-inbox .inbox-chat .inbox-message-body>p { overflow-wrap:anywhere; border-radius:12px 12px 12px 3px; }
+.unified-inbox .inbox-chat .inbox-message[data-inbound=false] .inbox-message-body>p { border-radius:12px 12px 3px 12px; }
+.unified-inbox .inbox-chat .inbox-message[data-inbound=false] .inbox-message-meta { justify-content:flex-end; }
+.unified-inbox .inbox-chat-time { display:block; color:var(--inbox-sub); font-size:10px; margin-top:5px; }
+.unified-inbox .inbox-chat .inbox-message[data-inbound=false] .inbox-chat-time { text-align:right; }
+.unified-inbox .inbox-chat-latest { position:absolute; bottom:12px; left:50%; transform:translateX(-50%); box-shadow:0 3px 12px #163e2420; font-size:12px; }
 .unified-inbox .inbox-context-notice { padding:10px; font-size:12px; color:var(--inbox-sub); background:var(--inbox-soft); border-radius:7px; }
 .unified-inbox .inbox-case-settings { border-top:1px solid var(--inbox-line); margin-top:20px; padding-top:10px; }
 .unified-inbox summary { cursor:pointer; font-size:11px; color:var(--inbox-sub); }
