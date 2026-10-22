@@ -6,6 +6,7 @@ import {liveInboxCaseSql} from './sourceLifetime';
 import {parseInboxSource} from './source';
 import {createLiveInboxPolicy,type LiveInboxPolicy} from './livePolicy';
 import {sourceDeletionBoundarySql} from './sourceDeletionBoundary';
+import {withFacebookReadInspection} from '../facebookManagement/readInspection';
 const rateScript="local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],60) end; return n";
 export function createInboxReads({db,access,registry,redis,policy=createLiveInboxPolicy([])}:{db:PrismaClient;access:InboxAccess;registry:InboxRegistry;redis:Pick<Redis,'eval'>;policy?:LiveInboxPolicy}){
  async function listCases(ctx:Scope,input:unknown):Promise<PageResult<CaseDto>>{
@@ -19,7 +20,7 @@ export function createInboxReads({db,access,registry,redis,policy=createLiveInbo
     if(!stored||stored.connectionVersion!==a.connectionVersion||(a.platform==='facebook'?stored.facebookManagedPageId!==parseInboxSource(a.sourceRef,'facebook').managedPageId:a.platform==='instagram'?stored.instagramConnectionId!==parseInboxSource(a.sourceRef,'instagram').connectionId:true)){statuses.push({accountId,status:'not_synced',count:null});continue;}
     const sync=await db.interactionSyncState.findUnique({where:{assetId_kind:{assetId:stored.id,kind:q.kind}}});
     statuses.push({accountId,status:sync?.status==='ok'?'ok':sync?.status??'not_synced',count:null});allowed.push({a,id:stored.id});if(sync?.lastSuccessAt&&(!lastSuccess||sync.lastSuccessAt.toISOString()>lastSuccess))lastSuccess=sync.lastSuccessAt.toISOString();
-   }catch{statuses.push({accountId,status:'unavailable',count:null});}
+   }catch(error){const limited=error instanceof HttpError&&error.statusCode===429;statuses.push({accountId,status:limited?'rate_limited':'unavailable',count:null,...(limited?{retryAfter:Math.max(1,Math.min(3600,Number((error.details as any)?.retryAfter)||60))}:{})});}
   }
   await access.require(ctx);if(!allowed.length)return{items:[],nextCursor:null,accountsStatus:statuses,partial:statuses.some(s=>s.status!=='ok'),observedAt:new Date().toISOString(),lastSuccessfulSyncAt:lastSuccess};
   const queryTime=new Date();
@@ -53,5 +54,5 @@ export function createInboxReads({db,access,registry,redis,policy=createLiveInbo
   const cursorScope={ctx,id,connectionVersion:asset.connectionVersion,source};const position=q.cursor?z.object({after:z.string().max(2048)}).strict().parse(decodeInboxCursor(cursorScope,q.cursor)).after:undefined;
   const detail=await registry.getInboxAdapter(asset.platform).detail(asset,source,position);await access.resolveCase(ctx,id);const presented=await presentInboxCase(db,ctx,id,asset.accountId);const items=detail.items.map(v=>({...v,senderAvatarUrl:v.deleted?null:v.inbound?v.senderAvatarUrl??((source.conversationId||v.id===source.commentId)?presented.customerAvatarUrl??null:null):presented.accountAvatarUrl??null}));return{...presented,...detail,items,nextCursor:detail.nextCursor?encodeInboxCursor(cursorScope,{after:detail.nextCursor}):null,readPosition:row.lastInboundAt&&row.lastInboundKey?{eventAt:row.lastInboundAt.toISOString(),eventKey:row.lastInboundKey}:null,pendingSend:await pendingInboxSend(db,ctx,id,source,asset,registry)};
  }
- return{listCases,getCase};
+ return{listCases:(...args:Parameters<typeof listCases>)=>withFacebookReadInspection(()=>listCases(...args)),getCase:(...args:Parameters<typeof getCase>)=>withFacebookReadInspection(()=>getCase(...args))};
 }

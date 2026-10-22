@@ -1,6 +1,8 @@
 import type {PrismaClient,Prisma} from '@prisma/client';
 import type {ManagementContext,PageContext,PageTokenInspection} from './types';
 import {LOGIN_SESSION_MAX_AGE_MS} from '../utils/sessionLifetime';
+import {FacebookDirectoryError} from './graphDirectory';
+import {HttpError} from '../utils/errors';
 
 export class FacebookPageAccessError extends Error{
   constructor(readonly status:403|404=404){super(status===403?'Facebook management access denied':'Facebook Page unavailable');}
@@ -18,7 +20,7 @@ export function activeManagementOwner(workspaceId:string):Prisma.UserWhereInput{
   return {memberships:{some:{workspaceId,status:'active',role:{in:['owner','admin']}}}};
 }
 export function createFacebookPageAccess(deps:{db:PrismaClient;decrypt:(v:string)=>string;
-  inspect:(pageId:string,token:string,connection?:{id:string;appId:string;userTokenEncrypted:string|null})=>Promise<PageTokenInspection>}){
+  inspect:(pageId:string,token:string,connection?:{id:string;appId:string;userTokenEncrypted:string|null;version?:number},options?:{write?:boolean})=>Promise<PageTokenInspection>}){
   return {async resolvePageAccess(ctx:PageContext,options:{write?:boolean;requirePublishingBinding?:boolean}={}){
     const member=await requireManagementMember(deps.db,ctx,options.write);
     const page=await deps.db.facebookManagedPage.findFirst({where:{id:ctx.managedPageId,active:true,connection:{workspaceId:ctx.workspaceId,status:'active',user:activeManagementOwner(ctx.workspaceId)}},include:{connection:true}});
@@ -28,7 +30,7 @@ export function createFacebookPageAccess(deps:{db:PrismaClient;decrypt:(v:string
     const account=await deps.db.socialAccount.findFirst({where:{workspaceId:ctx.workspaceId,platform:'facebook',providerAccountId:page.pageId,accountType:'page',status:'active'},select:{id:true}});
     if(options.requirePublishingBinding!==false&&!account)throw new FacebookPageAccessError();
     let pageToken:string,inspection:PageTokenInspection;
-    try{pageToken=deps.decrypt(page.pageTokenEncrypted);inspection=await deps.inspect(page.pageId,pageToken,page.connection);}catch{throw new FacebookPageAccessError();}
+    try{pageToken=deps.decrypt(page.pageTokenEncrypted);inspection=await deps.inspect(page.pageId,pageToken,page.connection,{write:options.write});}catch(error){if(error instanceof FacebookDirectoryError&&error.kind==='rate_limited')throw new HttpError(429,'Facebook verification is rate limited',{retryAfter:error.retryAfterSeconds??60});throw new FacebookPageAccessError();}
     if(inspection.pageId!==page.pageId||inspection.expiresAt&&new Date(inspection.expiresAt)<=new Date())throw new FacebookPageAccessError();
     const scopes=inspection.scopes.filter(scope=>!inspection.granularScopes.some(g=>g.scope===scope&&g.targetIds!==null&&!g.targetIds.includes(page.pageId)));
     if(!scopes.length)throw new FacebookPageAccessError();

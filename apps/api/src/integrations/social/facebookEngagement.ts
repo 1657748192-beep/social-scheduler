@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
+import {metaRetryAfter} from '../../utils/metaRetryAfter';
 import type { CapabilityState, FacebookCapabilities, FacebookComment, FacebookConversation, FacebookMessage, FacebookPage, FacebookSendResult } from './facebookEngagementTypes';
 
 export type FacebookFailureKind = 'permission_missing' | 'authorization_invalid' | 'task_missing' | 'access_level' | 'rate_limited' | 'temporary_failure' | 'invalid_response' | 'content_unavailable';
 export class FacebookEngagementError extends Error {
-  constructor(public readonly kind: FacebookFailureKind, public readonly diagnosticId = randomUUID()) {
+  constructor(public readonly kind: FacebookFailureKind, public readonly diagnosticId = randomUUID(),public readonly retryAfterSeconds?:number) {
     super(`Facebook ${kind} (${diagnosticId}).`);
     this.name = 'FacebookEngagementError';
   }
@@ -55,7 +56,8 @@ export function createFacebookEngagementClient(input: {
     if (!response.ok || payload.error) {
       const error = record(payload.error);
       // Never copy Meta's message: it can contain credentials or customer content.
-      throw new FacebookEngagementError(contentRead&&error.code===100&&error.error_subcode===33?'content_unavailable':classify(response.status,error.code));
+      const kind=contentRead&&error.code===100&&error.error_subcode===33?'content_unavailable':classify(response.status,error.code);
+      throw new FacebookEngagementError(kind,undefined,kind==='rate_limited'?metaRetryAfter(response.headers.get('retry-after')):undefined);
     }
     if (!Object.keys(payload).length) throw new FacebookEngagementError('invalid_response');
     return payload;

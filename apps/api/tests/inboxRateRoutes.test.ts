@@ -1,0 +1,9 @@
+import test from 'node:test';import assert from 'node:assert/strict';import express from 'express';import {randomUUID} from 'node:crypto';
+import {createInteractionInboxRouter} from '../src/interactionInbox/routes';import {HttpError} from '../src/utils/errors';
+test('capabilities retain the provider limit and refresh Retry-After is not replaced with a fixed 30 seconds',async()=>{
+ const workspace=randomUUID(),account=randomUUID(),runtime:any={access:{require:async()=>{},resolveInboxAsset:async()=>{throw new HttpError(429,'private provider message',{retryAfter:120});}},reception:{refreshInbox:async()=>{throw new HttpError(429,'private provider message',{retryAfter:120});}}};
+ const app=express();app.use(express.json());app.use('/api/v1',createInteractionInboxRouter(runtime,{authenticate:(req,_res,next)=>{req.user={id:randomUUID(),sessionId:randomUUID(),email:'fixture@example.test'};next();}}));const server=app.listen(0,'127.0.0.1');await new Promise<void>(r=>server.once('listening',r));const address=server.address();assert.ok(address&&typeof address!=='string');const origin=`http://127.0.0.1:${address.port}/api/v1/workspaces/${workspace}/interaction-inbox`;
+ try{const capability=await fetch(origin+'/capabilities?accountIds='+account),body=await capability.json();assert.equal(body.accounts[0].reason,'rate_limited');assert.equal(body.accounts[0].retryAfter,120);assert.doesNotMatch(JSON.stringify(body),/private provider message/);
+ const refresh=await fetch(origin+'/refresh',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({accountIds:[account],kind:'messages'})});assert.equal(refresh.status,429);assert.equal(refresh.headers.get('Retry-After'),'120');assert.equal((await refresh.json()).details.code,'rate_limited');
+ }finally{await new Promise<void>((r,j)=>server.close(e=>e?j(e):r()));}
+});

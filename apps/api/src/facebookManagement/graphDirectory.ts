@@ -1,10 +1,11 @@
 import {randomUUID} from 'node:crypto';
 import type {DirectoryBusiness,DirectoryPage,DirectorySlice,DirectoryUserPage,PageTokenInspection} from './types';
+import {metaRetryAfter} from '../utils/metaRetryAfter';
 
 type Failure = 'invalid_input'|'invalid_response'|'authorization_invalid'|'permission_missing'|'rate_limited'|'temporary_failure';
 export class FacebookDirectoryError extends Error {
   readonly diagnosticId=randomUUID();
-  constructor(readonly kind:Failure){super(`Facebook directory ${kind}`);this.name='FacebookDirectoryError';}
+  constructor(readonly kind:Failure,readonly retryAfterSeconds?:number){super(`Facebook directory ${kind}`);this.name='FacebookDirectoryError';}
 }
 const fail=(kind:Failure):never=>{throw new FacebookDirectoryError(kind);};
 function record(value:unknown):Record<string,unknown> {
@@ -61,7 +62,7 @@ export function createFacebookDirectoryClient(input:{userToken:string;apiVersion
       if(!res.ok || data.error){
         const error=data.error && typeof data.error==='object'?data.error as {code?:unknown}:{};
         if(error.code===190)return fail('authorization_invalid');
-        if(res.status===429 || [4,17,32,613].includes(Number(error.code)))return fail('rate_limited');
+        if(res.status===429 || [4,17,32,613].includes(Number(error.code)))throw new FacebookDirectoryError('rate_limited',metaRetryAfter(res.headers.get('retry-after')));
         if(error.code===10 || Number(error.code)===200)return fail('permission_missing');
         return fail(res.status>=500?'temporary_failure':'invalid_response');
       }

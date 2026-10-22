@@ -20,6 +20,8 @@ import {createFacebookSubscriptionService} from './subscriptions';
 import {createFacebookWebhookRouter} from '../routes/facebookWebhookRoutes';
 import {createMetaInboxDeletion} from '../interactionInbox/deletion';
 import {parseFacebookReplyTestRestriction,type FacebookReplyTestRestriction} from './replyTestRestriction';
+import {createHash} from 'node:crypto';
+import {createFacebookReadInspectionGuard} from './readInspection';
 
 export function createFacebookManagementRuntime(input:{db:PrismaClient;settings:FacebookManagementConfig;appSecret:string;verifyToken?:string;testRestriction?:FacebookReplyTestRestriction|null;encrypt:(v:string)=>string;decrypt:(v:string)=>string;fetchImpl?:typeof fetch}){
   const {db,settings,appSecret}=input;
@@ -36,11 +38,13 @@ export function createFacebookManagementRuntime(input:{db:PrismaClient;settings:
     return createFacebookDirectoryClient({appId:settings.appId,appSecret,apiVersion:settings.graphVersion,userToken:connection.userToken,fetchImpl:input.fetchImpl});
   }
   const directory=createFacebookDirectoryService({db,decrypt:input.decrypt,encrypt:input.encrypt,createClient:directoryClient});
-  const access=createFacebookPageAccess({db,decrypt:input.decrypt,inspect:async(pageId,token,connection)=>{
+  const inspectRead=createFacebookReadInspectionGuard();
+  const access=createFacebookPageAccess({db,decrypt:input.decrypt,inspect:async(pageId,token,connection,options)=>{
     if(!connection?.userTokenEncrypted)throw new FacebookDirectoryError('authorization_invalid');
-    return directoryClient({...connection,userToken:input.decrypt(connection.userTokenEncrypted)}).inspectPageToken(pageId,token);
+    const key=createHash('sha256').update(JSON.stringify([connection.appId,connection.id,connection.version,pageId,token,connection.userTokenEncrypted])).digest('hex');
+    return inspectRead(key,()=>directoryClient({...connection,userToken:input.decrypt(connection.userTokenEncrypted!)}).inspectPageToken(pageId,token),{fresh:options?.write});
   }});
-  const engagement=createFacebookManagementEngagement({db,testRestriction:input.testRestriction,resolvePageAccess:access.resolvePageAccess,executeFacebookSend:createFacebookSendExecutor({db,testRestriction:input.testRestriction}).executeFacebookSend,
+  const engagement=createFacebookManagementEngagement({db,testRestriction:input.testRestriction,resolvePageAccess:access.resolvePageAccess,onRateLimited:seconds=>inspectRead.rateLimited(seconds),executeFacebookSend:createFacebookSendExecutor({db,testRestriction:input.testRestriction}).executeFacebookSend,
     receivedMessages:receptionStore.messages,receivedComments:receptionStore.comments,latestInbound:receptionStore.latestInbound,
     createClient:({pageId,accessToken})=>createFacebookEngagementClient({pageId,accessToken,apiVersion:settings.graphVersion,fetchImpl:input.fetchImpl})});
   const notifications=createFacebookSubscriptionService({db,appId:settings.appId,resolvePageAccess:access.resolvePageAccess,createClient:access=>createFacebookEngagementClient({pageId:access.pageId,accessToken:access.pageToken,apiVersion:settings.graphVersion,appId:settings.appId,fetchImpl:input.fetchImpl})});

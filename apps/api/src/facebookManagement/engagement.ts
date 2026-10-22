@@ -12,7 +12,7 @@ import {copyReplyTestRestriction,assertReplyTestContext,assertReplyTestGrant,ass
 type Access=Awaited<ReturnType<ReturnType<typeof createFacebookPageAccess>['resolvePageAccess']>>;
 type Client=Pick<FacebookEngagementClient,'getPostIdentity'|'listConversations'|'getConversation'|'listMessages'|'listComments'|'listCommentReplies'|'replyComment'|'sendMessage'>;
 type Dependencies={db:PrismaClient;testRestriction?:FacebookReplyTestRestriction|null;resolvePageAccess:ReturnType<typeof createFacebookPageAccess>['resolvePageAccess'];executeFacebookSend:ReturnType<typeof createFacebookSendExecutor>['executeFacebookSend'];
-  createClient:(input:{pageId:string;accessToken:string})=>Client;now?:()=>Date;latestInbound?:(managedPageId:string,participantId:string)=>Promise<Date|null>;
+  createClient:(input:{pageId:string;accessToken:string})=>Client;onRateLimited?:(seconds:number)=>void;now?:()=>Date;latestInbound?:(managedPageId:string,participantId:string)=>Promise<Date|null>;
   receivedMessages?:(managedPageId:string,participantId:string,conversationId:string)=>Promise<FacebookMessage[]>;
   receivedComments?:(managedPageId:string,postId:string,ids:string[],recent:boolean)=>Promise<FacebookComment[]>};
 function permissions(access:Access):FacebookCapabilities{
@@ -29,6 +29,7 @@ export function createFacebookManagementEngagement(deps:Dependencies){
     try{return await action();}catch(error){
       if(error instanceof HttpError)throw error;
       if(error instanceof FacebookEngagementError){
+        if(error.kind==='rate_limited'){deps.onRateLimited?.(error.retryAfterSeconds??60);throw new HttpError(429,'Facebook read is rate limited',{retryAfter:error.retryAfterSeconds??60});}
         if(error.kind==='authorization_invalid')await deps.db.facebookManagementConnection.updateMany({where:{id:access.connectionId,status:'active',version:access.connectionVersion},data:{status:'authorization_invalid',version:{increment:1}}});
         throw new HttpError(['permission_missing','task_missing','access_level'].includes(error.kind)?403:error.kind==='authorization_invalid'?409:502,`Facebook ${error.kind} (${error.diagnosticId})`);
       }
