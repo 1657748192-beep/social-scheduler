@@ -27,7 +27,13 @@ export function createInboxProjection({db,access,policy=createLiveInboxPolicy([]
     if(ref.platform==='facebook'&&!ref.sourceRecordId){const where={managedPageId_providerId:{managedPageId:ref.managedPageId,providerId:v.providerEventId}},original=v.kind==='messages'?await tx.facebookInteractionMessage.findUnique({where,select:{id:true}}):await tx.facebookInteractionComment.findUnique({where,select:{id:true}});if(original)ref.sourceRecordId=original.id;}
     if(!await inboxSourceAlive(tx,ref,time,new Date(),policy))continue;
     let identity=v.actorId?await tx.interactionIdentity.findUnique({where:{workspaceId_platform_appNamespace_assetId_providerActorId:{workspaceId:ctx.workspaceId,platform:a.platform,appNamespace:a.appNamespace,assetId:asset.id,providerActorId:v.actorId}}}):null;
-    if(v.actorId&&!identity){const customer=await tx.interactionCustomer.create({data:{workspaceId:ctx.workspaceId}});identity=await tx.interactionIdentity.create({data:{workspaceId:ctx.workspaceId,assetId:asset.id,customerId:customer.id,platform:a.platform,appNamespace:a.appNamespace,providerActorId:v.actorId,displayName:v.actorName,firstSeenAt:time,lastSeenAt:time}});}
+    const username=platform==='instagram'&&typeof v.actorUsername==='string'&&v.actorUsername.trim().length<=256?v.actorUsername.trim()||null:null;
+    if(v.actorId&&!identity){const customer=await tx.interactionCustomer.create({data:{workspaceId:ctx.workspaceId}});identity=await tx.interactionIdentity.create({data:{workspaceId:ctx.workspaceId,assetId:asset.id,customerId:customer.id,platform:a.platform,appNamespace:a.appNamespace,providerActorId:v.actorId,displayName:platform==='instagram'&&username?null:v.actorName,username,firstSeenAt:time,lastSeenAt:time}});}
+    else if(identity&&username){
+     // Repair only an empty username on the exact asset/actor after all source
+     // lifetime/deletion/epoch guards. Never merge customers or replace names.
+     await tx.interactionIdentity.updateMany({where:{id:identity.id,workspaceId:ctx.workspaceId,assetId:asset.id,platform:'instagram',appNamespace:a.appNamespace,providerActorId:v.actorId!,OR:[{username:null},{username:''}]},data:{username}});
+    }
     const key={workspaceId:ctx.workspaceId,assetId:asset.id,kind:v.kind,providerThreadOrEventId:v.threadId};
     if(ref.platform==='instagram'&&v.kind==='messages')await reconcileInstagramCases(tx,ctx.workspaceId,asset.id,v.threadId,ref);
     const c=await tx.interactionCase.upsert({where:{workspaceId_assetId_kind_providerThreadOrEventId:key},create:{...key,customerId:identity?.customerId,sourceRef:ref},update:{sourceRef:ref}});

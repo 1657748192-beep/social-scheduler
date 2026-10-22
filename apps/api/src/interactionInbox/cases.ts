@@ -31,7 +31,7 @@ export async function presentInboxCase(db:InboxDb,ctx:Scope,id:string,accountId:
    replied=rows.length>0;
   }
  }
- return{id:c.id,kind:c.kind as CaseDto['kind'],accountId,customerId:c.customerId,customerName:c.customer?.identities.find(i=>i.assetId===c.assetId)?.displayName??null,sourceLabel:c.asset.platform+' · '+(account?.displayName??accountId),status:c.status,replied,customerAvatarUrl,accountAvatarUrl,version:c.version,lastInboundAt:c.lastInboundAt?.toISOString()??null,unread:!!c.lastInboundAt&&(!r||r.lastReadAt<c.lastInboundAt||r.lastReadKey!==c.lastInboundKey),tags:c.tags.map(({tag})=>({id:tag.id,kind:tag.kind,name:tag.name,color:tag.color,version:tag.version})),assigneeId:c.assigneeId,sentiment:c.sentiment};
+ return{id:c.id,kind:c.kind as CaseDto['kind'],accountId,customerId:c.customerId,customerName:identity?.displayName??identity?.username??null,sourceLabel:c.asset.platform+' · '+(account?.displayName??accountId),status:c.status,replied,customerAvatarUrl,accountAvatarUrl,version:c.version,lastInboundAt:c.lastInboundAt?.toISOString()??null,unread:!!c.lastInboundAt&&(!r||r.lastReadAt<c.lastInboundAt||r.lastReadKey!==c.lastInboundKey),tags:c.tags.map(({tag})=>({id:tag.id,kind:tag.kind,name:tag.name,color:tag.color,version:tag.version})),assigneeId:c.assigneeId,sentiment:c.sentiment};
 }
 export function createInboxCases({db,access,setCaseTags}:{db:PrismaClient;access:InboxAccess;setCaseTags?:(ctx:Scope,id:string,ids:string[],version:number)=>Promise<void>}){
  async function getCaseDto(ctx:Scope,id:string){const {asset}=await access.resolveCase(ctx,id);return presentInboxCase(db,ctx,id,asset.accountId);}

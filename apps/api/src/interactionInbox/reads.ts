@@ -47,7 +47,11 @@ export function createInboxReads({db,access,registry,redis,policy=createLiveInbo
   const rows=await db.$queryRaw<Array<{id:string;assetId:string;time:Date}>>(Prisma.sql`SELECT c.id,c."assetId",COALESCE(c."lastInboundAt",c."createdAt") AS time FROM "InteractionCase" c WHERE ${Prisma.join(clauses,' AND ')} ORDER BY COALESCE(c."lastInboundAt",c."createdAt") DESC,c.id DESC LIMIT ${q.limit+1}`);
   const items:CaseDto[]=[];
   for(const row of rows.slice(0,q.limit)){const a=allowed.find(v=>v.id===row.assetId)!.a;await access.resolveCase(ctx,row.id);items.push(await presentInboxCase(db,ctx,row.id,a.accountId));}
-  for(const s of statuses)if(s.status==='ok'){const asset=allowed.find(a=>a.a.accountId===s.accountId);s.count=Number(counts.find(c=>c.assetId===asset?.id)?.count??0n);}
+  for(const s of statuses){const asset=allowed.find(a=>a.a.accountId===s.accountId);if(!asset)continue;const count=Number(counts.find(c=>c.assetId===asset.id)?.count??0n);if(s.status==='ok')s.count=count;
+   // Existing accessible records are not evidence of complete history coverage.
+   // Use the very same filtered, epoch/deletion/retention-guarded query above.
+   if(asset.a.platform==='instagram')s.synchronizedCount=count;
+  }
   await access.require(ctx);const last=rows[q.limit-1];return{items,nextCursor:rows.length>q.limit&&last?encodeInboxCursor(scope,{time:last.time.toISOString(),id:last.id}):null,accountsStatus:statuses,partial:statuses.some(s=>s.status!=='ok'),observedAt:new Date().toISOString(),lastSuccessfulSyncAt:lastSuccess};
  }
  async function getCase(ctx:Scope,id:string,input:unknown):Promise<DetailDto>{const q=parseQuery(input),{row,asset,source}=await access.resolveCase(ctx,id);if(!q.accountIds.includes(asset.accountId)||q.kind!==row.kind)throw new HttpError(404,'Interaction unavailable');

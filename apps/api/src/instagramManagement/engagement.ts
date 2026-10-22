@@ -63,7 +63,7 @@ export function createInstagramManagementEngagement({db,access,policy,graph,isDe
   if(capability==='mentions.read')return{capability,available:false,reason:'not_integrated',verifiedAt:null};
   try{await fresh(a,capability);return{capability,available:true,reason:'available',verifiedAt:now().toISOString()};}catch{return{capability,available:false,reason:'authorization_required',verifiedAt:null};}
  }));}
- const map=(a:ResolvedAsset,row:any,kind:'messages'|'comments'):VerifiedItem=>({providerEventId:row.providerId,threadId:kind==='messages'?instagramConversationIdentity(row.connectionId,row.connectionVersion,row.actorId):row.mediaId+':'+row.providerId,actorId:row.actorId,actorName:row.actorName??null,kind,occurredAt:row.occurredAt.toISOString(),inbound:row.inbound,deleted:row.deleted,sourceRef:{...parseInboxSource(a.sourceRef,'instagram'),sourceRecordId:row.id,...(kind==='messages'?{conversationId:row.conversationId,participantId:row.actorId}:{mediaId:row.mediaId,commentId:row.providerId})}});
+ const map=(a:ResolvedAsset,row:any,kind:'messages'|'comments'):VerifiedItem=>({providerEventId:row.providerId,threadId:kind==='messages'?instagramConversationIdentity(row.connectionId,row.connectionVersion,row.actorId):row.mediaId+':'+row.providerId,actorId:row.actorId,actorName:row.actorName??null,actorUsername:kind==='comments'?row.actorName??null:undefined,kind,occurredAt:row.occurredAt.toISOString(),inbound:row.inbound,deleted:row.deleted,sourceRef:{...parseInboxSource(a.sourceRef,'instagram'),sourceRecordId:row.id,...(kind==='messages'?{conversationId:row.conversationId,participantId:row.actorId}:{mediaId:row.mediaId,commentId:row.providerId})}});
  return{
   capabilities:caps,
   async list(a:ResolvedAsset,kind:string,cursor:string|null,limit:number):Promise<AdapterPage>{
@@ -106,12 +106,17 @@ export function createInstagramManagementEngagement({db,access,policy,graph,isDe
        if(await isDeleted(tx,{workspaceId:conn.workspaceId,platform:'instagram',appId:conn.appId,providerAssetId:conn.providerAccountId,actorId,providerEventId:raw.id,eventKind:'messages',occurredAt,connectionId:conn.id,connectionVersion:conn.version}))continue;
        const old=await tx.instagramInteractionMessage.findUnique({where:{connectionId_connectionVersion_providerId:key}});
        if(old?.deleted)continue;if(old&&(old.actorId!==actorId||old.conversationId!==parent.id&&!old.conversationId.startsWith('local:')))throw new HttpError(409,'Instagram message identity changed');
-       const row=await tx.instagramInteractionMessage.upsert({where:{connectionId_connectionVersion_providerId:key},create:{workspaceId:conn.workspaceId,...key,conversationId:parent.id,actorId,inbound,text:raw.message,occurredAt,receivedAt:occurredAt},update:raw.message===undefined?{}:{text:raw.message}});items.push(map(a,row,'messages'));
+       const row=await tx.instagramInteractionMessage.upsert({where:{connectionId_connectionVersion_providerId:key},create:{workspaceId:conn.workspaceId,...key,conversationId:parent.id,actorId,inbound,text:raw.message,occurredAt,receivedAt:occurredAt},update:raw.message===undefined?{}:{text:raw.message}});
+       // A business-authored message still belongs to its customer recipient.
+       // Carry only usernames attached to that exact, verified participant ID.
+       const actor=inbound?raw.from:raw.to.data.find((v:any)=>v.id===actorId),participant=(parent as any).participants.data.find((v:any)=>v.id===actorId);
+       items.push({...map(a,row,'messages'),actorUsername:actor?.username?.trim()||participant?.username?.trim()||null});
       }else{
        const actorId=raw.from?.id;if(typeof actorId!=='string'||!actorId)throw new HttpError(502,'Instagram comment actor unavailable');
        if(await isDeleted(tx,{workspaceId:conn.workspaceId,platform:'instagram',appId:conn.appId,providerAssetId:conn.providerAccountId,actorId,providerEventId:raw.id,eventKind:'comments',occurredAt,connectionId:conn.id,connectionVersion:conn.version}))continue;
        const old=await tx.instagramInteractionComment.findUnique({where:{connectionId_connectionVersion_providerId:key}});if(old?.deleted)continue;if(old&&(old.mediaId!==parent.id||old.actorId!==actorId))throw new HttpError(409,'Instagram comment identity changed');
-       const row=await tx.instagramInteractionComment.upsert({where:{connectionId_connectionVersion_providerId:key},create:{workspaceId:conn.workspaceId,...key,mediaId:parent.id,actorId,actorName:raw.username,inbound:!own.includes(actorId),text:raw.text,occurredAt,receivedAt:occurredAt,parentId:raw.parent_id},update:raw.text===undefined?{}:{text:raw.text,actorName:raw.username}});items.push(map(a,row,'comments'));
+       const username=raw.username?.trim()||raw.from.username?.trim()||undefined;
+       const row=await tx.instagramInteractionComment.upsert({where:{connectionId_connectionVersion_providerId:key},create:{workspaceId:conn.workspaceId,...key,mediaId:parent.id,actorId,actorName:username,inbound:!own.includes(actorId),text:raw.text,occurredAt,receivedAt:occurredAt,parentId:raw.parent_id},update:{...(raw.text===undefined?{}:{text:raw.text}),...(username?{actorName:username}:{})}});items.push({...map(a,row,'comments'),actorUsername:username??null});
       }
      }
     },{timeout:15000});
