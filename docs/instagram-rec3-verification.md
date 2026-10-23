@@ -27,7 +27,7 @@ Implementation base: `b710cd07f568b3955a1513146e601ed7bfc2cc97`.
 - Task 5: absent lifecycle and missing bounded close RED, then lifecycle + existing deletion/retention tests 13/13 GREEN.
 - Task 6: missing operations RED, then 4/4 GREEN; added actual default CLI, revoked-authorizer, expired-preparation tests. Active-binding mutation and bare duplicate marker RED→GREEN.
 - Concentrated new regressions: 36/36 passed in `output/ig-rec3-all-focused.log` (before the additional equal-timestamp assertion within the same receipt test; that assertion has its own RED log).
-- Full suite, final production builds and independent review are pending at this checkpoint; no completed full-suite claim is made here.
+- That initial implementation checkpoint preceded the independent review and final full-suite result recorded below.
 
 ## Independent review and single fix pass
 
@@ -43,7 +43,13 @@ Deferred minor: compressed formatting in the new grant/operations modules; no be
 
 Reviewer declined live Meta eligibility/delivery/deployment judgments: retained as an explicit future controlled-read gate, not inferred from local tests. Reviewer declined final suite/build results: parent runs and records them below; no static-review result substitutes for execution.
 
-An initial full regression exposed `expired candidates are unreadable before bounded cleanup, which does not extend retention` in unchanged `facebookPageImportLifecycle.integration.test.ts`. Its global LIMIT 1 cleanup competes with other fixtures' expired rows. The isolated file passed 4/4 alongside the two REC3 receipt/fence tests. The final full regression is still running; do not describe this checkpoint as a green whole suite.
+The initial full regression completed **1263/1264, one failure**, `expired candidates are unreadable before bounded cleanup, which does not extend retention` in unchanged `facebookPageImportLifecycle.integration.test.ts`. Its global LIMIT 1 cleanup competes with other fixtures' expired rows (two selected candidates remained when one was expected). The isolated file passed 4/4 alongside the two REC3 receipt/fence tests. No legacy test or cleanup behavior was changed to conceal this failure.
+
+**Final full regression after all review fixes: 1271/1271 PASS, fail 0, cancelled 0, skipped 0, exit 0.** Exact command: `node C:/Users/Administrator/AppData/Local/SocialSchedulerTools/run-ig-isolated-local-tests.cjs` (no test-file filters); log `output/ig-rec3-full-reviewed.log`. Duration 803632 ms. This run included the unchanged invitation lifecycle test and all new regressions, using a freshly migrated isolated local test database that the wrapper removed afterward. No product-code changes followed this run; only this evidence/ledger documentation was finalized.
+
+Task 6 final helper run: operations **11/11 PASS** at `7b4f8ad`, recorded with `task-done`; whole-suite completion is additionally gated by the separate unfiltered 1271/1271 run above. Original ledger and final rulings are archived in `instagram-rec3-execution-ledger.md`.
+
+Final-source builds passed with exit 0: `npm.cmd run build --workspace apps/api` (`output/ig-rec3-api-reviewed-final.log`) and `npm.cmd run build --workspace apps/web` (`output/ig-rec3-web-reviewed-final.log`). Existing multiple-lockfile/React test-renderer warnings are not new functional failures.
 
 ## Concrete implementation rulings
 
