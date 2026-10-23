@@ -4,7 +4,7 @@ import {HttpError} from '../utils/errors';
 import type {InboxDb} from '../interactionInbox/access';
 import type {ResolvedAsset,SourceRef} from '../interactionInbox/types';
 import {parseInboxSource} from '../interactionInbox/source';
-import {REC3_MARKER,REC3_TEXT} from './recordingGrantIdentity';
+import {REC3_MARKER,REC3_TEXT,REC3_MAX_AGE_MS} from './recordingGrantIdentity';
 
 export const recordingTexts=Object.freeze({
  comment:'Social Scheduler Instagram comment reply test REC1. This reply is for app review demonstration only.',
@@ -42,5 +42,6 @@ export async function requireInstagramRecordingTarget(db:InboxDb,rule:InstagramR
  const row=kind==='message'?await db.instagramInteractionMessage.findFirst({where:{...where,conversationId:'conversationId' in r?r.conversationId:undefined}}):await db.instagramInteractionComment.findFirst({where:{...where,mediaId:'mediaId' in r?r.mediaId:undefined}});
  const marker=selection.marker;
  if(!row?.text||!new RegExp('^'+marker+'(?:\\s|$)').test(row.text))throw deny();
+ if(marker===REC3_MARKER&&!allowExpired&&(!Number.isFinite(row.occurredAt.getTime())||at.getTime()<row.occurredAt.getTime()||at.getTime()-row.occurredAt.getTime()>=REC3_MAX_AGE_MS))throw deny();
  return{kind,targetId:kind==='message'?r.actorId:r.providerEventId};
 }

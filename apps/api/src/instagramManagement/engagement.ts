@@ -13,10 +13,11 @@ import {instagramConversationIdentity} from './conversationIdentity';
 import {copyInstagramReplyRecording,requireInstagramRecordingTarget,recordingTargetHash,recordingTexts,instagramRecordingSelection,type InstagramReplyRecording} from './replyRecording';
 import {createHash} from 'node:crypto';
 import {findInstagramReplyReceipt} from './replyReceipts';
+import {createInstagramRecordingGrants} from './recordingGrants';
 type Access=ReturnType<typeof createInstagramManagementAccess>;
 type Deps={db:PrismaClient;access:Access;policy:LiveInboxPolicy;graph:(asset:ResolvedAsset,token:string)=>InstagramManagementGraph;isDeleted:(tx:Prisma.TransactionClient,subject:InstagramSourceSubject)=>Promise<boolean>;verifiedCommentLimit:number;now?:()=>Date;testRestriction?:InstagramReplyRecording|null};
 export function createInstagramManagementEngagement({db,access,policy,graph,isDeleted,verifiedCommentLimit,now=()=>new Date(),testRestriction}:Deps){
- const rule=copyInstagramReplyRecording(testRestriction),executor=createInstagramSendExecutor({db,testRestriction:rule,now});
+ const rule=copyInstagramReplyRecording(testRestriction),recordingGrants=rule?.messageRec3?createInstagramRecordingGrants({db,rule,policy,now,isDeleted}):undefined,executor=createInstagramSendExecutor({db,testRestriction:rule,recordingGrants,now});
  async function restrict(tx:PrismaClient|Prisma.TransactionClient,a:ResolvedAsset,s:SourceRef,text:string){if(rule)await requireInstagramRecordingTarget(tx,rule,a,s,text,now());}
  async function recording(a:ResolvedAsset,s:SourceRef):Promise<AdapterDetail['recordingReply']>{
   if(!rule)return undefined;

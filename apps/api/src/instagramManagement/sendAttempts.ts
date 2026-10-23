@@ -6,14 +6,16 @@ import {requireInstagramAccount} from './store';
 import type {ResolvedAsset,SendOutcome,SourceRef} from '../interactionInbox/types';
 import {parseInboxSource} from '../interactionInbox/source';
 import {copyInstagramReplyRecording,requireInstagramRecordingTarget,type InstagramReplyRecording} from './replyRecording';
-type Input={asset:ResolvedAsset;source?:SourceRef;requestKey:string;kind:'message'|'comment';targetId:string;text:string};
+import type {createInstagramRecordingGrants} from './recordingGrants';
+export type InstagramSendInput={asset:ResolvedAsset;source?:SourceRef;requestKey:string;kind:'message'|'comment';targetId:string;text:string};
+type Input=InstagramSendInput;
 const hash=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 function outcome(row:InstagramInteractionSendAttempt,replayed=false):SendOutcome{
  if(row.status==='sent'&&row.providerId)return{status:'sent',providerId:row.providerId,...(replayed?{replayed:true as const}:{})};
  if(row.status==='failed')return{status:'failed',code:'reply_failed',diagnosticId:row.diagnosticId!};
  return{status:'unknown',diagnosticId:row.diagnosticId!};
 }
-export function createInstagramSendExecutor({db,testRestriction,now=()=>new Date()}:{db:PrismaClient;testRestriction?:InstagramReplyRecording|null;now?:()=>Date}){
+export function createInstagramSendExecutor({db,testRestriction,recordingGrants,now=()=>new Date()}:{db:PrismaClient;testRestriction?:InstagramReplyRecording|null;recordingGrants?:ReturnType<typeof createInstagramRecordingGrants>;now?:()=>Date}){
  const rule=copyInstagramReplyRecording(testRestriction);
  async function restricted(store:PrismaClient|Prisma.TransactionClient,input:Input){
   if(!rule)return;
@@ -37,10 +39,13 @@ export function createInstagramSendExecutor({db,testRestriction,now=()=>new Date
   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.requestKey)||!['message','comment'].includes(input.kind)||typeof input.text!=='string'||!input.text.trim()||input.text.length>(input.kind==='message'?2000:8000)||!/^[-a-zA-Z0-9_:.]{1,256}$/.test(input.targetId)||input.targetId===input.asset.providerAssetId)throw new HttpError(400,'Invalid Instagram reply');
   await restricted(db,input);
   const c=await current(input),key={connectionId:c.id,connectionVersion:c.version,requestKey:input.requestKey},targetHash=hash([input.kind,input.targetId]),payloadHash=hash(input.text);
+  const rec3=!!rule?.messageRec3&&input.kind==='message'&&input.source?.sourceRecordId===rule.messageRec3.sourceRecordId;
+  if(rec3&&!recordingGrants)throw new HttpError(409,'REC3 qualification service unavailable');
   let attempt:InstagramInteractionSendAttempt;
   const data={...key,workspaceId:c.workspaceId,targetHash,payloadHash,diagnosticId:randomUUID()};
   try{
-   if(rule){
+   if(rec3){const admitted=await recordingGrants!.claim(input);if(!admitted.fresh)return outcome(admitted.attempt,true);attempt=admitted.attempt;}
+   else if(rule){
     const admitted=await db.$transaction(async tx=>{
      // Durable admission is serialized across request keys and executor instances.
      // Never hold this lock over a provider request. Every prior status consumes the slot.
@@ -65,7 +70,7 @@ export function createInstagramSendExecutor({db,testRestriction,now=()=>new Date
    return outcome(row,!!rule);
   }
   // Persist the claim before dispatch; uncertainty is terminal, never an automatic retry.
-  try{await current(input);await restricted(db,input);}catch(error){await db.instagramInteractionSendAttempt.updateMany({where:{id:attempt.id,status:'pending'},data:{status:'failed'}});throw error;}
+  try{await current(input);await restricted(db,input);}catch(error){if(rec3)await recordingGrants!.finish(attempt.id,{status:'failed',code:'reply_failed',diagnosticId:attempt.diagnosticId!});else await db.instagramInteractionSendAttempt.updateMany({where:{id:attempt.id,status:'pending'},data:{status:'failed'}});throw error;}
   let result:SendOutcome;
   try{
    result=await send();
@@ -73,6 +78,7 @@ export function createInstagramSendExecutor({db,testRestriction,now=()=>new Date
    if(!['sent','failed','unknown'].includes(result.status))result={status:'unknown',diagnosticId:attempt.diagnosticId!};
    try{await current(input);}catch{result={status:'unknown',diagnosticId:attempt.diagnosticId!};}
   }catch{result={status:'unknown',diagnosticId:attempt.diagnosticId!};}
+  if(rec3)return recordingGrants!.finish(attempt.id,result);
   try{
    const changed=await db.instagramInteractionSendAttempt.updateMany({where:{id:attempt.id,workspaceId:c.workspaceId,connectionId:c.id,connectionVersion:c.version,status:'pending'},data:{status:result.status,providerId:result.status==='sent'?result.providerId:null}});
    if(changed.count!==1)return{status:'unknown',diagnosticId:attempt.diagnosticId!};
