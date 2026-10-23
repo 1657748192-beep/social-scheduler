@@ -17,14 +17,15 @@ import {createHash} from 'node:crypto';
 import {presentInboxCase} from '../src/interactionInbox/cases';
 import {createMetaSourceRetention} from '../src/interactionInbox/retention';
 
-async function setup(f:MetaInboxFixture,sendEnabled=true,rec2=false){
+async function setup(f:MetaInboxFixture,sendEnabled=true,rec2=false,dmRec2=false){
  const accountId=f.instagramAccountIds[0],connectionId=f.instagramConnectionIds[0];
  await f.db.socialAccount.update({where:{id:accountId},data:{capabilities:{profileUsername:'mooyamcosmetic'}}});
  const common={workspaceId:f.adminCtx.workspaceId,connectionId,connectionVersion:1,actorId:'300',inbound:true,occurredAt:new Date()};
  const comment=await f.db.instagramInteractionComment.create({data:{...common,providerId:'comment-rec1',mediaId:'media-rec1',text:'SS-IG-C-1022-REC1 review demo'}});
  const message=await f.db.instagramInteractionMessage.create({data:{...common,providerId:'message-rec1',conversationId:'local:rec1',text:'SS-IG-DM-1022-REC1 review demo'}});
  const next=rec2?await f.db.instagramInteractionComment.create({data:{...common,providerId:'comment-rec2',mediaId:comment.mediaId,text:'SS-IG-C-1023-REC2 review demo'}}):null;
- const rule=parseInstagramReplyRecording(JSON.stringify({enabled:true,...(next?{commentRec2:{sourceRecordId:next.id,providerEventId:next.providerId,actorId:'300',mediaId:next.mediaId,expiresAt:new Date(Date.now()+60000).toISOString()}}:{}),userId:f.adminCtx.userId,workspaceId:f.adminCtx.workspaceId,accountId,appId:'456',providerAccountId:'100',connectionId,connectionVersion:1,username:'mooyamcosmetic',expiresAt:new Date(Date.now()+60000).toISOString(),comment:{sourceRecordId:comment.id,providerEventId:comment.providerId,actorId:'300',mediaId:comment.mediaId},message:{sourceRecordId:message.id,providerEventId:message.providerId,actorId:'300',conversationId:message.conversationId}}))!;
+ const nextDm=dmRec2?await f.db.instagramInteractionMessage.create({data:{...common,providerId:'message-rec2',conversationId:message.conversationId,text:'SS-IG-DM-1023-REC2 review demo'}}):null;
+ const rule=parseInstagramReplyRecording(JSON.stringify({enabled:true,...(nextDm?{messageRec2:{sourceRecordId:nextDm.id,providerEventId:nextDm.providerId,actorId:'300',conversationId:nextDm.conversationId,expiresAt:new Date(Date.now()+60000).toISOString()}}:{}),...(next?{commentRec2:{sourceRecordId:next.id,providerEventId:next.providerId,actorId:'300',mediaId:next.mediaId,expiresAt:new Date(Date.now()+60000).toISOString()}}:{}),userId:f.adminCtx.userId,workspaceId:f.adminCtx.workspaceId,accountId,appId:'456',providerAccountId:'100',connectionId,connectionVersion:1,username:'mooyamcosmetic',expiresAt:new Date(Date.now()+60000).toISOString(),comment:{sourceRecordId:comment.id,providerEventId:comment.providerId,actorId:'300',mediaId:comment.mediaId},message:{sourceRecordId:message.id,providerEventId:message.providerId,actorId:'300',conversationId:message.conversationId}}))!;
  const policy=createLiveInboxPolicy([{workspaceId:f.adminCtx.workspaceId,platform:'instagram',appId:'456',providerAssetId:'100',readEnabled:true,sendEnabled,policy:{product:'synthetic',graphVersion:'v25.0',checkedAt:'2020-01-01T00:00:00Z',sources:['https://developers.facebook.com/docs/'],rawRetentionDays:7,contentRetentionDays:1,replyWindowMs:86400000,reviewed:true}}]);
  let reads=0,sends=0;
  const access=createInstagramManagementAccess({db:f.db,appId:'456',policy,decrypt:v=>v,inspect:async()=>({appId:'456',providerAccountId:'100',scopes:['instagram_business_basic','instagram_business_manage_comments','instagram_business_manage_messages'],expiresAt:new Date(Date.now()+86400000)})});
@@ -71,6 +72,29 @@ test('REC2 expiry and marker or media substitution cannot claim its single attem
  await f.db.instagramInteractionComment.update({where:{id:r.sourceRecordId},data:{text:'SS-IG-C-1023-REC20 not REC2'}});
  await assert.rejects(createInstagramSendExecutor({db:f.db,testRestriction:s.rule}).execute(input,send));
  assert.equal(sends,0);assert.equal(await f.db.instagramInteractionSendAttempt.count({where:{workspaceId:f.adminCtx.workspaceId}}),0);
+}));
+
+test('DM REC2 alone has fixed manual text, one dispatch and reload echo without reopening any comment or old message',async()=>withMetaInboxFixture(async f=>{
+ const s=await setup(f,true,true,true),r=(s.rule as any).messageRec2,source={...s.sources.message,sourceRecordId:r.sourceRecordId},text='Social Scheduler Instagram messaging reply test REC2. This reply is for app review demonstration only.';
+ const detail=await s.engagement.detail(s.asset,source);assert.equal(detail.recordingReply?.text,text);assert.equal(detail.recordingReply?.state,'available');assert.equal(s.calls().sends,0);
+ const executor=createInstagramSendExecutor({db:f.db,testRestriction:s.rule});let calls=0;
+ const input={...s.input('message'),source,text};
+ const expired={...s.rule,messageRec2:{...r,expiresAt:new Date(Date.now()-1000).toISOString()}};
+ await assert.rejects(createInstagramSendExecutor({db:f.db,testRestriction:expired}).execute(input,async()=>{calls++;throw Error('expired');}));
+ await assert.rejects(executor.execute({...input,source:{...source,conversationId:'wrong-conversation'}},async()=>{calls++;throw Error('wrong conversation');}));assert.equal(calls,0);
+ for(const bad of [{...input,source:s.sources.message},{...input,text:recordingTexts.message},{...input,source:{...source,participantId:'301'}},{...s.input('comment')},{...s.input('comment'),source:{...s.sources.comment,sourceRecordId:s.rule.commentRec2!.sourceRecordId,commentId:s.rule.commentRec2!.providerEventId},text:'Social Scheduler Instagram comment reply test REC2. This reply is for app review demonstration only.'}])await assert.rejects(executor.execute(bad,async()=>{throw Error('no dispatch');}));
+ assert.equal(await f.db.instagramInteractionSendAttempt.count({where:{connectionId:s.rule.connectionId}}),0);
+ assert.equal((await executor.execute(input,async()=>{calls++;return{status:'sent',providerId:'dm-rec2-reply'};})).status,'sent');
+ await executor.execute({...input,requestKey:randomUUID()},async()=>{calls++;throw Error('duplicate');});assert.equal(calls,1);
+ const after=await s.engagement.detail(s.asset,source);assert.equal(after.recordingReply?.state,'used');assert.ok(after.items.some(v=>v.id==='dm-rec2-reply'&&!v.inbound&&v.text===text));
+}));
+
+test('a new DM REC2 never resets a prior failed conversation attempt',async()=>withMetaInboxFixture(async f=>{
+ const s=await setup(f,true,true,true),r=(s.rule as any).messageRec2,source={...s.sources.message,sourceRecordId:r.sourceRecordId},text='Social Scheduler Instagram messaging reply test REC2. This reply is for app review demonstration only.';
+ const old=await f.db.instagramInteractionSendAttempt.create({data:{workspaceId:f.adminCtx.workspaceId,connectionId:s.rule.connectionId,connectionVersion:1,requestKey:randomUUID(),targetHash:createHash('sha256').update(JSON.stringify(['message','300'])).digest('hex'),payloadHash:createHash('sha256').update(JSON.stringify(recordingTexts.message)).digest('hex'),status:'failed',diagnosticId:randomUUID()}});
+ assert.equal((await s.engagement.detail(s.asset,source)).recordingReply?.state,'used');
+ let calls=0;await createInstagramSendExecutor({db:f.db,testRestriction:s.rule}).execute({...s.input('message'),source,text},async()=>{calls++;throw Error('must not dispatch');});assert.equal(calls,0);
+ assert.deepEqual(await f.db.instagramInteractionSendAttempt.findUnique({where:{id:old.id}}),old);
 }));
 
 test('recording guard rejects wrong target, text, account and administrator before provider reads or claims',async()=>withMetaInboxFixture(async f=>{
