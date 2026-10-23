@@ -3,9 +3,9 @@ import React,{useLayoutEffect,useMemo,useRef,useState} from 'react';
 import {useLanguage} from '../../LanguageProvider';import type {InboxDetail} from '../../../lib/interactionInbox';
 import {InboxAvatar} from './InboxAvatar';import {chronologicalMessages} from './messageHistory';
 type Position={top:number;height:number;nearBottom:boolean;anchorId:string|null;anchorOffset:number;firstId:string|null};
-export function MessageTimeline({items,customerName,accountName,nextCursor,busy,onMore}:{items:InboxDetail['items'];customerName:string;accountName:string;nextCursor:string|null;busy:boolean;onMore:()=>void}){
+export function MessageTimeline({items,customerName,accountName,nextCursor,busy,followConfirmedId,onMore}:{items:InboxDetail['items'];customerName:string;accountName:string;nextCursor:string|null;busy:boolean;followConfirmedId?:string;onMore:()=>void}){
  const {t,locale}=useLanguage(),ordered=useMemo(()=>chronologicalMessages(items),[items]);
- const viewport=useRef<HTMLDivElement>(null),position=useRef<Position|null>(null),[atBottom,setAtBottom]=useState(true);
+ const viewport=useRef<HTMLDivElement>(null),position=useRef<Position|null>(null),lastFollowed=useRef<string|undefined>(undefined),[atBottom,setAtBottom]=useState(true);
  const zone=Intl.DateTimeFormat().resolvedOptions().timeZone,language=locale==='en'?'en-GB':'zh-CN';
  function capture():Position|null{
   const node=viewport.current;if(!node)return null;const top=node.getBoundingClientRect().top;
@@ -17,13 +17,15 @@ export function MessageTimeline({items,customerName,accountName,nextCursor,busy,
  useLayoutEffect(()=>{
   const node=viewport.current;if(!node||!ordered.length)return;
   const previous=position.current,prepend=previous?.firstId&&ordered.findIndex(item=>item.id===previous.firstId)>0;
-  if(!previous||previous.nearBottom&&!prepend)node.scrollTop=node.scrollHeight;
+  const follow=followConfirmedId&&lastFollowed.current!==followConfirmedId&&ordered.some(item=>item.id===followConfirmedId&&!item.inbound&&!item.deleted);
+  if(follow){lastFollowed.current=followConfirmedId;node.scrollTop=node.scrollHeight;}
+  else if(!previous||previous.nearBottom&&!prepend)node.scrollTop=node.scrollHeight;
   else{
    const anchor=Array.from(node.querySelectorAll<HTMLElement>('[data-message-id]')).find(row=>row.dataset.messageId===previous.anchorId);
    node.scrollTop=anchor?node.scrollTop+anchor.getBoundingClientRect().top-node.getBoundingClientRect().top-previous.anchorOffset:previous.top+(prepend?node.scrollHeight-previous.height:0);
   }
   remember();
- },[ordered,locale]);
+ },[ordered,locale,followConfirmedId]);
  let lastDay='';
  return <div className="inbox-chat">
   <div className="inbox-chat-toolbar"><small>{t('本机时间','Local time')} · {zone}</small>{nextCursor?<button type="button" className="button secondary inbox-context-more" disabled={busy} onClick={onMore}>{busy?t('正在加载…','Loading…'):t('加载更早消息','Load earlier messages')}</button>:null}</div>
