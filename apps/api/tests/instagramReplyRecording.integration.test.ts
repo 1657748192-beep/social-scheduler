@@ -36,6 +36,100 @@ async function setup(f:MetaInboxFixture,sendEnabled=true,rec2=false,dmRec2=false
  return{rule,asset,sources,input,engagement,policy,calls:()=>({reads,sends})};
 }
 
+const new2Text='Social Scheduler Instagram reply test NEW2. This reply is for app review demonstration only.';
+async function setupNew2(f:MetaInboxFixture){
+ const s=await setup(f,true,true,true);
+ const row=await f.db.instagramInteractionMessage.create({data:{workspaceId:s.rule.workspaceId,connectionId:s.rule.connectionId,connectionVersion:1,providerId:'message-new2',actorId:'400',conversationId:'thread-new2',inbound:true,text:'SS-IG-DM-NEW2 Social Scheduler Instagram messaging review demo.',occurredAt:new Date()}});
+ const rule=parseInstagramReplyRecording(JSON.stringify({...s.rule,messageNew2:{sourceRecordId:row.id,providerEventId:row.providerId,actorId:'400',conversationId:row.conversationId,expiresAt:new Date(+row.occurredAt+86400000).toISOString()}}))!;
+ const source={...s.asset.sourceRef!,sourceRecordId:row.id,conversationId:row.conversationId,participantId:'400'};
+ let sends=0,ownershipReads=0;
+ const access=createInstagramManagementAccess({db:f.db,appId:'456',policy:s.policy,decrypt:v=>v,inspect:async()=>({appId:'456',providerAccountId:'100',scopes:['instagram_business_basic','instagram_business_manage_comments','instagram_business_manage_messages'],expiresAt:new Date(Date.now()+86400000)})});
+ const engagement=createInstagramManagementEngagement({db:f.db,access,policy:s.policy,testRestriction:rule,isDeleted:async()=>false,verifiedCommentLimit:1000,graph:()=>({conversation:async(id:string)=>{assert.equal(id,'thread-new2');ownershipReads++;return{id,participants:{data:[{id:'100',username:'mooyamcosmetic'},{id:'400',username:'zhizhangpeng'}]}};},sendMessage:async(id:string,text:string)=>{assert.equal(id,'400');assert.equal(text,new2Text);sends++;return{status:'sent',providerId:'new2-confirmed-reply'};}} as any)});
+ const input={asset:s.asset,source,kind:'message' as const,targetId:'400',text:new2Text,requestKey:randomUUID()};
+ return{...s,row,rule,source,engagement,input,counts:()=>({sends,ownershipReads})};
+}
+
+test('NEW2 whitelist uses normal ownership/send/receipt flow without historical pagination, while old records stay closed',async()=>withMetaInboxFixture(async f=>{
+ const s=await setupNew2(f),before=await f.publishingSnapshot();
+ const old=await f.db.instagramInteractionSendAttempt.create({data:{workspaceId:s.rule.workspaceId,connectionId:s.rule.connectionId,connectionVersion:1,requestKey:randomUUID(),targetHash:createHash('sha256').update(JSON.stringify(['message','300'])).digest('hex'),payloadHash:createHash('sha256').update(JSON.stringify(recordingTexts.message)).digest('hex'),status:'sent',providerId:'old-confirmed'}});
+ const detail=await s.engagement.detail(s.asset,s.source);assert.equal(detail.recordingReply?.state,'available');assert.equal(detail.recordingReply?.text,new2Text);assert.equal(detail.recordingReply?.expiresAt,new Date(+s.row.occurredAt+86400000).toISOString());
+ for(const source of [s.sources.message,s.sources.comment,{...s.sources.message,sourceRecordId:s.rule.messageRec2!.sourceRecordId}])await assert.rejects(s.engagement.reply(s.asset,source,new2Text,randomUUID()));
+ assert.equal((await s.engagement.reply(s.asset,s.source,new2Text,randomUUID())).status,'sent');
+ await s.engagement.reply(s.asset,s.source,new2Text,randomUUID());assert.equal(s.counts().sends,1);assert.ok(s.counts().ownershipReads>=1);
+ const after=await s.engagement.detail(s.asset,s.source);assert.equal(after.recordingReply?.state,'used');assert.equal(after.items.filter(v=>!v.inbound&&v.text===new2Text).length,1);
+ assert.deepEqual(await f.db.instagramInteractionSendAttempt.findUnique({where:{id:old.id}}),old);assert.deepEqual(await f.publishingSnapshot(),before);
+ const c=await f.db.instagramManagementConnection.findUniqueOrThrow({where:{id:s.rule.connectionId}});assert.equal(c.notificationsEnabled,false);assert.equal(s.rule.messageRec3,undefined);
+}));
+
+test('NEW2 identity, text, account, role, permission and marker substitutions fail without consuming attempts',async()=>withMetaInboxFixture(async f=>{
+ const s=await setupNew2(f),executor=createInstagramSendExecutor({db:f.db,testRestriction:s.rule});let sends=0;const send=async()=>{sends++;return{status:'sent' as const,providerId:'bad'};};
+ for(const patch of [{text:recordingTexts.message},{targetId:'300'},{source:{...s.source,sourceRecordId:randomUUID()}},{source:{...s.source,participantId:'300'}},{source:{...s.source,conversationId:'other'}},{asset:{...s.asset,ctx:f.viewerCtx}},{asset:{...s.asset,connectionVersion:2}},{asset:{...s.asset,accountId:f.instagramAccountIds[1]}}])await assert.rejects(executor.execute({...s.input,...patch},send));
+ await f.db.instagramInteractionMessage.update({where:{id:s.row.id},data:{text:'SS-IG-DM-NEW20 not the selected test'}});await assert.rejects(executor.execute(s.input,send));
+ await f.db.instagramInteractionMessage.update({where:{id:s.row.id},data:{text:s.row.text}});await f.db.instagramManagementConnection.update({where:{id:s.rule.connectionId},data:{scopes:['instagram_business_basic']}});await assert.rejects(executor.execute(s.input,send));
+ assert.equal(sends,0);assert.equal(await f.db.instagramInteractionSendAttempt.count({where:{connectionId:s.rule.connectionId}}),0);
+}));
+
+test('NEW2 cannot extend the original 24-hour deadline or re-arm by replacing configuration',async()=>withMetaInboxFixture(async f=>{
+ const s=await setupNew2(f);let sends=0;const send=async()=>{sends++;return{status:'sent' as const,providerId:'bad'};};
+ const boundary=new Date(+s.row.occurredAt+86400000),extended={...s.rule,messageNew2:{...s.rule.messageNew2!,expiresAt:new Date(+boundary+86400000).toISOString()}};
+ await assert.rejects(createInstagramSendExecutor({db:f.db,testRestriction:extended,now:()=>boundary}).execute(s.input,send));
+ const expired={...s.rule,messageNew2:{...s.rule.messageNew2!,expiresAt:new Date(Date.now()-1000).toISOString()}};
+ await assert.rejects(createInstagramSendExecutor({db:f.db,testRestriction:expired}).execute(s.input,send));
+ await f.db.instagramInteractionMessage.update({where:{id:s.row.id},data:{occurredAt:new Date(Date.now()+60000)}});await assert.rejects(createInstagramSendExecutor({db:f.db,testRestriction:s.rule}).execute(s.input,send));
+ assert.equal(sends,0);assert.equal(await f.db.instagramInteractionSendAttempt.count({where:{connectionId:s.rule.connectionId}}),0);
+}));
+
+for(const status of ['sent','failed','unknown','throw'] as const)test(`NEW2 ${status} remains consumed across request keys and executor recreation`,async()=>withMetaInboxFixture(async f=>{
+ const s=await setupNew2(f);let sends=0;const executor=()=>createInstagramSendExecutor({db:f.db,testRestriction:s.rule});
+ await executor().execute(s.input,async()=>{sends++;if(status==='throw')throw Error('synthetic transport');return status==='sent'?{status,providerId:'one-reply'}:status==='failed'?{status,code:'denied',diagnosticId:randomUUID()}:{status,diagnosticId:randomUUID()};});
+ await executor().execute({...s.input,requestKey:randomUUID()},async()=>{sends++;return{status:'sent',providerId:'duplicate'};});assert.equal(sends,1);
+}));
+
+test('NEW2 concurrent different request keys dispatch at most once',async()=>withMetaInboxFixture(async f=>{
+ const s=await setupNew2(f);let calls=0,release!:()=>void,started!:()=>void;const gate=new Promise<void>(r=>release=r),waiting=new Promise<void>(r=>started=r),executor=()=>createInstagramSendExecutor({db:f.db,testRestriction:s.rule});
+ const first=executor().execute(s.input,async()=>{calls++;started();await gate;return{status:'sent',providerId:'once'};});await waiting;
+ try{assert.equal((await executor().execute({...s.input,requestKey:randomUUID()},async()=>{calls++;return{status:'sent',providerId:'duplicate'};})).status,'unknown');}finally{release();}
+ assert.equal((await first).status,'sent');assert.equal(calls,1);
+}));
+
+test('NEW2 detail advertises the original 24-hour deadline even when configured expiry is later',async()=>withMetaInboxFixture(async f=>{
+ const s=await setupNew2(f),at=new Date(Date.now()-3600000);
+ await f.db.instagramInteractionMessage.update({where:{id:s.row.id},data:{occurredAt:at}});
+ const detail=await s.engagement.detail(s.asset,s.source);
+ assert.equal(detail.recordingReply?.expiresAt,new Date(+at+86400000).toISOString());
+ assert.equal(detail.recordingReply?.state,'available');
+ assert.equal(s.counts().sends,0);
+}));
+
+test('NEW2 does not reopen a configured REC3 or change its existing grant',async()=>withMetaInboxFixture(async f=>{
+ const s=await setupNew2(f),row=await f.db.instagramInteractionMessage.create({data:{workspaceId:s.rule.workspaceId,connectionId:s.rule.connectionId,connectionVersion:1,providerId:'old-rec3',actorId:'300',conversationId:s.rule.message.conversationId,inbound:true,text:'SS-IG-DM-1023-REC3 older test',occurredAt:new Date()}});
+ const grant=await f.db.instagramReplyRecordingGrant.create({data:{workspaceId:s.rule.workspaceId,appId:'456',incomingKey:'a'.repeat(64),connectionId:s.rule.connectionId,sourceRecordId:row.id,occurredAt:row.occurredAt,expiresAt:new Date(Date.now()+60000),forgetAfter:new Date(Date.now()+86400000),state:'closed'}});
+ const rule=parseInstagramReplyRecording(JSON.stringify({...s.rule,messageRec3:{sourceRecordId:row.id,providerEventId:row.providerId,actorId:'300',conversationId:row.conversationId,expiresAt:new Date(Date.now()+60000).toISOString()}}))!;
+ const executor=createInstagramSendExecutor({db:f.db,testRestriction:rule});let calls=0;
+ await assert.rejects(executor.execute({...s.input,source:{...s.sources.message,sourceRecordId:row.id},targetId:'300',text:'Social Scheduler Instagram messaging reply test REC3. This reply is for app review demonstration only.'},async()=>{calls++;throw Error('REC3 stays closed');}));
+ await executor.execute(s.input,async()=>{calls++;return{status:'sent',providerId:'new2-only'};});assert.equal(calls,1);
+ assert.deepEqual(await f.db.instagramReplyRecordingGrant.findUnique({where:{id:grant.id}}),grant);
+}));
+
+test('replacing a consumed NEW2 source for the same actor cannot restore its slot',async()=>withMetaInboxFixture(async f=>{
+ const s=await setupNew2(f);let sends=0;const send=async()=>{sends++;return{status:'sent' as const,providerId:'first-only'};};
+ await createInstagramSendExecutor({db:f.db,testRestriction:s.rule}).execute(s.input,send);
+ const old=await f.db.instagramInteractionSendAttempt.findMany({where:{connectionId:s.rule.connectionId}});
+ const next=await f.db.instagramInteractionMessage.create({data:{workspaceId:s.rule.workspaceId,connectionId:s.rule.connectionId,connectionVersion:1,providerId:'replacement-new2',actorId:'400',conversationId:s.row.conversationId,inbound:true,text:s.row.text,occurredAt:new Date()}});
+ const rule=parseInstagramReplyRecording(JSON.stringify({...s.rule,messageNew2:{...s.rule.messageNew2!,sourceRecordId:next.id,providerEventId:next.providerId,expiresAt:new Date(Date.now()+86400000).toISOString()}}))!;
+ const result=await createInstagramSendExecutor({db:f.db,testRestriction:rule}).execute({...s.input,source:{...s.source,sourceRecordId:next.id},requestKey:randomUUID()},send);
+ assert.deepEqual(result,{status:'sent',providerId:'first-only',replayed:true});assert.equal(sends,1);
+ assert.deepEqual(await f.db.instagramInteractionSendAttempt.findUnique({where:{id:old[0].id}}),old[0]);
+}));
+
+test('NEW2 expired detail disables reply capability without a send or reset',async()=>withMetaInboxFixture(async f=>{
+ const s=await setupNew2(f);
+ await f.db.instagramInteractionMessage.update({where:{id:s.row.id},data:{occurredAt:new Date(Date.now()-86400000-1000)}});
+ // Retention already forbids this old source; it must not expose a sendable detail.
+ await assert.rejects(s.engagement.detail(s.asset,s.source));
+ assert.equal(s.counts().sends,0);assert.equal(await f.db.instagramInteractionSendAttempt.count({where:{connectionId:s.rule.connectionId}}),0);
+}));
+
 test('recording config is absent by default and malformed configuration fails closed without leaking input',()=>{
  assert.equal(parseInstagramReplyRecording(undefined),null);
  for(const value of ['', 'null','[]','{}','{"enabled":false,"secret":"private"}'])assert.throws(()=>parseInstagramReplyRecording(value),e=>e instanceof Error&&e.message==='Invalid Instagram reply recording configuration');

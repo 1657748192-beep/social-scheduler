@@ -26,7 +26,11 @@ export function createInstagramManagementEngagement({db,access,policy,graph,isDe
   const selected=instagramRecordingSelection(rule,s);
   if(selected.marker===REC3_MARKER){const grant=await recordingGrants!.read(a,s);return{text:selected.text,expiresAt:grant?.expiresAt.toISOString()??selected.expiresAt,mode:'incoming_message_once',state:!grant||grant.state==='closed'||now()>=grant.expiresAt?'expired':grant.attemptId?'used':'available',...(grant?.attemptId?{outcome:grant.state==='claimed'?'pending':grant.state==='sent'?'sent':grant.state==='failed'?'failed':'unknown'}:{})};}
   const used=await db.instagramInteractionSendAttempt.findFirst({where:{workspaceId:rule.workspaceId,connectionId:rule.connectionId,targetHash:recordingTargetHash(target.kind,target.targetId)},select:{id:true}});
-  return{text:selected.text,expiresAt:selected.expiresAt,state:used?'used':!selected.sendEnabled||now().getTime()>=Date.parse(selected.expiresAt)?'expired':'available'};
+  // NEW2 uses the normal single-target executor, not a REC3 grant. Its visible
+  // deadline must never advertise more than the original inbound's 24 hours.
+  const inbound=selected.marker==='SS-IG-DM-NEW2'?await db.instagramInteractionMessage.findUniqueOrThrow({where:{id:selected.record.sourceRecordId},select:{occurredAt:true}}):null;
+  const expiresAt=inbound?new Date(Math.min(Date.parse(selected.expiresAt),+inbound.occurredAt+86400000)).toISOString():selected.expiresAt;
+  return{text:selected.text,expiresAt,state:used?'used':!selected.sendEnabled||now().getTime()>=Date.parse(expiresAt)?'expired':'available'};
  }
  function source(a:ResolvedAsset,value:SourceRef){
   if(a.platform!=='instagram')throw new HttpError(409,'Instagram platform required');
