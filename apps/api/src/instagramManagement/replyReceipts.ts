@@ -1,8 +1,23 @@
 import {createHash} from 'node:crypto';
 import {Prisma} from '@prisma/client';
 import type {InboxDb} from '../interactionInbox/access';
+import {requireInboxAccess} from '../interactionInbox/access';
+import type {ResolvedAsset,SourceRef} from '../interactionInbox/types';
+import {parseInboxSource} from '../interactionInbox/source';
+import {instagramRecordingIncomingKey,REC3_TEXT,REC3_MARKER} from './recordingGrantIdentity';
 
 type Binding={workspaceId:string;accountId:string;appId:string;providerAccountId:string;connectionId:string;connectionVersion:number;kind:'comment'|'message';targetId:string;after:Date;before?:Date;payloadHash?:string};
+export async function findInstagramRecordingGrantReceipt(db:InboxDb,b:{asset:ResolvedAsset;source:SourceRef;after:Date;before:Date}){
+ const a=b.asset,s=parseInboxSource(b.source,'instagram');await requireInboxAccess(db,a.ctx);
+ if(a.platform!=='instagram'||s.instagramAccountId!==a.accountId||s.connectionId!==a.sourceRef?.connectionId||s.connectionVersion!==a.connectionVersion)return null;
+ const source=await db.instagramInteractionMessage.findFirst({where:{id:s.sourceRecordId,workspaceId:a.ctx.workspaceId,connectionId:s.connectionId,connectionVersion:s.connectionVersion,actorId:s.participantId,conversationId:s.conversationId,inbound:true,deleted:false}});if(!source||source.occurredAt>b.before)return null;
+ const g=await db.instagramReplyRecordingGrant.findUnique({where:{incomingKey:instagramRecordingIncomingKey({workspaceId:a.ctx.workspaceId,appId:a.appNamespace,providerAccountId:a.providerAssetId,providerEventId:source.providerId})}});
+ if(!g||g.state!=='sent'||!g.attemptId||g.sourceRecordId!==source.id||g.connectionId!==s.connectionId||g.connectionVersion!==s.connectionVersion||g.accountId!==a.accountId||g.actorId!==s.participantId||g.conversationId!==s.conversationId||g.marker!==REC3_MARKER||g.payloadHash!==createHash('sha256').update(JSON.stringify(REC3_TEXT)).digest('hex'))return null;
+ const attempt=await db.instagramInteractionSendAttempt.findUnique({where:{id:g.attemptId}});if(!attempt||attempt.status!=='sent'||!attempt.providerId||!/^[-a-zA-Z0-9_:.]{1,256}$/.test(attempt.providerId)||attempt.workspaceId!==g.workspaceId||attempt.connectionId!==g.connectionId||attempt.connectionVersion!==g.connectionVersion||attempt.payloadHash!==g.payloadHash)return null;
+ if(!await db.interactionAudit.findFirst({where:{workspaceId:g.workspaceId,action:'instagram.reply.original',targetId:s.connectionId,result:s.connectionVersion+':'+attempt.requestKey}}))return null;
+ const receipt=await findInstagramReplyReceipt(db,{workspaceId:a.ctx.workspaceId,accountId:a.accountId,appId:a.appNamespace,providerAccountId:a.providerAssetId,connectionId:s.connectionId,connectionVersion:s.connectionVersion,kind:'message',targetId:s.participantId!,after:b.after,before:b.before,payloadHash:g.payloadHash});
+ return receipt?.providerId===attempt.providerId?receipt:null;
+}
 /** Read-only receipt evidence. Copied receipts never establish a newer send. */
 export async function findInstagramReplyReceipt(db:InboxDb,b:Binding){
  const before=b.before??new Date();

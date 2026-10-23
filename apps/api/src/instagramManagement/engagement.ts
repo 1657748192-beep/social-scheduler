@@ -12,7 +12,8 @@ import {encodeInboxCursor,decodeInboxCursor} from '../interactionInbox/cursor';
 import {instagramConversationIdentity} from './conversationIdentity';
 import {copyInstagramReplyRecording,requireInstagramRecordingTarget,recordingTargetHash,recordingTexts,instagramRecordingSelection,type InstagramReplyRecording} from './replyRecording';
 import {createHash} from 'node:crypto';
-import {findInstagramReplyReceipt} from './replyReceipts';
+import {findInstagramReplyReceipt,findInstagramRecordingGrantReceipt} from './replyReceipts';
+import {REC3_MARKER} from './recordingGrantIdentity';
 import {createInstagramRecordingGrants} from './recordingGrants';
 type Access=ReturnType<typeof createInstagramManagementAccess>;
 type Deps={db:PrismaClient;access:Access;policy:LiveInboxPolicy;graph:(asset:ResolvedAsset,token:string)=>InstagramManagementGraph;isDeleted:(tx:Prisma.TransactionClient,subject:InstagramSourceSubject)=>Promise<boolean>;verifiedCommentLimit:number;now?:()=>Date;testRestriction?:InstagramReplyRecording|null};
@@ -22,8 +23,10 @@ export function createInstagramManagementEngagement({db,access,policy,graph,isDe
  async function recording(a:ResolvedAsset,s:SourceRef):Promise<AdapterDetail['recordingReply']>{
   if(!rule)return undefined;
   let target;try{target=await requireInstagramRecordingTarget(db,rule,a,s,undefined,now(),true);}catch{return undefined;}
+  const selected=instagramRecordingSelection(rule,s);
+  if(selected.marker===REC3_MARKER){const grant=await recordingGrants!.read(a,s);return{text:selected.text,expiresAt:grant?.expiresAt.toISOString()??selected.expiresAt,mode:'incoming_message_once',state:!grant||grant.state==='closed'||now()>=grant.expiresAt?'expired':grant.attemptId?'used':'available',...(grant?.attemptId?{outcome:grant.state==='claimed'?'pending':grant.state==='sent'?'sent':grant.state==='failed'?'failed':'unknown'}:{})};}
   const used=await db.instagramInteractionSendAttempt.findFirst({where:{workspaceId:rule.workspaceId,connectionId:rule.connectionId,targetHash:recordingTargetHash(target.kind,target.targetId)},select:{id:true}});
-  const selected=instagramRecordingSelection(rule,s);return{text:selected.text,expiresAt:selected.expiresAt,state:used?'used':!selected.sendEnabled||now().getTime()>=Date.parse(selected.expiresAt)?'expired':'available'};
+  return{text:selected.text,expiresAt:selected.expiresAt,state:used?'used':!selected.sendEnabled||now().getTime()>=Date.parse(selected.expiresAt)?'expired':'available'};
  }
  function source(a:ResolvedAsset,value:SourceRef){
   if(a.platform!=='instagram')throw new HttpError(409,'Instagram platform required');
@@ -155,7 +158,8 @@ export function createInstagramManagementEngagement({db,access,policy,graph,isDe
    // never fetch, resend, write cached bodies, or guess other reply content.
    if(rule&&recordingReply)await db.$transaction(async tx=>{
     const connection=await fence(tx,a,cap),root=await target(tx,a,s),kind=s.conversationId?'message':'comment',text=instagramRecordingSelection(rule,s).text;
-    const receipt=await findInstagramReplyReceipt(tx,{workspaceId:a.ctx.workspaceId,accountId:a.accountId,appId:a.appNamespace,providerAccountId:a.providerAssetId,connectionId:s.connectionId,connectionVersion:a.connectionVersion,kind,targetId:kind==='message'?s.participantId!:s.commentId!,after:new Date(Math.max(root.occurredAt.getTime(),now().getTime()-evidence(a,'read').contentRetentionDays*86400000)),before:now(),payloadHash:createHash('sha256').update(JSON.stringify(text)).digest('hex')});
+    const after=new Date(Math.max(root.occurredAt.getTime(),now().getTime()-evidence(a,'read').contentRetentionDays*86400000));
+    const receipt=instagramRecordingSelection(rule,s).marker===REC3_MARKER?await findInstagramRecordingGrantReceipt(tx,{asset:a,source:s,after,before:now()}):await findInstagramReplyReceipt(tx,{workspaceId:a.ctx.workspaceId,accountId:a.accountId,appId:a.appNamespace,providerAccountId:a.providerAssetId,connectionId:s.connectionId,connectionVersion:a.connectionVersion,kind,targetId:kind==='message'?s.participantId!:s.commentId!,after,before:now(),payloadHash:createHash('sha256').update(JSON.stringify(text)).digest('hex')});
     if(!receipt||result.items.some(v=>v.id===receipt.providerId))return;
     const key={connectionId:s.connectionId,connectionVersion:a.connectionVersion,providerId:receipt.providerId};
     const cached=kind==='message'?await tx.instagramInteractionMessage.findUnique({where:{connectionId_connectionVersion_providerId:key}}):await tx.instagramInteractionComment.findUnique({where:{connectionId_connectionVersion_providerId:key}});

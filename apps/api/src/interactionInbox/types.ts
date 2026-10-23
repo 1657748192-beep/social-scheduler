@@ -15,7 +15,7 @@ export type ResolvedAsset={ctx:Scope;accountId:string;platform:InboxPlatform;can
 export type BodyItem={id:string;text:string|null;occurredAt:string;inbound:boolean;senderName?:string|null;senderAvatarUrl?:string|null;deleted?:boolean};
 export type VerifiedItem={providerEventId:string;threadId:string;actorId:string|null;actorName:string|null;actorUsername?:string|null;kind:Kind;occurredAt:string;inbound:boolean;deleted:boolean;sourceRef:SourceRef;text?:string|null};
 export type AdapterPage={items:VerifiedItem[];nextCursor:string|null;coverage:string;warnings:string[]};
-export type RecordingReply={text:string;expiresAt:string;state:'available'|'used'|'expired'};
+export type RecordingReply={text:string;expiresAt:string;state:'available'|'used'|'expired';mode?:'incoming_message_once';outcome?:'pending'|'sent'|'failed'|'unknown'};
 export type AdapterDetail={items:BodyItem[];nextCursor:string|null;officialUrl:string|null;replyTarget:string|null;capabilities:CapabilityDto[];recordingReply?:RecordingReply};
 export type SendOutcome={status:'sent';providerId:string;replayed?:true}|{status:'failed';code:string;diagnosticId:string}|{status:'unknown';diagnosticId:string};
 export interface InboxAdapter {

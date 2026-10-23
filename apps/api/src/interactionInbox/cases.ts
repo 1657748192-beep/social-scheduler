@@ -3,7 +3,8 @@ import {HttpError} from '../utils/errors';import {isPlatformAdmin} from '../util
 import type {InboxAccess,InboxDb} from './access';import type {Scope,CaseDto} from './types';import {createHash} from 'node:crypto';
 import {safeInboxAvatarUrl} from './directory';
 import {parseInboxSource} from './source';
-import {findInstagramReplyReceipt} from '../instagramManagement/replyReceipts';
+import {findInstagramReplyReceipt,findInstagramRecordingGrantReceipt} from '../instagramManagement/replyReceipts';
+import {REC3_MARKER} from '../instagramManagement/recordingGrantIdentity';
 export async function presentInboxCase(db:InboxDb,ctx:Scope,id:string,accountId:string,observedInboundAt?:Date):Promise<CaseDto>{
  const c=await db.interactionCase.findFirstOrThrow({where:{id,workspaceId:ctx.workspaceId},include:{asset:true,customer:{include:{identities:true}},tags:{where:{tag:{deletedAt:null}},include:{tag:true}},receipts:{where:{userId:ctx.userId}}}}),r=c.receipts[0];
  const account=await db.socialAccount.findFirst({where:{id:accountId,workspaceId:ctx.workspaceId,platform:c.asset.platform as any,providerAccountId:c.asset.providerAssetId},select:{displayName:true,avatarUrl:true}});
@@ -41,7 +42,10 @@ export async function presentInboxCase(db:InboxDb,ctx:Scope,id:string,accountId:
    const root=c.kind==='messages'?await db.instagramInteractionMessage.findFirst({where:{...where,...(s.sourceRecordId?{id:s.sourceRecordId}:{}),actorId:s.participantId,conversationId:s.conversationId}}):await db.instagramInteractionComment.findFirst({where:{...where,...(s.sourceRecordId?{id:s.sourceRecordId}:{}),providerId:s.commentId,mediaId:s.mediaId,inbound:true}});
    const latest=c.kind==='messages'?await db.instagramInteractionMessage.findFirst({where:{...where,actorId:s.participantId,inbound:true},orderBy:{occurredAt:'desc'},select:{occurredAt:true}}):root;
    const times=[c.lastInboundAt,observedInboundAt,latest?.occurredAt].filter((v):v is Date=>!!v&&Number.isFinite(v.getTime())&&v<=at),cutoff=times.length?new Date(Math.max(...times.map(v=>v.getTime()))):null;
-   if(root&&cutoff)replied=!!await findInstagramReplyReceipt(db,{workspaceId:ctx.workspaceId,accountId,appId:c.asset.appNamespace,providerAccountId:c.asset.providerAssetId,connectionId:s.connectionId,connectionVersion:s.connectionVersion,kind:c.kind==='messages'?'message':'comment',targetId,after:cutoff,before:at});
+   if(root&&cutoff){
+    const rec3=c.kind==='messages'&&(new RegExp('^'+REC3_MARKER+'(?:\\s|$)').test(root.text??'')||!!await db.instagramReplyRecordingGrant.findFirst({where:{workspaceId:ctx.workspaceId,sourceRecordId:root.id},select:{id:true}}));
+    replied=rec3?!!await findInstagramRecordingGrantReceipt(db,{asset:{ctx,accountId,platform:'instagram',canonicalKey:c.asset.canonicalKey,appNamespace:c.asset.appNamespace,providerAssetId:c.asset.providerAssetId,sourceRef:s,connectionVersion:s.connectionVersion},source:s,after:cutoff,before:at}):!!await findInstagramReplyReceipt(db,{workspaceId:ctx.workspaceId,accountId,appId:c.asset.appNamespace,providerAccountId:c.asset.providerAssetId,connectionId:s.connectionId,connectionVersion:s.connectionVersion,kind:c.kind==='messages'?'message':'comment',targetId,after:cutoff,before:at});
+   }
   }
  }
  return{id:c.id,kind:c.kind as CaseDto['kind'],accountId,customerId:c.customerId,customerName:identity?.displayName??identity?.username??null,sourceLabel:c.asset.platform+' · '+(account?.displayName??accountId),status:c.status,replied,customerAvatarUrl,accountAvatarUrl,version:c.version,lastInboundAt:c.lastInboundAt?.toISOString()??null,unread:!!c.lastInboundAt&&(!r||r.lastReadAt<c.lastInboundAt||r.lastReadKey!==c.lastInboundKey),tags:c.tags.map(({tag})=>({id:tag.id,kind:tag.kind,name:tag.name,color:tag.color,version:tag.version})),assigneeId:c.assigneeId,sentiment:c.sentiment};

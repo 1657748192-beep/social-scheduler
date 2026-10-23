@@ -28,7 +28,9 @@ export function createInstagramRecordingGrants({db,rule:input,policy,now,isDelet
   const predecessor=history.find(v=>v.status==='sent');if(!predecessor?.providerId||predecessor.connectionVersion!==c.version||+predecessor.updatedAt>=+row.occurredAt||+predecessor.updatedAt>+at)throw denied();
   if(await tx.instagramInteractionSendAttempt.findFirst({where:{connectionId:c.id,providerId:predecessor.providerId,OR:[{createdAt:{lt:predecessor.createdAt}},{createdAt:predecessor.createdAt,id:{lt:predecessor.id}}]}}))throw denied();
   if(!await tx.interactionAudit.findFirst({where:{workspaceId:c.workspaceId,action:'instagram.reply.original',targetId:c.id,result:c.version+':'+predecessor.requestKey}}))throw denied();
-  if(await tx.instagramInteractionMessage.findFirst({where:{workspaceId:c.workspaceId,connectionId:c.id,connectionVersion:c.version,conversationId:row.conversationId,inbound:false,deleted:false,occurredAt:{gte:row.occurredAt}}}))throw denied();
+  const ownAttempt=existing?.attemptId?await tx.instagramInteractionSendAttempt.findUnique({where:{id:existing.attemptId}}):null;
+  const ownReply=ownAttempt?.status==='sent'&&ownAttempt.payloadHash===existing?.payloadHash?ownAttempt.providerId:null;
+  if(await tx.instagramInteractionMessage.findFirst({where:{workspaceId:c.workspaceId,connectionId:c.id,connectionVersion:c.version,conversationId:row.conversationId,inbound:false,deleted:false,occurredAt:{gte:row.occurredAt},...(ownReply?{providerId:{not:ownReply}}:{})}}))throw denied();
   const expiresAt=new Date(Math.min(Date.parse(rule.messageRec3.expiresAt),+row.occurredAt+REC3_MAX_AGE_MS,+row.occurredAt+evidence.replyWindowMs,+row.occurredAt+retention));
   if(!reading&&+expiresAt<=+at)throw denied();
   if(existing&&(existing.state==='closed'||existing.accountId!==a.accountId||existing.connectionId!==c.id||existing.connectionVersion!==c.version||existing.sourceRecordId!==row.id||existing.providerEventId!==row.providerId||existing.actorId!==row.actorId||existing.conversationId!==row.conversationId||existing.predecessorAttemptId!==predecessor.id||existing.payloadHash!==hash(REC3_TEXT)||+existing.expiresAt!==+expiresAt))throw denied();
