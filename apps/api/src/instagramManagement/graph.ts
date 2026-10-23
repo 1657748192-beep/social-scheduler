@@ -28,12 +28,22 @@ export function createInstagramManagementGraph(input:{appId:string;graphVersion:
    return{value,status};
   }catch{throw new HttpError(502,'Independent Instagram request unavailable');}
  }
- async function page<T>(path:string,kind:string,schema:z.ZodType<T>,after?:string,fields?:string):Promise<InstagramGraphPage<T>>{
-  const {value,status}=await request(path,{limit:'25',...(fields?{fields}:{}),...(after?{after:cursor(kind,after)!}:{})});
+ async function page<T>(path:string,kind:string,schema:z.ZodType<T>,after?:string,fields?:string,messageRoot?:string):Promise<InstagramGraphPage<T>>{
+  const rawAfter=after?cursor(kind,after):undefined;
+  const {value,status}=await request(path,{limit:'25',...(fields?{fields}:{}),...(rawAfter?{after:rawAfter}:{})});
   try{
    if(status<200||status>=300)throw Error();
    const wrapper=value as any,body=kind.startsWith('messages:')?wrapper?.messages??wrapper:wrapper;
+   if(messageRoot&&wrapper?.messages!==undefined&&wrapper?.data!==undefined)throw Error();
    const parsed=z.object({data:z.array(schema).max(25),paging:z.object({next:z.string().max(8192).optional(),cursors:z.object({after:z.string().min(1).max(2048).optional()}).optional()}).optional()}).parse(body);
+   if(messageRoot&&parsed.paging?.next!==undefined){
+    const nextAfter=parsed.paging.cursors?.after;
+    if(!nextAfter||nextAfter===rawAfter||!parsed.data.length)throw Error();
+    if(messageRoot){
+     const next=new URL(parsed.paging.next);
+     if(next.origin!=='https://graph.instagram.com'||next.username||next.password||next.pathname!==`/${input.graphVersion}/${messageRoot}/messages`||next.searchParams.get('after')!==nextAfter)throw Error();
+    }
+   }
    return{items:parsed.data,nextCursor:parsed.paging?.next&&parsed.paging.cursors?.after?encode(kind,parsed.paging.cursors.after):null};
   }catch{throw new HttpError(502,'Invalid Instagram response');}
  }
@@ -52,7 +62,7 @@ export function createInstagramManagementGraph(input:{appId:string;graphVersion:
   media:(after?:string)=>page(`${input.accountId}/media`,'media',instagramMediaDto,after,'id'),
   comments:async(mediaId:string,after?:string)=>page(`${checked(mediaId)}/comments`,`comments:${mediaId}`,instagramCommentDto,after,'id,text,username,timestamp,from,parent_id'),
   conversations:(after?:string)=>page(`${input.accountId}/conversations`,'conversations',instagramConversationDto,after,'id,updated_time,participants'),
-  messages:async(conversationId:string,after?:string)=>page(checked(conversationId),`messages:${conversationId}`,instagramMessageDto,after,'messages{id,message,created_time,from,to}'),
+  messages:async(conversationId:string,after?:string)=>page(after?`${checked(conversationId)}/messages`:checked(conversationId),`messages:${conversationId}`,instagramMessageDto,after,after?'id,message,created_time,from,to':'messages{id,message,created_time,from,to}',conversationId),
   async conversation(conversationId:string){const{value,status}=await request(checked(conversationId),{fields:'id,participants'});try{if(status!==200)throw Error();const v=instagramConversationDto.parse(value);if(v.id!==conversationId)throw Error();return v;}catch{throw new HttpError(502,'Instagram conversation unavailable');}},
   async replyComment(commentId:string,value:string){return send(`${checked(commentId)}/replies`,new URLSearchParams({message:text(value,8000)}),'id');},
   async sendMessage(participantId:string,value:string){checked(participantId);if(participantId===input.accountId)throw new HttpError(400,'Invalid Instagram recipient');return send(`${input.accountId}/messages`,{recipient:{id:participantId},message:{text:text(value,2000)}},'message_id');},

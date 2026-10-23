@@ -9,12 +9,34 @@ async function fixture(f:any,mode='ok'){
   if(mode==='limited')return new Response('{}',{status:429});
   if(u.pathname.endsWith('/me'))return Response.json({id:'100',username:'mooyamcosmetic'});
   if(u.pathname.endsWith('/conversations'))return Response.json({data:[{id:s.rec3.conversationId,participants:{data:[{id:'100'},{id:'300'}]}}],...(mode==='broken-conversations'?{paging:{next:'https://graph.instagram.com/next'}}:{})});
-  assert.ok(u.pathname.endsWith('/thread-rec3'));
+  assert.ok(u.pathname.endsWith('/thread-rec3')||u.pathname.endsWith('/thread-rec3/messages'));
   const raw={id:s.rec3.providerId,message:s.rec3.text,created_time:s.rec3.occurredAt.toISOString(),from:{id:'300',username:'synthetic'},to:{data:[{id:'100'}]}};
+  const paging=(after:string)=>({next:'https://graph.instagram.com/v25.0/thread-rec3/messages?fields=id,message,created_time,from,to&limit=25&after='+after,cursors:{after}});
+  if(['paged','cycle','repeated-id','hidden-duplicate','hidden-outgoing','missing-terminal'].includes(mode)){
+   const after=u.searchParams.get('after');
+   if(after)assert.ok(u.pathname.endsWith('/thread-rec3/messages'),'Continuation must use messages edge');
+   if(!after)return Response.json({id:s.rec3.conversationId,messages:{data:[raw],paging:paging('A')}});
+   const older={...raw,id:'older-'+after,message:'older history',created_time:new Date(+s.rec3.occurredAt-1000).toISOString()};
+   if(mode==='missing-terminal')return Response.json({id:s.rec3.conversationId});
+   if(mode==='cycle')return Response.json({data:[older],paging:paging(after==='A'?'B':'A')});
+   if(mode==='repeated-id')return Response.json({data:[{...older,id:raw.id}],paging:paging('B')});
+   if(mode==='hidden-duplicate')return Response.json({data:[{...older,message:s.rec3.text}]});
+   if(mode==='hidden-outgoing')return Response.json({data:[{...older,from:{id:'100'},to:{data:[{id:'300'}]},created_time:new Date(+s.rec3.occurredAt+1000).toISOString()}]});
+   return Response.json({data:[older]});
+  }
   return Response.json(mode==='broken-messages'?{messages:{data:[raw],paging:{next:'https://graph.instagram.com/next'}}}:{data:mode==='duplicate'?[raw,{...raw,id:'duplicate'}]:[raw],...(mode==='endless'?{paging:{next:'https://graph.instagram.com/ignored',cursors:{after:'next'}}}:{})});
  };
  const ops=m.createInstagramRec3Ops({db:f.db,ctx:f.adminCtx,rule:s.rule,policy:s.policy,graphVersion:'v25.0',decrypt:(v:string)=>v,evidenceKey:'synthetic-evidence-key-long-enough',fetchImpl:fetchImpl as typeof fetch,isDeleted:async()=>false,now:()=>s.now});return Object.assign(s,{ops,calls:()=>calls});
 }
+
+test('REC3 signed read traverses the messages edge before releasing one qualification',async()=>withMetaInboxFixture(async f=>{try{
+ const s=await fixture(f,'paged'),before=await s.oldSnapshot(),evidence=await s.ops.read({allowProviderRead:true});assert.equal(evidence.complete,true);assert.equal(s.calls(),4);
+ assert.equal((await s.ops.prepare({apply:true,evidence})).ready,true);assert.equal(s.calls(),4);assert.deepEqual(await s.oldSnapshot(),before);
+}finally{await cleanRec3Fixture(f);}}));
+
+for(const mode of ['cycle','repeated-id','hidden-duplicate','hidden-outgoing','missing-terminal'])test('REC3 pagination rejects '+mode+' without a grant or an unbounded read',async()=>withMetaInboxFixture(async f=>{try{
+ const s=await fixture(f,mode);await assert.rejects(s.ops.read({allowProviderRead:true}));assert.ok(s.calls()<=(mode==='cycle'?5:4));assert.equal(await f.db.instagramReplyRecordingGrant.count({where:{workspaceId:s.rule.workspaceId}}),0);
+}finally{await cleanRec3Fixture(f);}}));
 test('REC3 operations default to zero requests and writes; signed read prepares exactly one source without any send',async()=>withMetaInboxFixture(async f=>{try{
  const s=await fixture(f),before=await s.oldSnapshot();assert.equal((await s.ops.read()).dryRun,true);assert.equal((await s.ops.prepare()).dryRun,true);assert.equal(s.calls(),0);assert.equal(await f.db.instagramReplyRecordingGrant.count({where:{workspaceId:s.rule.workspaceId}}),0);
  const evidence=await s.ops.read({allowProviderRead:true});assert.equal(s.calls(),3);assert.equal(evidence.complete,true);assert.equal(await f.db.instagramReplyRecordingGrant.count({where:{workspaceId:s.rule.workspaceId}}),0);

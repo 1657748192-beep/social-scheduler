@@ -2,7 +2,7 @@ import {createHmac,timingSafeEqual} from 'node:crypto';import {Prisma,type Prism
 import {isPlatformAdmin} from '../utils/platformAdmin';
 import {readBoundedInstagramJson} from './http';
 import {z} from 'zod';import type {Scope,ResolvedAsset} from '../interactionInbox/types';import type {LiveInboxPolicy} from '../interactionInbox/livePolicy';import {createInboxAccess} from '../interactionInbox/access';import {createInboxProjection} from '../interactionInbox/projection';
-import {createInstagramManagementGraph,instagramMessageDto} from './graph';import {createInstagramManagementAccess} from './access';import {requireInstagramAccount} from './store';import {copyInstagramReplyRecording,type InstagramReplyRecording} from './replyRecording';import {createInstagramRecordingGrants} from './recordingGrants';import type {InstagramSourceSubject} from './types';import {REC3_MARKER,REC3_MAX_AGE_MS} from './recordingGrantIdentity';import {instagramConversationIdentity} from './conversationIdentity';
+import {createInstagramManagementGraph,instagramMessageDto,type InstagramGraphPage} from './graph';import {createInstagramManagementAccess} from './access';import {requireInstagramAccount} from './store';import {copyInstagramReplyRecording,type InstagramReplyRecording} from './replyRecording';import {createInstagramRecordingGrants} from './recordingGrants';import type {InstagramSourceSubject} from './types';import {REC3_MARKER,REC3_MAX_AGE_MS} from './recordingGrantIdentity';import {instagramConversationIdentity} from './conversationIdentity';
 type Deps={db:PrismaClient;ctx:Scope;rule:InstagramReplyRecording;policy:LiveInboxPolicy;graphVersion:string;decrypt:(v:string)=>string;evidenceKey:string;fetchImpl?:typeof fetch;now?:()=>Date;isDeleted:(tx:Prisma.TransactionClient,s:InstagramSourceSubject)=>Promise<boolean>};
 const evidenceSchema=z.object({complete:z.literal(true),readAt:z.string().datetime(),binding:z.string().regex(/^[a-f0-9]{64}$/),protected:z.string().regex(/^[a-f0-9]{64}$/),message:instagramMessageDto,mac:z.string().regex(/^[a-f0-9]{64}$/)}).strict();
 function unavailable():never{throw Error('Controlled REC3 operation stopped; no send or reset was performed');}
@@ -24,11 +24,22 @@ export function createInstagramRec3Ops({db,ctx,rule:input,policy,graphVersion,de
   return transaction?collect(transaction):db.$transaction(async tx=>{await tx.$executeRaw`SET TRANSACTION READ ONLY`;return collect(tx);},{isolationLevel:'RepeatableRead',timeout:60000});
  }
  async function binding(){const c=await connection();return sign({rule,graphVersion,token:c.tokenEncrypted,ctx});}
+ async function completePages<T extends{id:string}>(read:(cursor?:string)=>Promise<InstagramGraphPage<T>>){
+  const items:T[]=[],cursors=new Set<string>(),ids=new Set<string>();let cursor:string|undefined;
+  for(let page=0;page<9;page++){
+   const result=await read(cursor);
+   for(const item of result.items){if(ids.has(item.id))unavailable();ids.add(item.id);items.push(item);}
+   if(!result.nextCursor)return items;
+   if(!result.items.length||cursors.has(result.nextCursor))unavailable();
+   cursors.add(result.nextCursor);cursor=result.nextCursor;
+  }
+  return unavailable();
+ }
  return{
   async read(options:{allowProviderRead?:boolean}={}){
    if(options.allowProviderRead!==true)return{dryRun:true,requests:0} as const;
    const before=await snapshot(),protectedHash=await snapshot(true),bound=await binding(),c=await connection();let requests=0;
-   const paths=new Set([`/${graphVersion}/me`,`/${graphVersion}/${rule.providerAccountId}/conversations`,`/${graphVersion}/${rec3.conversationId}`]);
+   const paths=new Set([`/${graphVersion}/me`,`/${graphVersion}/${rule.providerAccountId}/conversations`,`/${graphVersion}/${rec3.conversationId}`,`/${graphVersion}/${rec3.conversationId}/messages`]);
    const transport:typeof fetch=async(url,opts)=>{
     const u=new URL(String(url));if((opts?.method??'GET')!=='GET'||u.protocol!=='https:'||u.hostname!=='graph.instagram.com'||u.port||u.username||u.password||!paths.has(u.pathname)||opts?.redirect!=='error'||++requests>10)unavailable();
     const response=await fetchImpl(u,{...opts,method:'GET',redirect:'error'});if(!response.ok)unavailable();
@@ -38,9 +49,9 @@ export function createInstagramRec3Ops({db,ctx,rule:input,policy,graphVersion,de
    };
    const graph=createInstagramManagementGraph({appId:rule.appId,graphVersion,accessToken:decrypt(c.tokenEncrypted!),accountId:rule.providerAccountId,connectionVersion:c.version,fetchImpl:transport});
    if((await graph.identity()).username!=='mooyamcosmetic')unavailable();
-   const threads=[];let cursor:string|undefined;do{const p=await graph.conversations(cursor);threads.push(...p.items);cursor=p.nextCursor??undefined;}while(cursor);
+   const threads=await completePages(cursor=>graph.conversations(cursor));
    const matches=threads.filter(v=>v.id===rec3.conversationId);if(matches.length!==1||!matches[0].participants.data.some(v=>v.id===rec3.actorId)||!matches[0].participants.data.some(v=>[c.providerAccountId,c.providerUserId].includes(v.id)))unavailable();
-   const messages=[];cursor=undefined;do{const p=await graph.messages(rec3.conversationId,cursor);messages.push(...p.items);cursor=p.nextCursor??undefined;}while(cursor);
+   const messages=await completePages(cursor=>graph.messages(rec3.conversationId,cursor));
    const candidates=messages.filter(v=>new RegExp('^'+REC3_MARKER+'(?:\\s|$)').test(v.message??''));if(candidates.length!==1)unavailable();const message=candidates[0],at=Date.parse(message.created_time);
    if(message.id!==rec3.providerEventId||message.from.id!==rec3.actorId||message.to.data.length!==1||![c.providerAccountId,c.providerUserId].includes(message.to.data[0].id)||!Number.isFinite(at)||at>+now()||+now()-at>=REC3_MAX_AGE_MS)unavailable();
    if(messages.some(v=>[c.providerAccountId,c.providerUserId].includes(v.from.id)&&Date.parse(v.created_time)>=at))unavailable();
