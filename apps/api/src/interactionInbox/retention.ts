@@ -5,6 +5,7 @@ import {z} from 'zod';
 import {createLiveInboxPolicy,type LiveInboxPolicy} from './livePolicy';
 import type {MetaDeletionAsset} from './deletion';
 import {HttpError} from '../utils/errors';
+import {expireInstagramRecordingGrants,purgeClosedInstagramRecordingGrants} from '../instagramManagement/recordingGrantLifecycle';
 export type MetaSourcePhase='raw'|'messages'|'comments'|'threads'|'sends';
 
 const retentionAsset=z.object({workspaceId:z.string().uuid(),platform:z.literal('instagram'),appId:z.string().regex(/^\d{1,256}$/),providerAssetId:z.string().regex(/^\d{1,256}$/),connectionId:z.string().uuid(),connectionVersion:z.number().int().positive()}).strict();
@@ -18,6 +19,7 @@ export function createMetaSourceRetention({db,policy}:{db:PrismaClient;policy:Li
    await tx.$queryRaw`SELECT id FROM "InstagramManagementConnection" WHERE id=${a.connectionId}::uuid FOR UPDATE`;
    const connection=await tx.instagramManagementConnection.findFirst({where:{id:a.connectionId,workspaceId:a.workspaceId,appId:a.appId,providerAccountId:a.providerAssetId,version:{gte:a.connectionVersion}},select:{id:true}});
    if(!connection)throw new HttpError(404,'Meta retention scope unavailable');
+   const grants=await expireInstagramRecordingGrants(tx,limit,now,a);if(grants)return grants;
    const scope={workspaceId:a.workspaceId,connectionId:a.connectionId,connectionVersion:{lte:a.connectionVersion}};
    if(phase==='sends'){
     const where={...scope,createdAt:{lt:bodyCutoff},targetHash:{not:'deleted'}},rows=await tx.instagramInteractionSendAttempt.findMany({where,take:limit,select:{id:true}});return(await tx.instagramInteractionSendAttempt.updateMany({where:{...where,id:{in:rows.map(v=>v.id)}},data:{targetHash:'deleted',payloadHash:'deleted',providerId:null,diagnosticId:null,status:'unknown'}})).count;
@@ -66,8 +68,10 @@ export function createInboxRetention({db,policy=createLiveInboxPolicy([])}:{db:P
  return{async pruneInbox(now:Date,limit:number){
   if(!Number.isInteger(limit)||limit<1||limit>50)throw Error('Invalid retention batch');
   return db.$transaction(async tx=>{
-   const cutoff=new Date(now.getTime()-90*86400000),expired={OR:[{receivedAt:{lt:cutoff}},{occurredAt:{lt:cutoff}}]};let changed=0;
-   const rows=await tx.interactionItem.findMany({where:expired,take:limit,select:{id:true}});
+   let changed=await expireInstagramRecordingGrants(tx,limit,now);if(changed>=limit)return changed;
+   changed+=await purgeClosedInstagramRecordingGrants(tx,limit-changed,now);if(changed>=limit)return changed;
+   const cutoff=new Date(now.getTime()-90*86400000),expired={OR:[{receivedAt:{lt:cutoff}},{occurredAt:{lt:cutoff}}]};
+   const rows=await tx.interactionItem.findMany({where:expired,take:limit-changed,select:{id:true}});
    changed+=(await tx.interactionItem.deleteMany({where:{...expired,id:{in:rows.map(r=>r.id)}}})).count;if(changed>=limit)return changed;
    const [candidate]=await tx.$queryRaw<Array<{id:string}>>(Prisma.sql`SELECT c.id FROM "InteractionCase" c WHERE NOT (${liveInboxCaseSql(now)}) ORDER BY c.id LIMIT 1 FOR UPDATE OF c SKIP LOCKED`);
    if(candidate){

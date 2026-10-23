@@ -7,6 +7,7 @@ import {createMetaGrantFence} from './grantFence';
 import {invalidatePageImportInvitations} from '../facebookPageImportInvitations/deletion';
 import {deriveMetaDeletionKey} from '../utils/tokenCrypto';
 import {purgeFacebookDeletionSources} from './facebookDeletionSources';
+import {closeInstagramRecordingGrants} from '../instagramManagement/recordingGrantLifecycle';
 export type MetaDeletionAsset={workspaceId:string;platform:'facebook'|'instagram';appId:string;providerAssetId:string;connectionId:string;connectionVersion:number};
 export type MetaDeletionSubject=MetaDeletionAsset&{actorId?:string;providerEventId:string;eventKind?:'comments'|'messages';occurredAt:Date};
 export type MetaMaintenanceClaim={id:string;confirmationCode:string;claimToken:string};
@@ -182,6 +183,10 @@ export function createMetaInboxDeletion({db,hmacKey=deriveMetaDeletionKey(),encr
     const request=await tx.metaInboxDeletionRequest.findUnique({where:{confirmationCode:code}});if(!request?.targetEncrypted||request.status!=='pending')throw new HttpError(409,'Meta source purge unavailable');
     const t=decode(request),a=t.asset;
     if(a.platform==='facebook'){const result=await purgeFacebookDeletionSources(tx,t,limit);await tx.metaInboxDeletionRequest.update({where:{id:request.id},data:{targetEncrypted:encrypt(JSON.stringify(t))}});return result;}
+    if(t.kind!=='item'||t.eventKind==='messages'){
+     const grants=await closeInstagramRecordingGrants(tx,a,limit,await timestamp(tx),t.kind==='actor'?{actorId:t.subjectId}:t.kind==='item'?{providerEventId:t.subjectId}:undefined);
+     if(grants)return{purged:grants,sourcesComplete:false};
+    }
     const where={workspaceId:a.workspaceId,connectionId:a.connectionId,connectionVersion:{lte:a.connectionVersion}};let purged=0;
     if(t.phase==='pending'){
      // Scan at most limit raw envelopes before removing their source mapping.

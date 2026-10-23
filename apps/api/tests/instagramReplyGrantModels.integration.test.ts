@@ -12,4 +12,5 @@ test('REC3 database constraints reject duplicate identities, reused attempts and
  await assert.rejects(model.update({where:{id:row.id},data:{state:'available',claimedAt:null}}));
  await assert.rejects(model.update({where:{id:row.id},data:{incomingKey:'d'.repeat(64)}}));
  assert.deepEqual(await f.publishingSnapshot(),before);
+ await model.deleteMany({where:{workspaceId:f.adminCtx.workspaceId}});
 }));
