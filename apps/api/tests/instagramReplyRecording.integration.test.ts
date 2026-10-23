@@ -13,6 +13,9 @@ import {createInboxAccess} from '../src/interactionInbox/access';
 import {createInboxProjection} from '../src/interactionInbox/projection';
 import {createInboxReads} from '../src/interactionInbox/reads';
 import {createInboxSends} from '../src/interactionInbox/sends';
+import {createHash} from 'node:crypto';
+import {presentInboxCase} from '../src/interactionInbox/cases';
+import {createMetaSourceRetention} from '../src/interactionInbox/retention';
 
 async function setup(f:MetaInboxFixture,sendEnabled=true){
  const accountId=f.instagramAccountIds[0],connectionId=f.instagramConnectionIds[0];
@@ -119,4 +122,84 @@ test('an older different text consumes the target without claiming the recording
  const s=await setup(f);let calls=0;
  await createInstagramSendExecutor({db:f.db}).execute(s.input('message',{text:'An earlier different reply'}),async()=>{calls++;return{status:'sent',providerId:'older-reply'};});
  const result=await createInstagramSendExecutor({db:f.db,testRestriction:s.rule}).execute(s.input('message'),async()=>{calls++;return{status:'sent',providerId:'bad'};});assert.equal(result.status,'unknown');assert.equal(calls,1);
+}));
+
+for(const kind of ['comment','message'] as const)test(`confirmed ${kind} REC1 receipt is visible after reload without resending or writing cached bodies`,async()=>withMetaInboxFixture(async f=>{
+ const s=await setup(f),executor=createInstagramSendExecutor({db:f.db,testRestriction:s.rule});
+ await executor.execute(s.input(kind),async()=>({status:'sent',providerId:'existing-'+kind+'-receipt'}));
+ const before=await f.db.instagramInteractionSendAttempt.findMany({where:{connectionId:s.rule.connectionId}}),rawBefore=await f.db[kind==='comment'?'instagramInteractionComment':'instagramInteractionMessage'].count(),publishing=await f.publishingSnapshot();
+ const first=await s.engagement.detail(s.asset,s.sources[kind]),second=await s.engagement.detail(s.asset,s.sources[kind]);
+ const replies=first.items.filter(v=>!v.inbound);assert.equal(replies.length,1);assert.equal(replies[0].id,'existing-'+kind+'-receipt');assert.equal(replies[0].text,kind==='comment'?'Social Scheduler Instagram comment reply test REC1. This reply is for app review demonstration only.':'Social Scheduler Instagram messaging reply test REC1. This reply is for app review demonstration only.');
+ assert.deepEqual(second.items,first.items);assert.equal(first.recordingReply?.state,'used');assert.ok(first.items[0].inbound);assert.deepEqual(s.calls(),{reads:0,sends:0});
+ assert.deepEqual(await f.db.instagramInteractionSendAttempt.findMany({where:{connectionId:s.rule.connectionId}}),before);assert.equal(await f.db[kind==='comment'?'instagramInteractionComment':'instagramInteractionMessage'].count(),rawBefore);assert.deepEqual(await f.publishingSnapshot(),publishing);
+}));
+
+test('REC1 echo never invents text for failed, unknown, wrong payload, epoch or target receipts',async()=>withMetaInboxFixture(async f=>{
+ const s=await setup(f),hash=(v:unknown)=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
+ const add=(patch:any)=>f.db.instagramInteractionSendAttempt.create({data:{workspaceId:s.rule.workspaceId,connectionId:s.rule.connectionId,connectionVersion:1,requestKey:randomUUID(),targetHash:hash(['comment',s.rule.comment.providerEventId]),payloadHash:hash(recordingTexts.comment),status:'sent',providerId:randomUUID(),...patch}});
+ for(const patch of [{status:'pending'},{status:'unknown'},{status:'failed'},{providerId:null},{connectionVersion:2},{targetHash:hash(['comment','other'])},{payloadHash:hash('Different text')}])await add(patch);
+ assert.equal((await s.engagement.detail(s.asset,s.sources.comment)).items.filter(v=>!v.inbound).length,0);
+ assert.equal(s.calls().sends,0);
+}));
+
+test('recording message receipt is not duplicated when its verified cached body already exists',async()=>withMetaInboxFixture(async f=>{
+ const s=await setup(f);await createInstagramSendExecutor({db:f.db,testRestriction:s.rule}).execute(s.input('message'),async()=>({status:'sent',providerId:'echo-message'}));
+ await f.db.instagramInteractionMessage.create({data:{workspaceId:s.rule.workspaceId,connectionId:s.rule.connectionId,connectionVersion:1,providerId:'echo-message',conversationId:s.rule.message.conversationId,actorId:'300',inbound:false,text:recordingTexts.message,occurredAt:new Date()}});
+ const detail=await s.engagement.detail(s.asset,s.sources.message);assert.equal(detail.items.filter(v=>v.id==='echo-message').length,1);
+}));
+
+for(const kind of ['comment','message'] as const)test(`Instagram ${kind} replied state requires current original receipt, not a copied reply after a new inbound`,async()=>withMetaInboxFixture(async f=>{
+ const s=await setup(f),before=await f.publishingSnapshot(),base=Date.now()-120000,hash=(v:unknown)=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
+ if(kind==='comment')await f.db.instagramInteractionComment.update({where:{id:s.rule.comment.sourceRecordId},data:{occurredAt:new Date(base)}});
+ else await f.db.instagramInteractionMessage.update({where:{id:s.rule.message.sourceRecordId},data:{occurredAt:new Date(base)}});
+ const access=createInboxAccess({db:f.db,facebookEnabled:false,instagram:{enabled:true,access:createInstagramManagementAccess({db:f.db,appId:'456',policy:s.policy,decrypt:v=>v,inspect:async()=>({appId:'456',providerAccountId:'100',scopes:['instagram_business_basic','instagram_business_manage_comments','instagram_business_manage_messages'],expiresAt:new Date(Date.now()+86400000)})})},policy:s.policy,verifyFacebook:async()=>{throw Error('not Facebook');}});
+ const projection=createInboxProjection({db:f.db,access,policy:s.policy}),items=await s.engagement.normalizeVerifiedEvent([s.rule[kind].sourceRecordId],s.asset);await projection.projectVerifiedPage(f.adminCtx,s.asset,{items,nextCursor:null,coverage:'verified_selected_sources',warnings:[]});
+ const c=await f.db.interactionCase.findFirstOrThrow({where:{workspaceId:s.rule.workspaceId,kind:kind==='comment'?'comments':'messages'}});await f.db.interactionCase.update({where:{id:c.id},data:{lastInboundAt:new Date(base)}});
+ const add=(patch:any={})=>f.db.instagramInteractionSendAttempt.create({data:{workspaceId:s.rule.workspaceId,connectionId:s.rule.connectionId,connectionVersion:1,requestKey:randomUUID(),targetHash:hash([kind,kind==='comment'?s.rule.comment.providerEventId:'300']),payloadHash:hash(recordingTexts[kind]),status:'unknown',providerId:null,createdAt:new Date(base+10000),...patch}});
+ const badge=(at?:Date)=>presentInboxCase(f.db,f.adminCtx,c.id,s.asset.accountId,at).then(v=>v.replied);
+ const receipt=await add();assert.equal(await badge(),false);
+ await f.db.instagramInteractionSendAttempt.update({where:{id:receipt.id},data:{status:'sent',providerId:'original-'+kind}});assert.equal(await badge(),true);
+ await f.db.interactionCase.update({where:{id:c.id},data:{lastInboundAt:null}});assert.equal(await badge(),true,'epoch-reconciled cases with no indexed inbound still use the verified source time');
+ assert.equal(await badge(new Date(base+20000)),false);
+ await f.db.interactionCase.update({where:{id:c.id},data:{lastInboundAt:new Date(base+20000)}});await add({status:'sent',providerId:'original-'+kind,createdAt:new Date(base+30000)});assert.equal(await badge(),false);
+ await add({status:'sent',providerId:'wrong-target',targetHash:hash([kind,'other']),createdAt:new Date(base+40000)});await add({status:'sent',providerId:'old-version',connectionVersion:2,createdAt:new Date(base+40000)});assert.equal(await badge(),false);
+ await add({status:'sent',providerId:'new-original-'+kind,createdAt:new Date(base+50000)});assert.equal(await badge(),true);
+ if(kind==='message'){await f.db.instagramInteractionMessage.create({data:{workspaceId:s.rule.workspaceId,connectionId:s.rule.connectionId,connectionVersion:1,providerId:'new-unprojected-inbound',conversationId:s.rule.message.conversationId,actorId:'300',inbound:true,text:'A newer customer message',occurredAt:new Date(base+60000)}});assert.equal(await badge(),false,'a newer cached inbound clears the badge before projection catches up');}
+ await f.db.instagramManagementConnection.update({where:{id:s.rule.connectionId},data:{status:'authorization_invalid'}});assert.equal(await badge(),false);assert.deepEqual(await f.publishingSnapshot(),before);
+}));
+
+for(const kind of ['comment','message'] as const)test(`a locally deleted ${kind} reply is never resurrected from its successful receipt`,async()=>withMetaInboxFixture(async f=>{
+ const s=await setup(f);await createInstagramSendExecutor({db:f.db,testRestriction:s.rule}).execute(s.input(kind),async()=>({status:'sent',providerId:'deleted-reply'}));
+ const common={workspaceId:s.rule.workspaceId,connectionId:s.rule.connectionId,connectionVersion:1,providerId:'deleted-reply',inbound:false,text:null,deleted:true,occurredAt:new Date()};
+ if(kind==='message')await f.db.instagramInteractionMessage.create({data:{...common,actorId:'300',conversationId:s.rule.message.conversationId}});
+ else await f.db.instagramInteractionComment.create({data:{...common,actorId:'100',mediaId:s.rule.comment.mediaId,parentId:s.rule.comment.providerEventId}});
+ assert.equal((await s.engagement.detail(s.asset,s.sources[kind])).items.filter(v=>v.id==='deleted-reply').length,0);
+}));
+
+test('cached verified comment reply content takes precedence over a receipt echo',async()=>withMetaInboxFixture(async f=>{
+ const s=await setup(f);await createInstagramSendExecutor({db:f.db,testRestriction:s.rule}).execute(s.input('comment'),async()=>({status:'sent',providerId:'cached-comment-reply'}));
+ await f.db.instagramInteractionComment.create({data:{workspaceId:s.rule.workspaceId,connectionId:s.rule.connectionId,connectionVersion:1,providerId:'cached-comment-reply',actorId:'100',mediaId:s.rule.comment.mediaId,parentId:s.rule.comment.providerEventId,inbound:false,text:'Verified updated reply text',occurredAt:new Date()}});
+ const rows=(await s.engagement.detail(s.asset,s.sources.comment)).items.filter(v=>v.id==='cached-comment-reply');assert.equal(rows.length,1);assert.equal(rows[0].text,'Verified updated reply text');
+}));
+
+test('retention of a scrubbed original cannot promote its surviving copied receipt to a new reply',async()=>withMetaInboxFixture(async f=>{
+ const s=await setup(f),hash=(v:unknown)=>createHash('sha256').update(JSON.stringify(v)).digest('hex'),base=Date.now();
+ await f.db.instagramInteractionMessage.update({where:{id:s.rule.message.sourceRecordId},data:{occurredAt:new Date(base-12*3600000)}});
+ const access=createInboxAccess({db:f.db,facebookEnabled:false,instagram:{enabled:true,access:createInstagramManagementAccess({db:f.db,appId:'456',policy:s.policy,decrypt:v=>v,inspect:async()=>({appId:'456',providerAccountId:'100',scopes:['instagram_business_basic','instagram_business_manage_comments','instagram_business_manage_messages'],expiresAt:new Date(Date.now()+86400000)})})},policy:s.policy,verifyFacebook:async()=>{throw Error('not Facebook');}}),projection=createInboxProjection({db:f.db,access,policy:s.policy});
+ await projection.projectVerifiedPage(f.adminCtx,s.asset,{items:await s.engagement.normalizeVerifiedEvent([s.rule.message.sourceRecordId],s.asset),nextCursor:null,coverage:'verified_selected_sources',warnings:[]});
+ const c=await f.db.interactionCase.findFirstOrThrow({where:{workspaceId:s.rule.workspaceId,kind:'messages'}});
+ for(const age of [36,1])await f.db.instagramInteractionSendAttempt.create({data:{workspaceId:s.rule.workspaceId,connectionId:s.rule.connectionId,connectionVersion:1,requestKey:randomUUID(),targetHash:hash(['message','300']),payloadHash:hash(recordingTexts.message),status:'sent',providerId:'retained-copy',createdAt:new Date(base-age*3600000)}});
+ assert.equal((await presentInboxCase(f.db,f.adminCtx,c.id,s.asset.accountId)).replied,false);
+ assert.equal(await createMetaSourceRetention({db:f.db,policy:s.policy}).pruneInstagram({workspaceId:s.rule.workspaceId,platform:'instagram',appId:'456',providerAssetId:'100',connectionId:s.rule.connectionId,connectionVersion:1},new Date(),50,'sends'),1);
+ assert.equal((await presentInboxCase(f.db,f.adminCtx,c.id,s.asset.accountId)).replied,false);
+ assert.equal((await s.engagement.detail(s.asset,s.sources.message)).items.filter(v=>!v.inbound).length,0);
+}));
+
+test('a fresh original send remains visible after unrelated historical receipts were scrubbed',async()=>withMetaInboxFixture(async f=>{
+ const s=await setup(f);
+ await f.db.instagramInteractionSendAttempt.create({data:{workspaceId:s.rule.workspaceId,connectionId:s.rule.connectionId,connectionVersion:1,requestKey:randomUUID(),targetHash:'deleted',payloadHash:'deleted',status:'unknown',createdAt:new Date(Date.now()-2*86400000)}});
+ assert.equal((await s.engagement.reply(s.asset,s.sources.comment,recordingTexts.comment,randomUUID())).status,'sent');
+ assert.equal((await s.engagement.detail(s.asset,s.sources.comment)).items.filter(v=>!v.inbound).length,1);
+ const proof=await f.db.interactionAudit.findMany({where:{workspaceId:s.rule.workspaceId,action:'instagram.reply.original'}});assert.equal(proof.length,1);assert.doesNotMatch(JSON.stringify(proof),/Social Scheduler|sealed:|publishing-original/);
+ await s.engagement.reply(s.asset,s.sources.comment,recordingTexts.comment,randomUUID());assert.equal(await f.db.interactionAudit.count({where:{workspaceId:s.rule.workspaceId,action:'instagram.reply.original'}}),1);assert.equal(s.calls().sends,1);
 }));

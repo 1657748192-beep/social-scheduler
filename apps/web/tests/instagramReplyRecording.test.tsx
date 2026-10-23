@@ -22,3 +22,15 @@ test('recording expiry disables the button even after a timer longer than the pl
   await act(async()=>t.mock.timers.tick(1000));assert.equal(facebookButton(view,'发送公开回复').props.disabled,true);
  });
 });
+
+for(const state of ['used','expired'])test(`recording ${state} explains its restriction without incorrectly asking for authorization`,async()=>withInboxUI(<><LanguageToggle/><ReplyComposer detail={{...detail(state),capabilities:[{capability:'comments.reply',available:false,reason:'recording_restricted'}]}} accountName="mooyamcosmetic" canWrite onDirtyChange={()=>{}} onAcknowledge={async()=>{throw Error('no reset');}} onSend={async()=>{throw Error('no send');}}/></>,async({view}:any)=>{
+ assert.doesNotMatch(facebookText(view),/请检查独立授权与平台限制/);await act(async()=>facebookButton(view,'English').props.onClick());assert.doesNotMatch(facebookText(view),/Check authorization and platform restrictions/);assert.equal(facebookButton(view,'Send public reply').props.disabled,true);
+}));
+
+test('successful recording send does not display an authorization failure next to its success receipt',async()=>withInboxUI(<ReplyComposer detail={detail()} accountName="mooyamcosmetic" canWrite onDirtyChange={()=>{}} onAcknowledge={async()=>{throw Error('no reset');}} onSend={async()=>({status:'sent',providerId:'one'})}/>,async({view}:any)=>{
+ await act(async()=>facebookButton(view,'发送公开回复').props.onClick());assert.match(facebookText(view),/平台已确认发送成功/);assert.doesNotMatch(facebookText(view),/请检查独立授权与平台限制/);assert.equal(facebookButton(view,'发送公开回复').props.disabled,true);
+}));
+
+test('an available recording with genuinely missing authorization still explains the access restriction',async()=>withInboxUI(<ReplyComposer detail={{...detail(),capabilities:[{capability:'comments.reply',available:false,reason:'authorization_required'}]}} accountName="mooyamcosmetic" canWrite onDirtyChange={()=>{}} onAcknowledge={async()=>{}} onSend={async()=>{throw Error('no send');}}/>,async({view}:any)=>{
+ assert.match(facebookText(view),/请检查独立授权与平台限制/);assert.equal(facebookButton(view,'发送公开回复').props.disabled,true);
+}));

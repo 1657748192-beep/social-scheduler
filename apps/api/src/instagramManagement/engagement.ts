@@ -11,6 +11,8 @@ import {createInstagramSendExecutor} from './sendAttempts';
 import {encodeInboxCursor,decodeInboxCursor} from '../interactionInbox/cursor';
 import {instagramConversationIdentity} from './conversationIdentity';
 import {copyInstagramReplyRecording,requireInstagramRecordingTarget,recordingTargetHash,recordingTexts,type InstagramReplyRecording} from './replyRecording';
+import {createHash} from 'node:crypto';
+import {findInstagramReplyReceipt} from './replyReceipts';
 type Access=ReturnType<typeof createInstagramManagementAccess>;
 type Deps={db:PrismaClient;access:Access;policy:LiveInboxPolicy;graph:(asset:ResolvedAsset,token:string)=>InstagramManagementGraph;isDeleted:(tx:Prisma.TransactionClient,subject:InstagramSourceSubject)=>Promise<boolean>;verifiedCommentLimit:number;now?:()=>Date;testRestriction?:InstagramReplyRecording|null};
 export function createInstagramManagementEngagement({db,access,policy,graph,isDeleted,verifiedCommentLimit,now=()=>new Date(),testRestriction}:Deps){
@@ -148,6 +150,24 @@ export function createInstagramManagementEngagement({db,access,policy,graph,isDe
     const last=rows[24];return{items,nextCursor:rows.length>25&&last?encodeInboxCursor(scope,{at:last.occurredAt.toISOString(),id:last.id}):null};
    });
    const recordingReply=await recording(a,s),resolvedCaps=await caps(a);
+   // REC1 receipts bind the fixed text's hash. Echo only that known payload;
+   // never fetch, resend, write cached bodies, or guess other reply content.
+   if(rule&&recordingReply)await db.$transaction(async tx=>{
+    const connection=await fence(tx,a,cap),root=await target(tx,a,s),kind=s.conversationId?'message':'comment',text=recordingTexts[kind];
+    const receipt=await findInstagramReplyReceipt(tx,{workspaceId:a.ctx.workspaceId,accountId:a.accountId,appId:a.appNamespace,providerAccountId:a.providerAssetId,connectionId:s.connectionId,connectionVersion:a.connectionVersion,kind,targetId:kind==='message'?s.participantId!:s.commentId!,after:new Date(Math.max(root.occurredAt.getTime(),now().getTime()-evidence(a,'read').contentRetentionDays*86400000)),before:now(),payloadHash:createHash('sha256').update(JSON.stringify(text)).digest('hex')});
+    if(!receipt||result.items.some(v=>v.id===receipt.providerId))return;
+    const key={connectionId:s.connectionId,connectionVersion:a.connectionVersion,providerId:receipt.providerId};
+    const cached=kind==='message'?await tx.instagramInteractionMessage.findUnique({where:{connectionId_connectionVersion_providerId:key}}):await tx.instagramInteractionComment.findUnique({where:{connectionId_connectionVersion_providerId:key}});
+    // A cached body owns its pagination and deletion state. Never resurrect it
+    // from receipt metadata, including a deleted body with no remaining text.
+    if(cached){
+     if(kind==='message'||cached.deleted||cached.inbound||!('mediaId' in cached)||cached.mediaId!==s.mediaId||cached.parentId!==s.commentId||![connection.providerAccountId,connection.providerUserId].includes(cached.actorId!))return;
+     await target(tx,a,{...s,sourceRecordId:cached.id,commentId:cached.providerId});
+    }
+    const occurredAt=cached?.occurredAt??receipt.updatedAt;
+    if(await isDeleted(tx,{workspaceId:a.ctx.workspaceId,platform:'instagram',appId:a.appNamespace,providerAssetId:a.providerAssetId,actorId:rule[kind].actorId,providerEventId:receipt.providerId,eventKind:s.conversationId?'messages':'comments',occurredAt,connectionId:s.connectionId,connectionVersion:a.connectionVersion}))return;
+    result.items.push({id:receipt.providerId,text:cached?cached.text:text,occurredAt:occurredAt.toISOString(),inbound:false,deleted:false});result.items.sort((x,y)=>Date.parse(x.occurredAt)-Date.parse(y.occurredAt)||x.id.localeCompare(y.id));
+   });
    return{...result,officialUrl:null,replyTarget:s.conversationId??s.commentId??null,capabilities:resolvedCaps.map(c=>rule&&c.capability.endsWith('.reply')&&(!recordingReply||recordingReply.state!=='available'||c.capability!==cap.replace('.read','.reply'))?{...c,available:false,reason:'recording_restricted'}:c),...(recordingReply?{recordingReply}:{})};
   },
   async reply(a:ResolvedAsset,value:SourceRef,text:string,requestKey:string):Promise<SendOutcome>{
@@ -167,13 +187,20 @@ export function createInstagramManagementEngagement({db,access,policy,graph,isDe
       await target(tx,a,{...s,conversationId:last!.conversationId,sourceRecordId:last!.id});
      }return r;
     });
-    return executor.execute({asset:a,source:s,requestKey,kind:s.conversationId?'message':'comment',targetId:s.conversationId?s.participantId!:row.providerId,text},async()=>{
+    const outcome=await executor.execute({asset:a,source:s,requestKey,kind:s.conversationId?'message':'comment',targetId:s.conversationId?s.participantId!:row.providerId,text},async()=>{
      // Final local policy/window/connection check immediately precedes the one provider operation.
      await fresh(a,cap);await db.$transaction(async tx=>{await fence(tx,a,cap);await target(tx,a,s);await restrict(tx,a,s,text);
       if(s.conversationId){const last=await tx.instagramInteractionMessage.findFirst({where:{connectionId:s.connectionId,connectionVersion:a.connectionVersion,workspaceId:a.ctx.workspaceId,actorId:s.participantId,inbound:true,deleted:false},orderBy:{occurredAt:'desc'}});const age=last?now().getTime()-last.occurredAt.getTime():NaN;if(!Number.isFinite(age)||age<0||age>evidence(a,'send').replyWindowMs)throw new HttpError(409,'Instagram reply window unavailable');await target(tx,a,{...s,conversationId:last!.conversationId,sourceRecordId:last!.id});}
      });
      return s.conversationId?g.sendMessage(s.participantId!,text):g.replyComment(row.providerId,text);
     });
+    if(outcome.status==='sent'&&!outcome.replayed)try{await db.$transaction(async tx=>{
+     await fence(tx,a,cap);await target(tx,a,s);
+     const claim=await tx.instagramInteractionSendAttempt.findFirst({where:{workspaceId:a.ctx.workspaceId,connectionId:s.connectionId,connectionVersion:a.connectionVersion,requestKey,status:'sent',providerId:outcome.providerId}});
+     const proof={workspaceId:a.ctx.workspaceId,action:'instagram.reply.original',targetId:s.connectionId,result:a.connectionVersion+':'+requestKey};
+     if(claim&&!await tx.interactionAudit.findFirst({where:proof}))await tx.interactionAudit.create({data:{...proof,actorId:a.ctx.userId}});
+    });}catch{/* Keep the accepted outcome and consumed claim. Missing proof only restricts presentation; never resend. */}
+    return outcome;
    });
   },
   async pendingSend(a:ResolvedAsset,requestKey:string){
