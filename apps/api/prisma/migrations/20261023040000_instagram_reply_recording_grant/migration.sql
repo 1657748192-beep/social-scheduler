@@ -15,7 +15,7 @@ CREATE TABLE "InstagramReplyRecordingGrant" (
  CONSTRAINT "ig_grant_lifetime" CHECK ("forgetAfter">="expiresAt" AND "forgetAfter">="occurredAt"+INTERVAL '24 hours'),
  CONSTRAINT "ig_grant_binding" CHECK ("state"='closed' OR
   ("providerAccountId" IS NOT NULL AND "accountId" IS NOT NULL AND "userId" IS NOT NULL AND
-   "connectionId" IS NOT NULL AND "connectionVersion">0 AND "sourceRecordId" IS NOT NULL AND
+   "connectionId" IS NOT NULL AND "connectionVersion" IS NOT NULL AND "connectionVersion">0 AND "sourceRecordId" IS NOT NULL AND
    "providerEventId" IS NOT NULL AND "actorId" IS NOT NULL AND "conversationId" IS NOT NULL AND
    "predecessorAttemptId" IS NOT NULL AND "predecessorProviderId" IS NOT NULL AND "marker" IS NOT NULL AND "payloadHash" IS NOT NULL))
 );
@@ -31,6 +31,9 @@ BEGIN
     (OLD."state"='claimed' AND NEW."state" IN ('sent','failed','unknown','closed')) OR
     (OLD."state" IN ('sent','failed','unknown') AND NEW."state"='closed')) THEN
   RAISE EXCEPTION 'Invalid Instagram recording grant transition';
+ END IF;
+ IF NEW."state"<>'closed' AND ROW(NEW."providerAccountId",NEW."accountId",NEW."userId",NEW."connectionId",NEW."connectionVersion",NEW."sourceRecordId",NEW."providerEventId",NEW."actorId",NEW."conversationId",NEW."predecessorAttemptId",NEW."predecessorProviderId",NEW."marker",NEW."payloadHash") IS DISTINCT FROM ROW(OLD."providerAccountId",OLD."accountId",OLD."userId",OLD."connectionId",OLD."connectionVersion",OLD."sourceRecordId",OLD."providerEventId",OLD."actorId",OLD."conversationId",OLD."predecessorAttemptId",OLD."predecessorProviderId",OLD."marker",OLD."payloadHash") THEN
+  RAISE EXCEPTION 'Instagram recording binding cannot be replaced';
  END IF;
  IF OLD."attemptId" IS NOT NULL AND NEW."attemptId" IS DISTINCT FROM OLD."attemptId" AND NOT (NEW."state"='closed' AND NEW."attemptId" IS NULL) THEN
   RAISE EXCEPTION 'Instagram recording attempt cannot be replaced';

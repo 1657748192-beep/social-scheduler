@@ -21,7 +21,7 @@ export function createInstagramRecordingGrants({db,rule:input,policy,now,isDelet
   const row=await tx.instagramInteractionMessage.findUniqueOrThrow({where:{id:s.sourceRecordId!}}),age=+at-+row.occurredAt,retention=evidence.contentRetentionDays*86400000;
   if(!Number.isFinite(age)||age<0||age>=retention||+row.receivedAt<+at-retention||!reading&&(age>=REC3_MAX_AGE_MS||age>=evidence.replyWindowMs))throw denied();
   if(await isDeleted(tx,{workspaceId:c.workspaceId,platform:'instagram',appId:c.appId,providerAssetId:c.providerAccountId,actorId:row.actorId,providerEventId:row.providerId,eventKind:'messages',occurredAt:row.occurredAt,connectionId:c.id,connectionVersion:c.version}))throw denied();
-  const candidates=await tx.instagramInteractionMessage.count({where:{workspaceId:c.workspaceId,connectionId:c.id,connectionVersion:c.version,inbound:true,deleted:false,text:{startsWith:REC3_MARKER+' '}}});if(candidates!==1)throw denied();
+  const candidates=await tx.instagramInteractionMessage.findMany({where:{workspaceId:c.workspaceId,connectionId:c.id,connectionVersion:c.version,inbound:true,deleted:false,text:{startsWith:REC3_MARKER}},take:26,select:{text:true}});if(candidates.length>25||candidates.filter(v=>new RegExp('^'+REC3_MARKER+'(?:\\s|$)').test(v.text??'')).length!==1)throw denied();
   const targetHash=hash(['message',row.actorId]);
   const history=await tx.instagramInteractionSendAttempt.findMany({where:{workspaceId:c.workspaceId,connectionId:c.id,OR:[{targetHash},{targetHash:'deleted'}],...(existing?.attemptId?{id:{not:existing.attemptId}}:{})},orderBy:[{createdAt:'desc'},{id:'desc'}]});
   if(history.some(v=>['pending','unknown'].includes(v.status)||v.targetHash==='deleted'))throw denied();

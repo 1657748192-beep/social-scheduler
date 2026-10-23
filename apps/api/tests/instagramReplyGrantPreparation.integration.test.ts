@@ -5,7 +5,7 @@ test('same sender receives one REC3 grant without rewriting REC1 or REC2',async(
  const a=await s.grants.prepare(s.asset,s.source),b=await s.grants.prepare(s.asset,s.source);assert.equal(a.id,b.id);assert.equal(a.state,'available');assert.equal(await f.db.instagramReplyRecordingGrant.count({where:{workspaceId:f.adminCtx.workspaceId}}),1);assert.deepEqual(await s.oldSnapshot(),before);
  await assert.rejects(s.grants.prepare(s.asset,{...s.source,sourceRecordId:randomUUID()}));assert.equal(await f.db.instagramInteractionSendAttempt.count({where:{connectionId:s.rule.connectionId}}),2);
 }finally{await cleanRec3Fixture(f);}}));
-for(const mode of ['wrong actor','wrong account','equal time','old time','unknown send','deleted','duplicate marker','copied predecessor','expired','reauthorized'] as const)test('REC3 preparation fails closed: '+mode,async()=>withMetaInboxFixture(async f=>{try{
+for(const mode of ['wrong actor','wrong account','equal time','old time','unknown send','deleted','duplicate marker','bare duplicate marker','copied predecessor','expired','reauthorized'] as const)test('REC3 preparation fails closed: '+mode,async()=>withMetaInboxFixture(async f=>{try{
  const s=await service(f);let asset=s.asset,source=s.source;
  if(mode==='wrong actor')source={...source,participantId:'999'};
  if(mode==='wrong account')asset={...asset,accountId:f.instagramAccountIds[1]};
@@ -13,6 +13,7 @@ for(const mode of ['wrong actor','wrong account','equal time','old time','unknow
  if(mode==='unknown send')await f.db.instagramInteractionSendAttempt.create({data:{workspaceId:s.rule.workspaceId,connectionId:s.rule.connectionId,connectionVersion:1,requestKey:randomUUID(),targetHash:s.legacy[1].targetHash,payloadHash:'unknown',status:'unknown'}});
  if(mode==='deleted')await f.db.instagramInteractionMessage.update({where:{id:s.rec3.id},data:{deleted:true}});
  if(mode==='duplicate marker')await f.db.instagramInteractionMessage.create({data:{workspaceId:s.rule.workspaceId,connectionId:s.rule.connectionId,connectionVersion:1,providerId:'duplicate-rec3',actorId:'300',inbound:true,conversationId:s.rec3.conversationId,text:s.rec3.text,occurredAt:s.now}});
+ if(mode==='bare duplicate marker')await f.db.instagramInteractionMessage.create({data:{workspaceId:s.rule.workspaceId,connectionId:s.rule.connectionId,connectionVersion:1,providerId:'bare-rec3',actorId:'300',inbound:true,conversationId:s.rec3.conversationId,text:'SS-IG-DM-1023-REC3',occurredAt:s.now}});
  if(mode==='copied predecessor')await f.db.interactionAudit.deleteMany({where:{targetId:s.rule.connectionId}});
  if(mode==='expired')s.now=new Date(+s.now+86400000);
  if(mode==='reauthorized')await f.db.instagramManagementConnection.update({where:{id:s.rule.connectionId},data:{version:2}});
