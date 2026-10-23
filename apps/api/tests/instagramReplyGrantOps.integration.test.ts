@@ -12,6 +12,7 @@ async function fixture(f:any,mode='ok'){
   assert.ok(u.pathname.endsWith('/thread-rec3')||u.pathname.endsWith('/thread-rec3/messages'));
   const raw={id:s.rec3.providerId,message:s.rec3.text,created_time:s.rec3.occurredAt.toISOString(),from:{id:'300',username:'synthetic'},to:{data:[{id:'100'}]}};
   const paging=(after:string)=>({next:'https://graph.instagram.com/v25.0/thread-rec3/messages?fields=id,message,created_time,from,to&limit=25&after='+after,cursors:{after}});
+  if(mode==='outer-paging')return Response.json({messages:{data:[raw]},paging:paging('hidden-page')});
   if(['paged','cycle','repeated-id','hidden-duplicate','hidden-outgoing','missing-terminal'].includes(mode)){
    const after=u.searchParams.get('after');
    if(after)assert.ok(u.pathname.endsWith('/thread-rec3/messages'),'Continuation must use messages edge');
@@ -34,7 +35,7 @@ test('REC3 signed read traverses the messages edge before releasing one qualific
  assert.equal((await s.ops.prepare({apply:true,evidence})).ready,true);assert.equal(s.calls(),4);assert.deepEqual(await s.oldSnapshot(),before);
 }finally{await cleanRec3Fixture(f);}}));
 
-for(const mode of ['cycle','repeated-id','hidden-duplicate','hidden-outgoing','missing-terminal'])test('REC3 pagination rejects '+mode+' without a grant or an unbounded read',async()=>withMetaInboxFixture(async f=>{try{
+for(const mode of ['cycle','repeated-id','hidden-duplicate','hidden-outgoing','missing-terminal','outer-paging'])test('REC3 pagination rejects '+mode+' without a grant or an unbounded read',async()=>withMetaInboxFixture(async f=>{try{
  const s=await fixture(f,mode);await assert.rejects(s.ops.read({allowProviderRead:true}));assert.ok(s.calls()<=(mode==='cycle'?5:4));assert.equal(await f.db.instagramReplyRecordingGrant.count({where:{workspaceId:s.rule.workspaceId}}),0);
 }finally{await cleanRec3Fixture(f);}}));
 test('REC3 operations default to zero requests and writes; signed read prepares exactly one source without any send',async()=>withMetaInboxFixture(async f=>{try{

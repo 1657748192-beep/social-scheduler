@@ -35,6 +35,11 @@ test('conflicting nested and direct message lists cannot be accepted as a comple
  await assert.rejects(graph.messages('thread-1'));
 });
 
+test('outer paging beside a nested message list cannot be silently discarded as terminal',async()=>{
+ const graph=createInstagramManagementGraph({...config,fetchImpl:async()=>Response.json({messages:{data:[message]},paging:messageNext('hidden-page')})});
+ await assert.rejects(graph.messages('thread-1'));
+});
+
 test('a repeated message cursor is rejected rather than returning the same page again',async()=>{
  const graph=createInstagramManagementGraph({...config,fetchImpl:async()=>Response.json({messages:{data:[message],paging:messageNext('same')}})});
  const first=await graph.messages('thread-1');await assert.rejects(graph.messages('thread-1',first.nextCursor!));

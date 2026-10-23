@@ -25,3 +25,13 @@ The first page contained one REC3 marker with original `created_time=2026-10-23T
 - `ig-pagination-completeness-red.log`: blank next and conflicting nested/direct lists reproduced as accepted; `ig-pagination-completeness-green.log`: **9/9 pass** after fail-closed correction.
 - `ig-pagination-ops-green.log`: **17/17 pass**, including complete multi-page read→qualification, cycles, repeated event IDs, hidden duplicate marker, hidden official outgoing and missing terminal list.
 - Focused legacy/grant regression, builds, final independent review and unfiltered final full regression are not yet all complete. No deployment or readiness claim at this checkpoint.
+
+## Independent review and one fix pass
+
+Read-only fresh-context reviewer `ig_pagination_final_review` inspected `77deb6c..7ec6289`, without tests, network or service operations. No Critical or Minor; one Important: a nested `messages.data` with sibling outer `paging` could hide a continuation and sign incomplete evidence. Confirmed via graph and operations failures (`ig-pagination-review-graph-red.log`, `ig-pagination-review-ops-red.log`), then rejected this ambiguous envelope without dropping either continuation. Post-fix graph **10/10 PASS** and operations plus legacy invitation lifecycle **22/22 PASS** (`ig-pagination-review-graph-green.log`, `ig-pagination-review-ops-green.log`). No second reviewer or expanded functional cleanup.
+
+The reviewer set aside live operational eligibility and running tests/builds. These remain independently gated by actual final outputs and the later authorized controlled read, not assumed from static review.
+
+Legacy/grant/receipt focused run: **59/59 PASS**, `ig-pagination-focused-final.log`. API final build and Web final build exited 0; final-source API build `ig-pagination-api-verified-build.log`, Web `ig-pagination-web-final-build.log` (Web production source unchanged).
+
+The first unfiltered regression again exposed unchanged `expired candidates are unreadable before bounded cleanup, which does not extend retention`. Its global LIMIT 1 could select an older synthetic fixture instead of one of the test's two rows. Ruling: drain only pre-existing test maintenance backlog in bounded batches **before** creating the measured two rows. Keep all existing limit=1, remaining-candidate and immutable-retention assertions unchanged; no production cleanup code modified. This makes the fixture independent of UUID ordering and earlier completed tests in the isolated test database. The final full regression was restarted after this and the review fix; result pending.

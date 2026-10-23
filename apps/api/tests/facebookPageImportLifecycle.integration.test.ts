@@ -20,7 +20,15 @@ test('subject deletion clears only matching invitation envelopes, not existing p
 });
 test('expired candidates are unreadable before bounded cleanup, which does not extend retention',async()=>{
  const mod=await import('../src/facebookPageImportInvitations/maintenance').catch(()=>null);assert.ok(mod,'bounded invitation maintenance must exist');
- await withPageImportFixture(async f=>{const a=await preparePageInvitation(f),b=await preparePageInvitation(f),deadline=new Date(Date.now()-1000);
+ await withPageImportFixture(async f=>{
+ // Maintenance is deliberately global. Drain older synthetic fixtures before
+ // creating the two rows whose limit=1 behavior this test measures.
+ for(let batch=0;batch<20;batch++){
+  const prior=await mod.runInvitationMaintenance(f.db,new Date(),50);
+  if(!prior.cleared&&!prior.removed)break;
+  assert.ok(batch<19,'Older fixture maintenance did not drain within its test bound');
+ }
+ const a=await preparePageInvitation(f),b=await preparePageInvitation(f),deadline=new Date(Date.now()-1000);
  await f.db.facebookPageImportInvitation.updateMany({where:{id:{in:[a.id,b.id]}},data:{candidateExpiresAt:deadline}});
  await assert.rejects(a.repo.candidates(await a.repo.readPrivate(f.ctx,a.id)));
  assert.equal((await mod.runInvitationMaintenance(f.db,new Date(),1)).cleared,1);

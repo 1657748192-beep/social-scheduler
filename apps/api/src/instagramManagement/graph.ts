@@ -34,7 +34,7 @@ export function createInstagramManagementGraph(input:{appId:string;graphVersion:
   try{
    if(status<200||status>=300)throw Error();
    const wrapper=value as any,body=kind.startsWith('messages:')?wrapper?.messages??wrapper:wrapper;
-   if(messageRoot&&wrapper?.messages!==undefined&&wrapper?.data!==undefined)throw Error();
+   if(messageRoot&&wrapper?.messages!==undefined&&(wrapper?.data!==undefined||wrapper?.paging!==undefined))throw Error();
    const parsed=z.object({data:z.array(schema).max(25),paging:z.object({next:z.string().max(8192).optional(),cursors:z.object({after:z.string().min(1).max(2048).optional()}).optional()}).optional()}).parse(body);
    if(messageRoot&&parsed.paging?.next!==undefined){
     const nextAfter=parsed.paging.cursors?.after;
