@@ -4,17 +4,18 @@ import {HttpError} from '../utils/errors';
 import type {InboxDb} from '../interactionInbox/access';
 import type {ResolvedAsset,SourceRef} from '../interactionInbox/types';
 import {parseInboxSource} from '../interactionInbox/source';
+import {REC3_MARKER,REC3_TEXT} from './recordingGrantIdentity';
 
 export const recordingTexts=Object.freeze({
  comment:'Social Scheduler Instagram comment reply test REC1. This reply is for app review demonstration only.',
  message:'Social Scheduler Instagram messaging reply test REC1. This reply is for app review demonstration only.',
 });
 const id=z.string().regex(/^[-a-zA-Z0-9_:.]{1,256}$/),target={sourceRecordId:z.string().uuid(),providerEventId:id,actorId:id};
-const schema=z.object({enabled:z.literal(true),userId:z.string().uuid(),workspaceId:z.string().uuid(),accountId:z.string().uuid(),appId:z.string().regex(/^\d{1,256}$/),providerAccountId:z.string().regex(/^\d{1,256}$/),connectionId:z.string().uuid(),connectionVersion:z.number().int().positive(),username:z.literal('mooyamcosmetic'),expiresAt:z.string().datetime(),messageRec2:z.object({...target,conversationId:id,expiresAt:z.string().datetime()}).strict().optional(),commentRec2:z.object({...target,mediaId:id,expiresAt:z.string().datetime()}).strict().optional(),comment:z.object({...target,mediaId:id}).strict(),message:z.object({...target,conversationId:id}).strict()}).strict();
+const schema=z.object({enabled:z.literal(true),userId:z.string().uuid(),workspaceId:z.string().uuid(),accountId:z.string().uuid(),appId:z.string().regex(/^\d{1,256}$/),providerAccountId:z.string().regex(/^\d{1,256}$/),connectionId:z.string().uuid(),connectionVersion:z.number().int().positive(),username:z.literal('mooyamcosmetic'),expiresAt:z.string().datetime(),messageRec3:z.object({...target,conversationId:id,expiresAt:z.string().datetime()}).strict().optional(),messageRec2:z.object({...target,conversationId:id,expiresAt:z.string().datetime()}).strict().optional(),commentRec2:z.object({...target,mediaId:id,expiresAt:z.string().datetime()}).strict().optional(),comment:z.object({...target,mediaId:id}).strict(),message:z.object({...target,conversationId:id}).strict()}).strict();
 export type InstagramReplyRecording=z.infer<typeof schema>;
 export function copyInstagramReplyRecording(value:InstagramReplyRecording|null|undefined){
  if(value==null)return null;
- const rule=schema.parse(value);Object.freeze(rule.comment);Object.freeze(rule.message);if(rule.commentRec2)Object.freeze(rule.commentRec2);if(rule.messageRec2)Object.freeze(rule.messageRec2);return Object.freeze(rule);
+ const rule=schema.parse(value);Object.freeze(rule.comment);Object.freeze(rule.message);if(rule.commentRec2)Object.freeze(rule.commentRec2);if(rule.messageRec2)Object.freeze(rule.messageRec2);if(rule.messageRec3)Object.freeze(rule.messageRec3);return Object.freeze(rule);
 }
 /** An absent setting leaves the existing send gate untouched; invalid settings never open access. */
 export function parseInstagramReplyRecording(value:string|undefined){
@@ -23,9 +24,9 @@ export function parseInstagramReplyRecording(value:string|undefined){
 }
 export const recordingTargetHash=(kind:'message'|'comment',targetId:string)=>createHash('sha256').update(JSON.stringify([kind,targetId])).digest('hex');
 export function instagramRecordingSelection(rule:InstagramReplyRecording,s:SourceRef){
- const kind=s.conversationId?'message':'comment',nextComment=kind==='comment'&&rule.commentRec2?.sourceRecordId===s.sourceRecordId,nextMessage=kind==='message'&&rule.messageRec2?.sourceRecordId===s.sourceRecordId;
- const record=nextMessage?rule.messageRec2!:nextComment?rule.commentRec2!:rule[kind];
- return{kind:kind as 'message'|'comment',record,text:nextMessage?'Social Scheduler Instagram messaging reply test REC2. This reply is for app review demonstration only.':nextComment?'Social Scheduler Instagram comment reply test REC2. This reply is for app review demonstration only.':recordingTexts[kind],expiresAt:nextMessage?rule.messageRec2!.expiresAt:nextComment?rule.commentRec2!.expiresAt:rule.expiresAt,sendEnabled:rule.messageRec2?!!nextMessage:!rule.commentRec2||!!nextComment,marker:nextMessage?'SS-IG-DM-1023-REC2':nextComment?'SS-IG-C-1023-REC2':kind==='message'?'SS-IG-DM-1022-REC1':'SS-IG-C-1022-REC1'};
+ const kind=s.conversationId?'message':'comment',nextComment=kind==='comment'&&rule.commentRec2?.sourceRecordId===s.sourceRecordId,nextMessage=kind==='message'&&rule.messageRec2?.sourceRecordId===s.sourceRecordId,nextThird=kind==='message'&&rule.messageRec3?.sourceRecordId===s.sourceRecordId;
+ const record=nextThird?rule.messageRec3!:nextMessage?rule.messageRec2!:nextComment?rule.commentRec2!:rule[kind];
+ return{kind:kind as 'message'|'comment',record,text:nextThird?REC3_TEXT:nextMessage?'Social Scheduler Instagram messaging reply test REC2. This reply is for app review demonstration only.':nextComment?'Social Scheduler Instagram comment reply test REC2. This reply is for app review demonstration only.':recordingTexts[kind],expiresAt:nextThird?rule.messageRec3!.expiresAt:nextMessage?rule.messageRec2!.expiresAt:nextComment?rule.commentRec2!.expiresAt:rule.expiresAt,sendEnabled:rule.messageRec3?!!nextThird:rule.messageRec2?!!nextMessage:!rule.commentRec2||!!nextComment,marker:nextThird?REC3_MARKER:nextMessage?'SS-IG-DM-1023-REC2':nextComment?'SS-IG-C-1023-REC2':kind==='message'?'SS-IG-DM-1022-REC1':'SS-IG-C-1022-REC1'};
 }
 export async function requireInstagramRecordingTarget(db:InboxDb,rule:InstagramReplyRecording,a:ResolvedAsset,value:SourceRef|undefined,text?:string,at=new Date(),allowExpired=false){
  const deny=()=>new HttpError(403,'Controlled Instagram reply recording unavailable');
