@@ -10,7 +10,7 @@ import type {InstagramSourceSubject} from './types';
 import {createInstagramSendExecutor} from './sendAttempts';
 import {encodeInboxCursor,decodeInboxCursor} from '../interactionInbox/cursor';
 import {instagramConversationIdentity} from './conversationIdentity';
-import {copyInstagramReplyRecording,requireInstagramRecordingTarget,recordingTargetHash,recordingTexts,type InstagramReplyRecording} from './replyRecording';
+import {copyInstagramReplyRecording,requireInstagramRecordingTarget,recordingTargetHash,recordingTexts,instagramRecordingSelection,type InstagramReplyRecording} from './replyRecording';
 import {createHash} from 'node:crypto';
 import {findInstagramReplyReceipt} from './replyReceipts';
 type Access=ReturnType<typeof createInstagramManagementAccess>;
@@ -22,7 +22,7 @@ export function createInstagramManagementEngagement({db,access,policy,graph,isDe
   if(!rule)return undefined;
   let target;try{target=await requireInstagramRecordingTarget(db,rule,a,s,undefined,now(),true);}catch{return undefined;}
   const used=await db.instagramInteractionSendAttempt.findFirst({where:{workspaceId:rule.workspaceId,connectionId:rule.connectionId,targetHash:recordingTargetHash(target.kind,target.targetId)},select:{id:true}});
-  return{text:recordingTexts[target.kind],expiresAt:rule.expiresAt,state:used?'used':now().getTime()>=Date.parse(rule.expiresAt)?'expired':'available'};
+  const selected=instagramRecordingSelection(rule,s);return{text:selected.text,expiresAt:selected.expiresAt,state:used?'used':!selected.sendEnabled||now().getTime()>=Date.parse(selected.expiresAt)?'expired':'available'};
  }
  function source(a:ResolvedAsset,value:SourceRef){
   if(a.platform!=='instagram')throw new HttpError(409,'Instagram platform required');
@@ -153,7 +153,7 @@ export function createInstagramManagementEngagement({db,access,policy,graph,isDe
    // REC1 receipts bind the fixed text's hash. Echo only that known payload;
    // never fetch, resend, write cached bodies, or guess other reply content.
    if(rule&&recordingReply)await db.$transaction(async tx=>{
-    const connection=await fence(tx,a,cap),root=await target(tx,a,s),kind=s.conversationId?'message':'comment',text=recordingTexts[kind];
+    const connection=await fence(tx,a,cap),root=await target(tx,a,s),kind=s.conversationId?'message':'comment',text=instagramRecordingSelection(rule,s).text;
     const receipt=await findInstagramReplyReceipt(tx,{workspaceId:a.ctx.workspaceId,accountId:a.accountId,appId:a.appNamespace,providerAccountId:a.providerAssetId,connectionId:s.connectionId,connectionVersion:a.connectionVersion,kind,targetId:kind==='message'?s.participantId!:s.commentId!,after:new Date(Math.max(root.occurredAt.getTime(),now().getTime()-evidence(a,'read').contentRetentionDays*86400000)),before:now(),payloadHash:createHash('sha256').update(JSON.stringify(text)).digest('hex')});
     if(!receipt||result.items.some(v=>v.id===receipt.providerId))return;
     const key={connectionId:s.connectionId,connectionVersion:a.connectionVersion,providerId:receipt.providerId};
@@ -165,7 +165,7 @@ export function createInstagramManagementEngagement({db,access,policy,graph,isDe
      await target(tx,a,{...s,sourceRecordId:cached.id,commentId:cached.providerId});
     }
     const occurredAt=cached?.occurredAt??receipt.updatedAt;
-    if(await isDeleted(tx,{workspaceId:a.ctx.workspaceId,platform:'instagram',appId:a.appNamespace,providerAssetId:a.providerAssetId,actorId:rule[kind].actorId,providerEventId:receipt.providerId,eventKind:s.conversationId?'messages':'comments',occurredAt,connectionId:s.connectionId,connectionVersion:a.connectionVersion}))return;
+    if(await isDeleted(tx,{workspaceId:a.ctx.workspaceId,platform:'instagram',appId:a.appNamespace,providerAssetId:a.providerAssetId,actorId:instagramRecordingSelection(rule,s).record.actorId,providerEventId:receipt.providerId,eventKind:s.conversationId?'messages':'comments',occurredAt,connectionId:s.connectionId,connectionVersion:a.connectionVersion}))return;
     result.items.push({id:receipt.providerId,text:cached?cached.text:text,occurredAt:occurredAt.toISOString(),inbound:false,deleted:false});result.items.sort((x,y)=>Date.parse(x.occurredAt)-Date.parse(y.occurredAt)||x.id.localeCompare(y.id));
    });
    return{...result,officialUrl:null,replyTarget:s.conversationId??s.commentId??null,capabilities:resolvedCaps.map(c=>rule&&c.capability.endsWith('.reply')&&(!recordingReply||recordingReply.state!=='available'||c.capability!==cap.replace('.read','.reply'))?{...c,available:false,reason:'recording_restricted'}:c),...(recordingReply?{recordingReply}:{})};
