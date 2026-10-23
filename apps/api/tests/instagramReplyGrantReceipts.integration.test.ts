@@ -1,4 +1,19 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';import {withMetaInboxFixture} from './helpers/metaInboxFixture';import {seedRec3Fixture,cleanRec3Fixture} from './helpers/instagramReplyGrantFixture';import {createInstagramRecordingGrants} from '../src/instagramManagement/recordingGrants';import {createInstagramManagementEngagement} from '../src/instagramManagement/engagement';import {presentInboxCase} from '../src/interactionInbox/cases';
+
+test('REC3 final engagement fence rejects fixed expiry reached during fresh access inspection despite a later inbound',async()=>withMetaInboxFixture(async f=>{try{
+ const s=await seedRec3Fixture(f),policy={...s.policy,requireAsset:(...args:Parameters<typeof s.policy.requireAsset>)=>({...s.policy.requireAsset(...args),replyWindowMs:35000})};
+ const grants=createInstagramRecordingGrants({db:f.db,rule:s.rule,policy,now:()=>s.now,isDeleted:async()=>false});await grants.prepare(s.asset,s.source);let sends=0,advanced=false;
+ const access={...s.access,resolve:async(...args:Parameters<typeof s.access.resolve>)=>{
+  const asset=await s.access.resolve(...args);
+  if(!advanced&&await f.db.instagramReplyRecordingGrant.findFirst({where:{workspaceId:s.rule.workspaceId,state:'claimed'}})){
+   advanced=true;s.now=new Date(+s.now+6000);
+   await f.db.instagramInteractionMessage.create({data:{workspaceId:s.rule.workspaceId,connectionId:s.rule.connectionId,connectionVersion:1,providerId:'fresh-later-inbound',actorId:'300',conversationId:s.rec3.conversationId,inbound:true,text:'later inbound',occurredAt:s.now,receivedAt:s.now}});
+  }return asset;
+ }};
+ const engagement=createInstagramManagementEngagement({db:f.db,access,policy,now:()=>s.now,testRestriction:s.rule,isDeleted:async()=>false,verifiedCommentLimit:1000,graph:()=>({conversation:async()=>({id:s.rec3.conversationId,participants:{data:[{id:'100'},{id:'300'}]}}),sendMessage:async()=>{sends++;return{status:'sent',providerId:'must-not-send'};}} as any)});
+ const result=await engagement.reply(s.asset,s.source,s.text,randomUUID());assert.equal(result.status,'unknown');assert.equal(advanced,true);assert.equal(sends,0);
+ assert.equal((await f.db.instagramReplyRecordingGrant.findFirstOrThrow({where:{workspaceId:s.rule.workspaceId}})).state,'unknown');
+}finally{await cleanRec3Fixture(f);}}));
 test('REC3 detail and list use its original receipt, not the older reply to the same sender',async()=>withMetaInboxFixture(async f=>{try{
  const s=await seedRec3Fixture(f),grants=createInstagramRecordingGrants({db:f.db,rule:s.rule,policy:s.policy,now:()=>s.now,isDeleted:async()=>false});await grants.prepare(s.asset,s.source);let sends=0;
  const engagement=createInstagramManagementEngagement({db:f.db,access:s.access,policy:s.policy,now:()=>new Date(),testRestriction:s.rule,isDeleted:async()=>false,verifiedCommentLimit:1000,graph:()=>({conversation:async()=>({id:s.rec3.conversationId,participants:{data:[{id:'100'},{id:'300'}]}}),sendMessage:async()=>{sends++;return{status:'sent',providerId:'rec3-real-reply'};}} as any)});

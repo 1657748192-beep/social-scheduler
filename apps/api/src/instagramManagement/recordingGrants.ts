@@ -37,13 +37,27 @@ export function createInstagramRecordingGrants({db,rule:input,policy,now,isDelet
   return{row,c,predecessor,expiresAt,retention};
  }
  return{
-  async prepare(a:ResolvedAsset,s:SourceRef){return db.$transaction(async tx=>{
+  async prepare(a:ResolvedAsset,s:SourceRef,transaction?:Prisma.TransactionClient){const prepare=async(tx:Prisma.TransactionClient)=>{
    await tx.$queryRaw`SELECT id FROM "InstagramManagementConnection" WHERE id=${a.sourceRef!.connectionId}::uuid FOR UPDATE`;
    const incomingKey=key(a,s),existing=await tx.instagramReplyRecordingGrant.findUnique({where:{incomingKey}}),v=await verify(tx,a,s,existing);
    if(existing)return existing;
    return tx.instagramReplyRecordingGrant.create({data:{incomingKey,workspaceId:a.ctx.workspaceId,appId:a.appNamespace,providerAccountId:a.providerAssetId,accountId:a.accountId,userId:a.ctx.userId,connectionId:v.c.id,connectionVersion:v.c.version,sourceRecordId:v.row.id,providerEventId:v.row.providerId,actorId:v.row.actorId,conversationId:v.row.conversationId,occurredAt:v.row.occurredAt,predecessorAttemptId:v.predecessor.id,predecessorProviderId:v.predecessor.providerId,marker:REC3_MARKER,payloadHash:hash(REC3_TEXT),expiresAt:v.expiresAt,forgetAfter:new Date(Math.max(+v.row.occurredAt+REC3_MAX_AGE_MS,+v.expiresAt,+v.row.occurredAt+v.retention))}});
-  });},
+  };return transaction?prepare(transaction):db.$transaction(prepare);},
   async read(a:ResolvedAsset,s:SourceRef){return db.$transaction(async tx=>{const row=await tx.instagramReplyRecordingGrant.findUnique({where:{incomingKey:key(a,s)}});if(!row)return null;try{await verify(tx,a,s,row,true);return row;}catch{return null;}});},
+  async assertDispatch(input:InstagramSendInput,transaction?:Prisma.TransactionClient){
+   const check=async(tx:Prisma.TransactionClient)=>{
+    if(input.kind!=='message'||input.text!==REC3_TEXT||!input.source)throw denied();
+    const a=input.asset,s=input.source,incomingKey=key(a,s);
+    await tx.$queryRaw`SELECT id FROM "InstagramManagementConnection" WHERE id=${a.sourceRef!.connectionId}::uuid FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM "InstagramReplyRecordingGrant" WHERE "incomingKey"=${incomingKey} FOR UPDATE`;
+    const grant=await tx.instagramReplyRecordingGrant.findUnique({where:{incomingKey}});
+    if(!grant||grant.state!=='claimed'||!grant.attemptId||+now()>=+grant.expiresAt||grant.actorId!==input.targetId)throw denied();
+    await verify(tx,a,s,grant);
+    const attempt=await tx.instagramInteractionSendAttempt.findUnique({where:{id:grant.attemptId}});
+    if(!attempt||attempt.status!=='pending'||attempt.requestKey!==input.requestKey||attempt.workspaceId!==grant.workspaceId||attempt.connectionId!==grant.connectionId||attempt.connectionVersion!==grant.connectionVersion||attempt.payloadHash!==grant.payloadHash||attempt.targetHash!==hash(['message',grant.actorId]))throw denied();
+   };
+   return transaction?check(transaction):db.$transaction(check);
+  },
   async claim(input:InstagramSendInput){return db.$transaction(async tx=>{
    if(input.kind!=='message'||input.text!==REC3_TEXT||!input.source)throw denied();
    const a=input.asset,s=input.source;await tx.$queryRaw`SELECT id FROM "InstagramManagementConnection" WHERE id=${a.sourceRef!.connectionId}::uuid FOR UPDATE`;

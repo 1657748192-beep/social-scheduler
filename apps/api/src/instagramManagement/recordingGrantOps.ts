@@ -1,5 +1,6 @@
 import {createHmac,timingSafeEqual} from 'node:crypto';import {Prisma,type PrismaClient} from '@prisma/client';
 import {isPlatformAdmin} from '../utils/platformAdmin';
+import {readBoundedInstagramJson} from './http';
 import {z} from 'zod';import type {Scope,ResolvedAsset} from '../interactionInbox/types';import type {LiveInboxPolicy} from '../interactionInbox/livePolicy';import {createInboxAccess} from '../interactionInbox/access';import {createInboxProjection} from '../interactionInbox/projection';
 import {createInstagramManagementGraph,instagramMessageDto} from './graph';import {createInstagramManagementAccess} from './access';import {requireInstagramAccount} from './store';import {copyInstagramReplyRecording,type InstagramReplyRecording} from './replyRecording';import {createInstagramRecordingGrants} from './recordingGrants';import type {InstagramSourceSubject} from './types';import {REC3_MARKER,REC3_MAX_AGE_MS} from './recordingGrantIdentity';import {instagramConversationIdentity} from './conversationIdentity';
 type Deps={db:PrismaClient;ctx:Scope;rule:InstagramReplyRecording;policy:LiveInboxPolicy;graphVersion:string;decrypt:(v:string)=>string;evidenceKey:string;fetchImpl?:typeof fetch;now?:()=>Date;isDeleted:(tx:Prisma.TransactionClient,s:InstagramSourceSubject)=>Promise<boolean>};
@@ -18,14 +19,23 @@ export function createInstagramRec3Ops({db,ctx,rule:input,policy,graphVersion,de
   const owner=await db.workspaceMember.findUnique({where:{workspaceId_userId:{workspaceId:c.workspaceId,userId:c.userId}},include:{user:{select:{email:true}}}});if(!owner||owner.status!=='active'||!['owner','admin'].includes(owner.role)||!isPlatformAdmin(owner.user.email))unavailable();return c;
  }
  const mutable=new Set(['InteractionAsset','InteractionCase','InteractionItem','InteractionIdentity','InteractionCustomer','InstagramReplyRecordingGrant']);
- async function snapshot(protectedOnly=false){return db.$transaction(async tx=>{await tx.$executeRaw`SET TRANSACTION READ ONLY`;const out:Record<string,string>={};for(const m of Prisma.dmmf.datamodel.models){if(protectedOnly&&mutable.has(m.name))continue;const keys=m.fields.filter(f=>f.isId).map(f=>f.name);if(!keys.length)keys.push(...(m.primaryKey?.fields??[]));if(!keys.length)unavailable();let rows=await (tx as any)[m.name[0].toLowerCase()+m.name.slice(1)].findMany({orderBy:keys.map(k=>({[k]:'asc'}))});if(protectedOnly&&m.name==='InstagramInteractionMessage')rows=rows.filter((v:any)=>v.id!==rec3.sourceRecordId);out[m.name]=sign(rows);}return sign(out);},{isolationLevel:'RepeatableRead',timeout:60000});}
+ async function snapshot(protectedOnly=false,transaction?:Prisma.TransactionClient){
+  const collect=async(tx:Prisma.TransactionClient)=>{const out:Record<string,string>={};for(const m of Prisma.dmmf.datamodel.models){if(protectedOnly&&mutable.has(m.name))continue;const keys=m.fields.filter(f=>f.isId).map(f=>f.name);if(!keys.length)keys.push(...(m.primaryKey?.fields??[]));if(!keys.length)unavailable();let rows=await (tx as any)[m.name[0].toLowerCase()+m.name.slice(1)].findMany({orderBy:keys.map(k=>({[k]:'asc'}))});if(protectedOnly&&m.name==='InstagramInteractionMessage')rows=rows.filter((v:any)=>v.id!==rec3.sourceRecordId);out[m.name]=sign(rows);}return sign(out);};
+  return transaction?collect(transaction):db.$transaction(async tx=>{await tx.$executeRaw`SET TRANSACTION READ ONLY`;return collect(tx);},{isolationLevel:'RepeatableRead',timeout:60000});
+ }
  async function binding(){const c=await connection();return sign({rule,graphVersion,token:c.tokenEncrypted,ctx});}
  return{
   async read(options:{allowProviderRead?:boolean}={}){
    if(options.allowProviderRead!==true)return{dryRun:true,requests:0} as const;
    const before=await snapshot(),protectedHash=await snapshot(true),bound=await binding(),c=await connection();let requests=0;
    const paths=new Set([`/${graphVersion}/me`,`/${graphVersion}/${rule.providerAccountId}/conversations`,`/${graphVersion}/${rec3.conversationId}`]);
-   const transport:typeof fetch=async(url,opts)=>{const u=new URL(String(url));if((opts?.method??'GET')!=='GET'||u.protocol!=='https:'||u.hostname!=='graph.instagram.com'||u.port||u.username||u.password||!paths.has(u.pathname)||opts?.redirect!=='error'||++requests>10)unavailable();const response=await fetchImpl(u,{...opts,method:'GET',redirect:'error'});if(!response.ok)unavailable();return response;};
+   const transport:typeof fetch=async(url,opts)=>{
+    const u=new URL(String(url));if((opts?.method??'GET')!=='GET'||u.protocol!=='https:'||u.hostname!=='graph.instagram.com'||u.port||u.username||u.password||!paths.has(u.pathname)||opts?.redirect!=='error'||++requests>10)unavailable();
+    const response=await fetchImpl(u,{...opts,method:'GET',redirect:'error'});if(!response.ok)unavailable();
+    const value:any=await readBoundedInstagramJson(async()=>response.clone(),u);
+    for(const page of [value,value?.messages])if(page?.paging?.next&&!(typeof page.paging.cursors?.after==='string'&&page.paging.cursors.after.length))unavailable();
+    return response;
+   };
    const graph=createInstagramManagementGraph({appId:rule.appId,graphVersion,accessToken:decrypt(c.tokenEncrypted!),accountId:rule.providerAccountId,connectionVersion:c.version,fetchImpl:transport});
    if((await graph.identity()).username!=='mooyamcosmetic')unavailable();
    const threads=[];let cursor:string|undefined;do{const p=await graph.conversations(cursor);threads.push(...p.items);cursor=p.nextCursor??undefined;}while(cursor);
@@ -54,7 +64,11 @@ export function createInstagramRec3Ops({db,ctx,rule:input,policy,graphVersion,de
    const access=createInstagramManagementAccess({db,appId:rule.appId,policy,decrypt,inspect:async()=>{if(evidence.binding!==await binding())unavailable();return{appId:c.appId,providerAccountId:c.providerAccountId,scopes:c.scopes,expiresAt:c.expiresAt??new Date(+now()+60000)};}});
    const inbox=createInboxAccess({db,policy,instagram:{enabled:true,access},facebookEnabled:false,verifyFacebook:async()=>unavailable()}),projection=createInboxProjection({db,access:inbox,policy});
    await projection.projectVerifiedPage(ctx,asset,{items:[{providerEventId:message.id,threadId:instagramConversationIdentity(c.id,c.version,rec3.actorId),actorId:rec3.actorId,actorName:message.from.username??null,actorUsername:message.from.username??null,kind:'messages',occurredAt:at.toISOString(),inbound:true,deleted:false,sourceRef:source}],nextCursor:null,coverage:'verified_account_edges',warnings:['bounded_history_only']});
-   const grant=await grants.prepare(asset,source);if(before!==await snapshot(true))unavailable();return{ready:grant.state==='available',protectedUnchanged:true,existing:false};
+   return db.$transaction(async tx=>{
+    const grant=await grants.prepare(asset,source,tx);
+    if(before!==await snapshot(true,tx))unavailable();
+    return{ready:grant.state==='available',protectedUnchanged:true,existing:false};
+   },{isolationLevel:'Serializable',timeout:60000});
   },
   async verify(){await connection();const grant=await grants.read(asset,source);return{ready:grant?.state==='available'&&+grant.expiresAt>+now(),unused:!!grant&&!grant.attemptId,requests:0,protected:await snapshot(true)};}
  };

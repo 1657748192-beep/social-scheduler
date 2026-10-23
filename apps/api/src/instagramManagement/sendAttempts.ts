@@ -70,7 +70,7 @@ export function createInstagramSendExecutor({db,testRestriction,recordingGrants,
    return outcome(row,!!rule);
   }
   // Persist the claim before dispatch; uncertainty is terminal, never an automatic retry.
-  try{await current(input);await restricted(db,input);}catch(error){if(rec3)await recordingGrants!.finish(attempt.id,{status:'failed',code:'reply_failed',diagnosticId:attempt.diagnosticId!});else await db.instagramInteractionSendAttempt.updateMany({where:{id:attempt.id,status:'pending'},data:{status:'failed'}});throw error;}
+  try{await current(input);await restricted(db,input);if(rec3)await recordingGrants!.assertDispatch(input);}catch(error){if(rec3)await recordingGrants!.finish(attempt.id,{status:'failed',code:'reply_failed',diagnosticId:attempt.diagnosticId!});else await db.instagramInteractionSendAttempt.updateMany({where:{id:attempt.id,status:'pending'},data:{status:'failed'}});throw error;}
   let result:SendOutcome;
   try{
    result=await send();

@@ -195,6 +195,7 @@ export function createInstagramManagementEngagement({db,access,policy,graph,isDe
     const outcome=await executor.execute({asset:a,source:s,requestKey,kind:s.conversationId?'message':'comment',targetId:s.conversationId?s.participantId!:row.providerId,text},async()=>{
      // Final local policy/window/connection check immediately precedes the one provider operation.
      await fresh(a,cap);await db.$transaction(async tx=>{await fence(tx,a,cap);await target(tx,a,s);await restrict(tx,a,s,text);
+      if(rule?.messageRec3&&s.sourceRecordId===rule.messageRec3.sourceRecordId)await recordingGrants!.assertDispatch({asset:a,source:s,requestKey,kind:'message',targetId:s.participantId!,text},tx);
       if(s.conversationId){const last=await tx.instagramInteractionMessage.findFirst({where:{connectionId:s.connectionId,connectionVersion:a.connectionVersion,workspaceId:a.ctx.workspaceId,actorId:s.participantId,inbound:true,deleted:false},orderBy:{occurredAt:'desc'}});const age=last?now().getTime()-last.occurredAt.getTime():NaN;if(!Number.isFinite(age)||age<0||age>evidence(a,'send').replyWindowMs)throw new HttpError(409,'Instagram reply window unavailable');await target(tx,a,{...s,conversationId:last!.conversationId,sourceRecordId:last!.id});}
      });
      return s.conversationId?g.sendMessage(s.participantId!,text):g.replyComment(row.providerId,text);

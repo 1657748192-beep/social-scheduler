@@ -1,6 +1,22 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';import {withMetaInboxFixture} from './helpers/metaInboxFixture';import {seedRec3Fixture,cleanRec3Fixture} from './helpers/instagramReplyGrantFixture';import {createInstagramRecordingGrants} from '../src/instagramManagement/recordingGrants';import {createInstagramSendExecutor} from '../src/instagramManagement/sendAttempts';
 import {parseInstagramReplyRecording} from '../src/instagramManagement/replyRecording';
+import {closeInstagramRecordingGrants} from '../src/instagramManagement/recordingGrantLifecycle';
 async function setup(f:any){const s=await seedRec3Fixture(f),grants=createInstagramRecordingGrants({db:f.db,rule:s.rule,policy:s.policy,now:()=>s.now,isDeleted:async()=>false});await grants.prepare(s.asset,s.source);return{...s,grants,executor:()=>createInstagramSendExecutor({db:f.db,testRestriction:s.rule,recordingGrants:grants,now:()=>s.now} as any)};}
+
+for(const boundary of ['closed','fixed-expiry'])test('REC3 dispatch rejects a claimed qualification after '+boundary,async()=>withMetaInboxFixture(async f=>{try{
+ const s=await seedRec3Fixture(f),policy=boundary==='fixed-expiry'?{...s.policy,requireAsset:(...args:Parameters<typeof s.policy.requireAsset>)=>({...s.policy.requireAsset(...args),replyWindowMs:35000})}:s.policy,grants=createInstagramRecordingGrants({db:f.db,rule:s.rule,policy,now:()=>s.now,isDeleted:async()=>false});
+ await grants.prepare(s.asset,s.source);let calls=0;
+ const guarded={...grants,claim:async(input:any)=>{const claimed=await grants.claim(input);
+  if(boundary==='closed')await f.db.$transaction(tx=>closeInstagramRecordingGrants(tx,{workspaceId:s.rule.workspaceId,platform:'instagram',appId:s.rule.appId,providerAssetId:s.rule.providerAccountId,connectionId:s.rule.connectionId,connectionVersion:1},10,s.now));
+  if(boundary==='fixed-expiry'){
+   s.now=new Date(+s.now+6000);
+   await f.db.instagramInteractionMessage.create({data:{workspaceId:s.rule.workspaceId,connectionId:s.rule.connectionId,connectionVersion:1,providerId:'newer-inbound',actorId:'300',conversationId:s.rec3.conversationId,inbound:true,text:'later inbound',occurredAt:s.now,receivedAt:s.now}});
+  }
+  return claimed;
+ }};
+ const executor=createInstagramSendExecutor({db:f.db,testRestriction:s.rule,recordingGrants:guarded,now:()=>s.now});
+ await assert.rejects(executor.execute(s.input(),async()=>{calls++;return{status:'sent',providerId:'must-not-dispatch'};}));assert.equal(calls,0);
+}finally{await cleanRec3Fixture(f);}}));
 test('REC3 concurrent executors and new request keys consume one original attempt without changing old records',async()=>withMetaInboxFixture(async f=>{try{
  const s=await setup(f),before=await s.oldSnapshot();let calls=0;const send=async()=>{calls++;return{status:'sent' as const,providerId:'rec3-confirmed'};};
  const input=s.input();const results=await Promise.all([s.executor().execute(input,send),s.executor().execute(s.input(),send)]);assert.equal(calls,1);assert.ok(results.some(v=>v.status==='sent'));
